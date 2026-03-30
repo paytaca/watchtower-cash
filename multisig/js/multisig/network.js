@@ -80,7 +80,6 @@ export class WatchtowerNetworkProvider {
         this.network = config?.network || WatchtowerNetwork.mainnet
         if (this.network === WatchtowerNetwork.chipnet) {
             this.hostname = 'https://chipnet.watchtower.cash'
-            
             this.cashAddressNetworkPrefix = CashAddressNetworkPrefix.testnet
         }
     }
@@ -198,33 +197,8 @@ export class WatchtowerNetworkProvider {
             wallet_hash: walletHash
         }) 
     }
-
-
-
       
 }
-
-
-// /**
-//  * @implements { NetworkProvider }
-//  */
-// export class ElectrumNetworkProvider {
-
-    // /**
-    //  * @param {Object} config
-    //  * @param {import('./wallet').Network} config.network
-    //  * @param {Network}
-    //  */
-    // constructor(config) {
-    //     this.hostname = 'https://bch.imaginary.cash'
-    //     this.cashAddressNetworkPrefix = CashAddressNetworkPrefix.mainnet
-    //     this.network = config?.network || Network.MAINNET
-    //     if (this.network === Network.chipnet) {
-    //         this.cashAddressNetworkPrefix = CashAddressNetworkPrefix.chipnet
-    //     }
-    // }
-// }
-
 
 export class WatchtowerCoordinationServer {
 
@@ -237,14 +211,17 @@ export class WatchtowerCoordinationServer {
         switch (this.network) {
             case WatchtowerNetwork.chipnet:
                 // this.hostname = 'https://chipnet.watchtower.cash'
-                this.hostname = 'http://localhost:8000'
+                // this.hostname = 'http://localhost:8000'
+                this.hostname = 'http://192.168.1.41:8000'
                 break
             case WatchtowerNetwork.mainnet:
                 // this.hostname = 'https://watchtower.cash'    
-                this.hostname = 'http://localhost:8000'
+                // this.hostname = 'http://localhost:8000'
+                this.hostname = 'http://192.168.1.41:8000'
                 break
             case WatchtowerNetwork.local:
-                this.hostname = 'http://localhost:8000'
+                // this.hostname = 'http://localhost:8000'
+                this.hostname = 'http://192.168.1.41:8000'
                 break
         }
     }
@@ -318,7 +295,7 @@ export class WatchtowerCoordinationServer {
 
     async createServerIdentity({ serverIdentity, authCredentialsGenerator }) {
         const authCredentials = await authCredentialsGenerator.generateAuthCredentials()
-        console.log('authCredentials', authCredentials)
+        
         if (!authCredentials) return null
         const response = await axios.post(
             `${this.hostname}/api/multisig/coordinator/server-identities/`,
@@ -334,7 +311,6 @@ export class WatchtowerCoordinationServer {
             `${this.hostname}/api/multisig/coordinator/server-identities/${publicKey}/`,
             { headers: { ...authCredentials } }
         )
-        console.log('response', response)
         return response.data
     }
 
@@ -342,13 +318,20 @@ export class WatchtowerCoordinationServer {
         const response = await axios.get(
             `${this.hostname}/api/multisig/wallets/${identifier}/`
         )
-        console.log('response', response)
         return response.data
     }
 
     async getSignerWallets({ publicKey }) {        
         const response = await axios.get(
             `${this.hostname}/api/multisig/signers/${publicKey}/wallets/`
+        )
+        return response.data
+    }
+
+
+    async getSignerWalletsByMasterFingerprint({ masterFingerprint }) {
+        const response = await axios.get(
+            `${this.hostname}/api/multisig/signers/${masterFingerprint}/wallets/`
         )
         return response.data
     }
@@ -363,7 +346,6 @@ export class WatchtowerCoordinationServer {
      * @param {*} params.authCredentialsGenerator
      */
     async uploadProposal({ payload, authCosignerAuthCredentials, authCredentials }) {
-        console.log('AUTHcosigner', authCosignerAuthCredentials)
         const response = await axios.post(
             `${this.hostname}/api/multisig/proposals/`,
             payload, 
@@ -397,7 +379,6 @@ export class WatchtowerCoordinationServer {
     async getProposalStatus({ unsignedTransactionHash, queryFilter }) {
         let url = `${this.hostname}/api/multisig/proposals/${unsignedTransactionHash}/status/`
 
-        console.log('QUERY FILTER', queryFilter)
         if (queryFilter?.includeDeleted) {
             url += '?include_deleted=true'
         }
@@ -458,10 +439,8 @@ export class WatchtowerCoordinationServer {
      * @param {string} params.authCredentialsGenerator - Object or class instance that knows how to generate cosigner credential for this particular proposal.
      * @returns {Promise<Object>} Response data from the signature submission.
      */
-    async submitPsbt({ content, standard = 'psbt', encoding = 'base64', proposalUnsignedTransactionHash, walletId, authCredentialsGenerator }) {
-
-        const authCosignerAuthCredentials = await authCredentialsGenerator.generateCosignerAuthCredentials()
-        
+    async submitPsbt({ content, standard = 'psbt', encoding = 'base64', proposalUnsignedTransactionHash, walletId, authCosignerAuthCredentials }) {
+        // const authCosignerAuthCredentials = await authCredentialsGenerator.generateCosignerAuthCredentials()
         const response = await axios.post(
             `${this.hostname}/api/multisig/proposals/${proposalUnsignedTransactionHash}/psbts/?wallet_id=${walletId}`,
             { content, standard, encoding },
@@ -486,6 +465,22 @@ export class WatchtowerCoordinationServer {
     async getWalletProposals(walletIdentifier, status='pending') {
         const response = await axios.get(
             `${this.hostname}/api/multisig/wallets/${walletIdentifier}/proposals/?status=${status}`
+        )
+        return response.data
+    }
+
+    async uploadWalletWcSession({ walletIdentifier, payload, authCosignerAuthCredentials }) {
+        const response = await axios.post(
+            `${this.hostname}/api/multisig/wallets/${walletIdentifier}/walletconnect/sessions/`,
+            payload,
+            { headers: { ...authCosignerAuthCredentials } }
+        )
+        return response.data
+    }
+
+    async getWalletWcSessions({ walletIdentifier }) {
+        const response = await axios.get(
+            `${this.hostname}/api/multisig/wallets/${walletIdentifier}/walletconnect/sessions/`,
         )
         return response.data
     }

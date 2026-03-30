@@ -83,6 +83,7 @@
 
 
   
+import axios from 'axios'
 import {
   encodeTransactionCommon,
   hashTransaction,
@@ -111,7 +112,8 @@ import {
   hash256,
   secp256k1,
   generateSigningSerializationBch,
-  sortObjectKeys
+  sortObjectKeys,
+  encodeTransactionBch
 } from 'bitauth-libauth-v3'
 
 import { derivePublicKey, getCompiler, getWalletHash, MultisigWallet, sortPublicKeysBip67 } from './wallet.js'
@@ -259,7 +261,7 @@ export const combine = (psts) => {
   const finalizedPst = psts.find(pst => pst.scriptSig)
   if (finalizedPst) return finalizedPst
   const sameUnsignedTransaction = psts.every(pst => pst.unsignedTransactionHex === psts[0].unsignedTransactionHex)
-  if (!sameUnsignedTransaction) throw new Error('Combining different transactions')
+  if (!sameUnsignedTransaction) throw new Error(`Trying to combine signatures of different transactions. Make sure you are uploading signatures for the same proposal.`)
   const sameMetadata = psts.every(pst => {
     return (
       psts[0].creator === pst.creator &&
@@ -850,8 +852,6 @@ export class Pst {
       })
       this.vmVerificationSuccess = verificationResult
     }
-
-    console.log('FINALZIATION', finalCompilation, this.vmVerificationSuccess)
     return { finalCompilationResult: finalCompilation, vmVerificationSuccess: this.vmVerificationSuccess }
   }
 
@@ -889,12 +889,79 @@ export class Pst {
     return getSigningProgress(this)
   }
 
-  async fetchStatus(queryFilter) {
+  async resolveStatus(queryFilter) {
     this.status = await this.options?.coordinationServer?.getProposalStatus({ 
       unsignedTransactionHash: this.unsignedTransactionHash,
       queryFilter: queryFilter
     })
     return this.status 
+  }
+  
+  async resolveStatusByInputs(network='mainnet') {
+    for (const input of this.inputs) {
+      const txid = typeof input.outpointTransactionHash === 'string'
+        ? input.outpointTransactionHash
+        : binToHex(input.outpointTransactionHash)
+
+      try {
+
+        let url = network === 'mainnet' ? 
+          `https://watchtower.cash/api/transactions/outputs/?txid=${txid}`: 
+          `https://chipnet.watchtower.cash/api/transactions/outputs/?txid=${txid}`
+        const response = await axios.get(url)
+        const outputs = response.data?.results || []
+        const outputIndex = input.outpointIndex
+        const outputData = outputs.find(o => Number(o.index) === Number(outputIndex))
+
+        if (outputData?.spending_txid) {
+          const spendingTxid = outputData.spending_txid
+          const spendingTxHex = await this.options?.provider?.getRawTransaction(spendingTxid)
+
+          if (spendingTxHex) {
+            const decodedSpendingTx = decodeTransactionBch(hexToBin(spendingTxHex))
+            const inputs = decodedSpendingTx.inputs.map(input => {
+              return {
+                  ...input,
+                  unlockingBytecode: []
+              }
+            })
+            const spendingTxUnsigned = (new MultisigTransactionBuilder())
+              .addInputs(inputs)
+              .addOutputs(decodedSpendingTx.outputs)
+              .build()
+            const spendingTxUnsignedTransactionHash = hashTransaction(
+              encodeTransactionBch(decodeTransactionBch(hexToBin(spendingTxUnsigned)))
+            )
+
+            if (spendingTxUnsignedTransactionHash === this.unsignedTransactionHash) {
+              this.status = {
+                status: STATUS.BROADCASTED,
+                txid: spendingTxid,
+                outpointTransactionHash: txid,
+                outpointIndex: outputIndex
+              }
+            } else {
+              this.status = {
+                status: STATUS.CONFLICTED,
+                txid: spendingTxid,
+                outpointTransactionHash: txid,
+                outpointIndex: outputIndex
+              }
+            }
+            return this.status
+          }
+        }
+
+        this.status = {
+          status: STATUS.PENDING
+        }
+        
+        return this.status
+      } catch (error) {
+        console.error(`Error checking input status for txid ${txid}:`, error.message)
+      }
+    }
+    return this.status
   }
 
   /**
@@ -974,12 +1041,24 @@ export class Pst {
 
   async uploadSignerPsbt(masterFingerprint) {
     if (!this.options.coordinationServer) return 
-    const psbt = this.getSignerPsbt(masterFingerprint)
+    const psbt = (await this.toPsbt()).toString()
+    let signer = null
+    if (masterFingerprint) {
+      signer = this.wallet?.signers.find(s => s.masterFingerprint === masterFingerprint)
+    }
+
+    if (!signer) {
+      signer = this.wallet?.signers.find(s => Boolean(s.xprv))
+    }
+
+    if (!signer) return 
+    const authCosignerAuthCredentials = await this.wallet.generateCosignerAuthCredentials(signer.xpub)
+    if (!authCosignerAuthCredentials) return
     const response = await this.options.coordinationServer.submitPsbt({
       content: psbt,
       proposalUnsignedTransactionHash: this.unsignedTransactionHash,
       walletId: this.wallet.id,
-      authCredentialsGenerator: this.wallet
+      authCosignerAuthCredentials
     })
     return response?.status
   }
@@ -1349,7 +1428,7 @@ export class Pst {
 
     if (!this.options?.coordinationServer) return
 
-    await this.wallet?.resolveXprvsOfXpubs?.()
+    await this.wallet?.loadSignersXPrv?.()
 
     const coordinator = this.wallet.getSigners().find(s=>s.xprv)
 
@@ -1397,7 +1476,7 @@ export class Pst {
       if (error?.response?.status === 404) {
         this.id = null
       }
-    }
+    } 
   }
 
   async fetchCoordinatorInfo() {
