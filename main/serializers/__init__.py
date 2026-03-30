@@ -22,3 +22,4 @@ from main.serializers.serializer_wallet_address_app import *
 from main.serializers.serializer_app_control import *
 from main.serializers.serializer_project import *
 from main.serializers.serializer_asset_setting import *
+from main.serializers.serializer_address_book import *

@@ -1,6 +1,5 @@
 from urllib.parse import unquote
-from django.db.models import Q
-from django.db.models import Exists, OuterRef
+from django.db.models import Exists, OuterRef, Q
 from rest_framework.compat import coreapi, coreschema
 from rest_framework.filters import BaseFilterBackend
 from django_filters import rest_framework as filters

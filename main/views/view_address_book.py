@@ -1,0 +1,164 @@
+from django.db import transaction, IntegrityError, DatabaseError, OperationalError
+from rest_framework import viewsets, mixins, status
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from rest_framework.exceptions import ValidationError
+
+from authentication.token import WalletAuthentication
+from main.models import AddressBook, AddressBookAddress
+from main.serializers import (
+    AddressBookSerializer,
+    AddressBookAddressSerializer,
+    AddressBookListSerializer,
+    AddressBookRetrieveSerializer,
+    AddressBookCreateSerializer,
+
+    AddressBookAddressCreateSerializer
+)
+from main.serializers.serializer_address_book import AddressBookUpdateSerializer
+
+import logging
+logger = logging.getLogger(__name__)
+
+
+class AddressBookViewSet(
+    viewsets.GenericViewSet,
+    mixins.RetrieveModelMixin,
+    mixins.CreateModelMixin,
+    mixins.UpdateModelMixin,
+    mixins.DestroyModelMixin
+):
+    authentication_classes = [WalletAuthentication]
+    http_method_names = ['get', 'post', 'patch', 'delete']
+    queryset = AddressBook.objects.all().prefetch_related('address_book_addresses')
+    serializer_class = AddressBookSerializer
+
+    def get_queryset(self):
+        wallet_hash = self.request.user.wallet_hash
+        return super().get_queryset().filter(wallet__wallet_hash=wallet_hash)
+    
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context['wallet_hash'] = self.request.user.wallet_hash
+        return context
+
+    def retrieve(self, request, *args, **kwargs):
+        instance = self.get_object()
+        serializer = AddressBookRetrieveSerializer(instance)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def create(self, request, *args, **kwargs):
+        addresses = request.data.get('addresses')
+        error = ''
+        status_resp = status.HTTP_201_CREATED
+        address_book_id = None
+        
+        try:
+            with transaction.atomic():
+                # Create AddressBook inside the transaction
+                serializer = AddressBookCreateSerializer(data=request.data.get('address_book'), context=self.get_serializer_context())
+                serializer.is_valid(raise_exception=True)
+                self.perform_create(serializer)
+                address_book_id = serializer.data['id']
+                
+                # Create addresses inside the same transaction
+                if addresses and isinstance(addresses, list) and len(addresses) > 0:
+                    all_errors = []
+                    validated_serializers = []
+                    
+                    # Single pass: Validate all and collect errors + serializers
+                    for idx, address in enumerate(addresses):
+                        address['address_book_id'] = address_book_id
+                        addresses_serializer = AddressBookAddressCreateSerializer(data=address, context=self.get_serializer_context())
+                        
+                        if addresses_serializer.is_valid():
+                            # Store the serializer instance for later save
+                            validated_serializers.append(addresses_serializer)
+                        else:
+                            # Collect errors with index for identification
+                            all_errors.append({
+                                'index': idx,
+                                'address': address.get('address', 'unknown'),
+                                'errors': addresses_serializer.errors
+                            })
+                    
+                    # If any validation errors exist, raise them all at once before any saves
+                    if all_errors:
+                        raise ValidationError({
+                            'addresses': all_errors,
+                            'message': f'Validation failed for {len(all_errors)} of {len(addresses)} addresses'
+                        })
+                    
+                    # All validations passed - now save all addresses using proper serializer.save()
+                    for addresses_serializer in validated_serializers:
+                        addresses_serializer.save()
+        except ValidationError as e:
+            status_resp = status.HTTP_400_BAD_REQUEST
+            error = ' '.join(str(arg) for arg in e.args) if e.args else str(e)
+        except IntegrityError as e:
+            status_resp = status.HTTP_400_BAD_REQUEST
+            error = f'Database integrity error: {str(e)}'
+        except DatabaseError as e:
+            status_resp = status.HTTP_503_SERVICE_UNAVAILABLE
+            error = f'Database error: {str(e)}'
+        except OperationalError as e:
+            status_resp = status.HTTP_503_SERVICE_UNAVAILABLE
+            error = f'Service temporarily unavailable: {str(e)}'
+        except Exception as e:
+            logger.error(f'Unexpected error in AddressBook creation: {e}', exc_info=True)
+            status_resp = status.HTTP_500_INTERNAL_SERVER_ERROR
+            error = 'An unexpected error occurred. Please try again.'
+        
+        data = {
+            'id': address_book_id,
+            'error': error
+        }
+        
+        return Response(data, status=status_resp)
+
+    def partial_update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        serializer = AddressBookUpdateSerializer(instance, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    @action(
+        detail=False,
+        methods=['GET'],
+        name='Get Wallet Address Book',
+        url_path=r'wallet/(?P<wallet_hash>[^/.]+)'
+    )
+    def get_wallet_address_book(self, request, *args, **kwargs):
+        wallet_hash = kwargs.get('wallet_hash')
+        if wallet_hash != request.user.wallet_hash:
+            return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
+        queryset = self.get_queryset().filter(wallet__wallet_hash=wallet_hash)
+        serializer = AddressBookListSerializer(queryset, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+class AddressBookAddressViewSet(
+    viewsets.GenericViewSet,
+    mixins.CreateModelMixin,
+    mixins.UpdateModelMixin,
+    mixins.DestroyModelMixin
+):
+    authentication_classes = [WalletAuthentication]
+    http_method_names = ['post', 'patch', 'delete']
+    queryset = AddressBookAddress.objects.all()
+    serializer_class = AddressBookAddressSerializer
+
+    def get_queryset(self):
+        wallet_hash = self.request.user.wallet_hash
+        return super().get_queryset().filter(address_book__wallet__wallet_hash=wallet_hash)
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context['wallet_hash'] = self.request.user.wallet_hash
+        return context
+
+    def create(self, request, *args, **kwargs):
+        serializer = AddressBookAddressCreateSerializer(data=request.data, context=self.get_serializer_context())
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
