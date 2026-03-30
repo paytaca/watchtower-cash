@@ -100,6 +100,19 @@ class ProposalSerializer(serializers.ModelSerializer):
             "coordinatorProposalSignatureScheme",
         ]
 
+    def validate_proposal(self, value):
+        proposal_format = self.initial_data.get("proposalFormat", "psbt")
+        if proposal_format == "psbt":
+            try:
+                decode_response = js_client.decode_psbt(value)
+                if not decode_response.ok:
+                    raise ValidationError(
+                        f"Invalid PSBT format: {decode_response.text}"
+                    )
+            except Exception as e:
+                raise ValidationError(f"Failed to validate PSBT: {str(e)}")
+        return value
+
     def to_representation(self, instance):
         rep = super().to_representation(instance)
         # rep['inputs'] = InputSerializer(instance.inputs.all(), many=True).data
@@ -229,6 +242,19 @@ class PsbtSerializer(serializers.ModelSerializer):
             "isProposal",
         ]
         read_only_fields = ["id", "proposal", "createdAt", "contentHash", "isProposal"]
+
+    def validate_content(self, value):
+        standard = self.initial_data.get("standard", "psbt")
+        if standard == "psbt":
+            try:
+                decode_response = js_client.decode_psbt(value)
+                if not decode_response.ok:
+                    raise ValidationError(
+                        f"Invalid PSBT format: {decode_response.text}"
+                    )
+            except Exception as e:
+                raise ValidationError(f"Failed to validate PSBT: {str(e)}")
+        return value
 
     def create(self, validated_data):
         signer = self.context["submitted_by"]
