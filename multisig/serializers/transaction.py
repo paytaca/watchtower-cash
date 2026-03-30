@@ -1,6 +1,7 @@
 import logging
 import json
-from django.db import transaction
+from django.db import transaction, IntegrityError
+from django.utils import timezone
 from multisig.serializers.wallet import SignerSerializer
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
@@ -131,27 +132,46 @@ class ProposalSerializer(serializers.ModelSerializer):
 
                 inputs = decoded_proposal.pop("inputs", [])
                 decoded_proposal.pop("signingProgress", None)
-                proposal, created = Proposal.objects.get_or_create(
-                    unsigned_transaction_hex=decoded_proposal.get(
-                        "unsignedTransactionHex"
-                    ),
-                    deleted_at__isnull=True,
-                    defaults={
-                        "wallet": validated_data.get("wallet"),
-                        "unsigned_transaction_hex": decoded_proposal.get(
-                            "unsignedTransactionHex"
-                        ),
-                        "proposal": validated_data["proposal"],
-                        "proposal_format": proposal_format,
-                        "coordinator": coordinator,
-                        "coordinator_proposal_signature": validated_data.get(
-                            "coordinator_proposal_signature"
-                        ),
-                        "coordinator_proposal_signature_scheme": validated_data.get(
-                            "coordinator_proposal_signature_scheme", "schnorr"
-                        ),
-                    },
+                unsigned_transaction_hex = decoded_proposal.get(
+                    "unsignedTransactionHex"
                 )
+
+                proposal = (
+                    Proposal.objects.filter(
+                        unsigned_transaction_hex=unsigned_transaction_hex,
+                        deleted_at__isnull=True,
+                    )
+                    .select_for_update()
+                    .first()
+                )
+
+                created = False
+
+                if not proposal:
+                    try:
+                        proposal = Proposal.objects.create(
+                            wallet=validated_data.get("wallet"),
+                            unsigned_transaction_hex=unsigned_transaction_hex,
+                            proposal=validated_data["proposal"],
+                            proposal_format=proposal_format,
+                            coordinator=coordinator,
+                            coordinator_proposal_signature=validated_data.get(
+                                "coordinator_proposal_signature"
+                            ),
+                            coordinator_proposal_signature_scheme=validated_data.get(
+                                "coordinator_proposal_signature_scheme", "schnorr"
+                            ),
+                        )
+                        created = True
+                    except IntegrityError:
+                        proposal = (
+                            Proposal.objects.filter(
+                                unsigned_transaction_hex=unsigned_transaction_hex,
+                                deleted_at__isnull=True,
+                            )
+                            .select_for_update()
+                            .first()
+                        )
 
                 if created:
                     psbt = None
