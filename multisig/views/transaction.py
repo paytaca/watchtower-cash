@@ -1,13 +1,9 @@
 import logging
-import requests
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
 from main.models import Transaction, TransactionBroadcast
 from multisig import js_client
-from multisig.auth.auth import PubKeySignatureMessageAuthentication
 from multisig.auth.permission import IsCosigner, IsProposalCoordinator, ProposalCoordinatorHasValidSignature
-from multisig.models.auth import ServerIdentity
-from rampp2p.utils import transaction
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -15,11 +11,9 @@ from django.db import models
 from django.http import Http404
 from django.shortcuts import get_object_or_404
 from django.db.models import Q
-from django.db.models.functions import Coalesce
 from main.tasks import NODE
 
 from multisig.models.transaction import (
-    Bip32Derivation,
     Proposal,
     Signature,
 )
@@ -371,26 +365,16 @@ class ProposalStatusView(APIView):
             proposal.save(update_fields=["signing_progress"])
 
         for inp in proposal.inputs.all():
-            ## TODO: use the Transaction table in prod, this is for local testing only
-            # url = f"https://watchtower.cash/api/transactions/outputs/?txid={inp.outpoint_transaction_hash}"
 
-            spending_tx = Transaction.objects.filter(txid=inp.outpoint_transaction_hash, index=inp.outpoint_index).first()
+            spending_tx = Transaction.objects.filter(
+                txid=inp.outpoint_transaction_hash, 
+                index=inp.outpoint_index
+            ).first()
             
             spending_txid = None
 
             if spending_tx:
                 spending_txid = spending_tx.spending_txid
-
-            # api_resp = requests.get(url, timeout=10)
-            # data = api_resp.json()
-            # for result in data.get("results", []):
-            #     if (
-            #         result.get("txid") == inp.outpoint_transaction_hash
-            #         and result.get("index") == inp.outpoint_index
-            #     ):
-            #         spending_txid = result.get("spending_txid", "")
-            #     else:
-            #         continue
 
             spending_transaction = None
             if spending_txid:
