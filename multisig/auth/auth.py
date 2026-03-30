@@ -10,23 +10,21 @@ LOGGER = logging.getLogger(__name__)
 
 from ..js_client import verify_signature
 
+
 def parse_x_signature_header(header_value):
     """
-    Parses a X-Signature header. 
+    Parses a X-Signature header.
     That is 'schnorr=abc123;der=def456' always returns a dict with both keys: { 'schnorr': '', 'der': '' }.
     """
-    result = {
-        'schnorr': '',
-        'der': ''
-    }
+    result = {"schnorr": "", "der": ""}
 
     if not header_value:
         return result
 
-    parts = [kv.strip() for kv in header_value.split(';') if '=' in kv]
+    parts = [kv.strip() for kv in header_value.split(";") if "=" in kv]
 
     for kv in parts:
-        key, value = kv.split('=', 1)
+        key, value = kv.split("=", 1)
         key = key.strip().lower()
         value = value.strip()
         if key in result:
@@ -34,9 +32,10 @@ def parse_x_signature_header(header_value):
 
     return result
 
+
 def parse_signatures(signature):
     """
-    Parses a signature string 
+    Parses a signature string
     That is 'schnorr=abc123;der=def456' always returns a dict with both keys: { 'schnorr': '', 'der': '' }.
     """
     return parse_x_signature_header(signature)
@@ -61,12 +60,10 @@ def normalize_timestamp(raw_ts):
         return ts // 1000
     return ts
 
-def get_timestamp_drift_limit():
-    return getattr(settings, 'MULTISIG', {}).get('TIMESTAMP_DRIFT_SECONDS', 120)
 
-def get_timestamp_from_auth_data(auth_data):
-    message, *ignore = auth_data.split('|')
-    return int(message.split(':')[1])
+def get_timestamp_drift_limit():
+    return getattr(settings, "MULTISIG", {}).get("TIMESTAMP_DRIFT_SECONDS", 120)
+
 
 def is_valid_timestamp(timestamp: int):
     """
@@ -82,10 +79,17 @@ def is_valid_timestamp(timestamp: int):
     drift = get_timestamp_drift_limit()
     timestamp = normalize_timestamp(timestamp)
     if timestamp < now - drift:
-        return (False, f"Message timestamp too old. Value must be ±{drift}s from current UTC time.")
+        return (
+            False,
+            f"Message timestamp too old. Value must be ±{drift}s from current UTC time.",
+        )
     if timestamp > now + drift:
-        return (False, f"Message timestamp drifted too far into the future. Value must be ±{drift}s from current UTC time.")
-    return (True, 'Ok')
+        return (
+            False,
+            f"Message timestamp drifted too far into the future. Value must be ±{drift}s from current UTC time.",
+        )
+    return (True, "Ok")
+
 
 class MultisigStatelessUser:
     """
@@ -108,6 +112,7 @@ class MultisigStatelessUser:
             This message must be signed using the corresponding private key.
             The server will parse, verify, and validate the timestamp and signature.
     """
+
     signer = None
     wallet = None
     auth_data = None
@@ -117,7 +122,7 @@ class MultisigStatelessUser:
         self.auth_data = auth_data
         self.signer = signer
         self.wallet = wallet
-        
+
     def __iter__(self):
         return iter(self.__dict__.items())
 
@@ -125,22 +130,22 @@ class MultisigStatelessUser:
         if not self.auth_data:
             self.signature_verified = False
             return
-        
+
         response = verify_signature(
-            self.auth_data['message'],
-            self.auth_data['public_key'],
-            self.auth_data['signature']
+            self.auth_data["message"],
+            self.auth_data["public_key"],
+            self.auth_data["signature"],
         )
 
         result = response.json()
-        if result['success']:
+        if result["success"]:
             self.signature_verified = True
 
     def get_public_key(self):
         if not self.auth_data:
-            return ''
-        return self.auth_data.get('public_key')
-    
+            return ""
+        return self.auth_data.get("public_key")
+
 
 class PubKeySignatureMessageAuthentication(BaseAuthentication):
     """
@@ -173,36 +178,56 @@ class PubKeySignatureMessageAuthentication(BaseAuthentication):
         - None if the signature headers are not present.
         - Raises AuthenticationFailed if the message is expired or signature is invalid.
     """
-    
+
     def authenticate(self, request):
-       
-        message = request.headers.get('X-Auth-Message', '')
+
+        message = request.headers.get("X-Auth-Message", "")
 
         if message:
-            timestamp = message.split(':')[1]
-            is_valid, error = is_valid_timestamp(int(timestamp)) # short circuits if timestamp is > ±drift
+            message_parts = message.split(":")
+            if len(message_parts) != 2:
+                raise AuthenticationFailed(
+                    'Invalid message format: expected "context:timestamp"'
+                )
+
+            timestamp_str = message_parts[1]
+            if not timestamp_str:
+                raise AuthenticationFailed("Invalid message: timestamp is empty")
+
+            try:
+                timestamp = int(timestamp_str)
+            except ValueError:
+                raise AuthenticationFailed(
+                    f'Invalid timestamp: "{timestamp_str}" is not a valid integer'
+                )
+
+            is_valid, error = is_valid_timestamp(timestamp)
             if not is_valid:
                 raise AuthenticationFailed(error)
 
-        public_key = request.headers.get('X-Auth-PubKey', '')
-        signature = request.headers.get('X-Auth-Signature', '')
+        public_key = request.headers.get("X-Auth-PubKey", "")
+        signature = request.headers.get("X-Auth-Signature", "")
 
         if not signature or not message or not public_key:
-            raise AuthenticationFailed('Invalid credentials')
-        
+            raise AuthenticationFailed("Invalid credentials")
+
         signature = parse_x_signature_header(signature)
 
         sig_verification_response = verify_signature(message, public_key, signature)
         sig_verification_result = sig_verification_response.json()
 
-        if not sig_verification_result['success']:
-            
-            raise AuthenticationFailed('Invalid signature')
+        if not sig_verification_result["success"]:
+            raise AuthenticationFailed("Invalid signature")
 
         identity = ServerIdentity.objects.filter(public_key=public_key).first()
         if not identity:
-            raise AuthenticationFailed('Invalid credentials')
+            raise AuthenticationFailed("Invalid credentials")
 
-        auth = { 'public_key': public_key, 'message': message, 'signature': signature, 'sig_verification_result': sig_verification_result }
+        auth = {
+            "public_key": public_key,
+            "message": message,
+            "signature": signature,
+            "sig_verification_result": sig_verification_result,
+        }
 
         return (identity, auth)

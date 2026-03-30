@@ -136,42 +136,33 @@ class ProposalSerializer(serializers.ModelSerializer):
                     "unsignedTransactionHex"
                 )
 
-                proposal = (
-                    Proposal.objects.filter(
-                        unsigned_transaction_hex=unsigned_transaction_hex,
-                        deleted_at__isnull=True,
-                    )
-                    .select_for_update()
-                    .first()
-                )
-
+                proposal = None
                 created = False
 
-                if not proposal:
-                    try:
-                        proposal = Proposal.objects.create(
-                            wallet=validated_data.get("wallet"),
+                try:
+                    proposal = Proposal.objects.create(
+                        wallet=validated_data.get("wallet"),
+                        unsigned_transaction_hex=unsigned_transaction_hex,
+                        proposal=validated_data["proposal"],
+                        proposal_format=proposal_format,
+                        coordinator=coordinator,
+                        coordinator_proposal_signature=validated_data.get(
+                            "coordinator_proposal_signature"
+                        ),
+                        coordinator_proposal_signature_scheme=validated_data.get(
+                            "coordinator_proposal_signature_scheme", "schnorr"
+                        ),
+                    )
+                    created = True
+                except IntegrityError:
+                    proposal = (
+                        Proposal.objects.filter(
                             unsigned_transaction_hex=unsigned_transaction_hex,
-                            proposal=validated_data["proposal"],
-                            proposal_format=proposal_format,
-                            coordinator=coordinator,
-                            coordinator_proposal_signature=validated_data.get(
-                                "coordinator_proposal_signature"
-                            ),
-                            coordinator_proposal_signature_scheme=validated_data.get(
-                                "coordinator_proposal_signature_scheme", "schnorr"
-                            ),
+                            deleted_at__isnull=True,
                         )
-                        created = True
-                    except IntegrityError:
-                        proposal = (
-                            Proposal.objects.filter(
-                                unsigned_transaction_hex=unsigned_transaction_hex,
-                                deleted_at__isnull=True,
-                            )
-                            .select_for_update()
-                            .first()
-                        )
+                        .select_for_update()
+                        .get()
+                    )
 
                 if created:
                     psbt = None
