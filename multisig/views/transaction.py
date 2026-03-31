@@ -418,7 +418,7 @@ class ProposalStatusView(APIView):
             if new_status == Proposal.Status.BROADCAST_INITIATED:
                     transaction_broadcast = TransactionBroadcast.objects.filter(
                         txid=spending_txid
-                    )
+                    ).first()
                     if transaction_broadcast:
                         proposal.on_premise_transaction_broadcast = (
                             transaction_broadcast
