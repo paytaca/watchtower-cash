@@ -19,6 +19,12 @@ import base64
 import decimal
 from celery.schedules import crontab
 
+# Memory optimization: Configure Python garbage collection to be more aggressive
+# This helps prevent memory fragmentation and reduces overall memory usage
+import gc
+
+gc.set_threshold(700, 10, 10)  # More frequent garbage collection
+
 
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -42,117 +48,114 @@ def decipher(value):
 # See https://docs.djangoproject.com/en/3.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'g7+b)g5r@ugo4&ix$mto0b(u*^9_51p5a5-j#_@t)1g!fv&j99'
+SECRET_KEY = "g7+b)g5r@ugo4&ix$mto0b(u*^9_51p5a5-j#_@t)1g!fv&j99"
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = False
-DEPLOYMENT_INSTANCE = config('DEPLOYMENT_INSTANCE', default='prod')
+DEPLOYMENT_INSTANCE = config("DEPLOYMENT_INSTANCE", default="prod")
 
-if DEPLOYMENT_INSTANCE == 'local':
+if DEPLOYMENT_INSTANCE == "local":
     DEBUG = True
 
-ALLOWED_HOSTS = [
-    '*'
-]
+ALLOWED_HOSTS = ["*"]
 
 # Application definition
 
-INSTALLED_APPS=[
-    'django.contrib.auth',
-    'django.contrib.contenttypes',
-    'django.contrib.sessions',
-    'django.contrib.messages',
-    'django.contrib.staticfiles',
-    'constance.backends.database',
-    'rest_framework',
-    'rest_framework.authtoken',
-    'rest_framework_simplejwt',
-    'corsheaders',
-    'django.contrib.admin',
+INSTALLED_APPS = [
+    "django.contrib.auth",
+    "django.contrib.contenttypes",
+    "django.contrib.sessions",
+    "django.contrib.messages",
+    "django.contrib.staticfiles",
+    "constance.backends.database",
+    "rest_framework",
+    "rest_framework.authtoken",
+    "rest_framework_simplejwt",
+    "corsheaders",
+    "django.contrib.admin",
     "django.contrib.postgres",
     "psqlextra",
-    'dynamic_raw_id',
-    'drf_yasg',
-    'channels',
-    'push_notifications',
-    'django_filters',
-    'django_rename_app',
-
-    'constance',
-    'main',
-    'smartbch',
-    'paytacapos',
-    'paytacagifts',
-    'anyhedge',
-    'chat',
-    'notifications',
-    'jpp',
-    'ramp',
-    'rampp2p',
-    'cts',
-    'authentication',
-    'stablehedge',
-    'multisig',
-    'memos'
+    "dynamic_raw_id",
+    "drf_yasg",
+    "channels",
+    "push_notifications",
+    "django_filters",
+    "django_rename_app",
+    "constance",
+    "main",
+    "smartbch",
+    "paytacapos",
+    "paytacagifts",
+    "anyhedge",
+    "chat",
+    "notifications",
+    "jpp",
+    "ramp",
+    "rampp2p",
+    "cts",
+    "authentication",
+    "stablehedge",
+    "multisig",
+    "memos",
 ]
 
-MIDDLEWARE=[
-    'django.middleware.security.SecurityMiddleware',
-    'django.contrib.sessions.middleware.SessionMiddleware',
-    'corsheaders.middleware.CorsMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware',
-    'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
-    'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'django.contrib.messages.middleware.MessageMiddleware',
-    'django.middleware.clickjacking.XFrameOptionsMiddleware',
+MIDDLEWARE = [
+    "django.middleware.security.SecurityMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware",
+    "corsheaders.middleware.CorsMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
+    "django.middleware.common.CommonMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "django.contrib.messages.middleware.MessageMiddleware",
+    "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
 AUTHENTICATION_BACKENDS = [
-    'authentication.backends.SignatureBackend',
-    'django.contrib.auth.backends.ModelBackend'
+    "authentication.backends.SignatureBackend",
+    "django.contrib.auth.backends.ModelBackend",
 ]
 
-ROOT_URLCONF = 'watchtower.urls'
+ROOT_URLCONF = "watchtower.urls"
 
 TEMPLATES = [
     {
-        'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [os.path.join(BASE_DIR, 'templates')],
-        'APP_DIRS': True,
-        'OPTIONS': {
-            'context_processors': [
-                'django.template.context_processors.debug',
-                'django.template.context_processors.request',
-                'django.contrib.auth.context_processors.auth',
-                'django.contrib.messages.context_processors.messages',
+        "BACKEND": "django.template.backends.django.DjangoTemplates",
+        "DIRS": [os.path.join(BASE_DIR, "templates")],
+        "APP_DIRS": True,
+        "OPTIONS": {
+            "context_processors": [
+                "django.template.context_processors.debug",
+                "django.template.context_processors.request",
+                "django.contrib.auth.context_processors.auth",
+                "django.contrib.messages.context_processors.messages",
             ],
         },
     },
 ]
 
-WSGI_APPLICATION = 'watchtower.wsgi.application'
-ASGI_APPLICATION = 'watchtower.asgi.application'
+WSGI_APPLICATION = "watchtower.wsgi.application"
+ASGI_APPLICATION = "watchtower.asgi.application"
 
 # Database
 # https://docs.djangoproject.com/en/3.0/ref/settings/#databases
 
-POSTGRES_DB = decipher(config('POSTGRES_DB'))
-POSTGRES_HOST = decipher(config('POSTGRES_HOST'))
-POSTGRES_PORT = decipher(config('POSTGRES_PORT'))
-POSTGRES_USER = decipher(config('POSTGRES_USER'))
-POSTGRES_PASSWORD = decipher(config('POSTGRES_PASSWORD'))
+POSTGRES_DB = decipher(config("POSTGRES_DB"))
+POSTGRES_HOST = decipher(config("POSTGRES_HOST"))
+POSTGRES_PORT = decipher(config("POSTGRES_PORT"))
+POSTGRES_USER = decipher(config("POSTGRES_USER"))
+POSTGRES_PASSWORD = decipher(config("POSTGRES_PASSWORD"))
 
 DATABASES = {
-    'default': {
-        'ENGINE': 'psqlextra.backend',
-        'NAME': POSTGRES_DB,
-        'HOST': POSTGRES_HOST,
-        'PORT': POSTGRES_PORT,
-        'USER': POSTGRES_USER,
-        'PASSWORD': POSTGRES_PASSWORD,
-        'CONN_MAX_AGE': 300,  # 5 minutes instead of None (infinite)
-        'CONN_HEALTH_CHECKS': True
+    "default": {
+        "ENGINE": "psqlextra.backend",
+        "NAME": POSTGRES_DB,
+        "HOST": POSTGRES_HOST,
+        "PORT": POSTGRES_PORT,
+        "USER": POSTGRES_USER,
+        "PASSWORD": POSTGRES_PASSWORD,
+        "CONN_MAX_AGE": 60,  # Reduced from 5 minutes to 1 minute to free connections faster
+        "CONN_HEALTH_CHECKS": True,
     }
 }
 
@@ -162,16 +165,16 @@ DATABASES = {
 
 AUTH_PASSWORD_VALIDATORS = [
     {
-        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
+        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+        "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
+        "NAME": "django.contrib.auth.password_validation.CommonPasswordValidator",
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
+        "NAME": "django.contrib.auth.password_validation.NumericPasswordValidator",
     },
 ]
 
@@ -179,9 +182,9 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internationalization
 # https://docs.djangoproject.com/en/3.0/topics/i18n/
 
-LANGUAGE_CODE = 'en-us'
+LANGUAGE_CODE = "en-us"
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = "UTC"
 
 USE_I18N = True
 
@@ -191,37 +194,43 @@ USE_TZ = True
 
 # Django constance
 # For dynamic settings
-CONSTANCE_BACKEND = 'constance.backends.database.DatabaseBackend'
+CONSTANCE_BACKEND = "constance.backends.database.DatabaseBackend"
 CONSTANCE_CONFIG = {
-    'P2P_SETTLEMENT_SERVICE_FEE': (
-        0, 'Settlement service fee for contracts settled by watchtower',
+    "P2P_SETTLEMENT_SERVICE_FEE": (
+        0,
+        "Settlement service fee for contracts settled by watchtower",
     ),
-    'P2P_SETTLEMENT_SERVICE_FEE_ADDRESS': (
-        '', 'Recipient of settlement service fee of contracts settled by watchtower',
+    "P2P_SETTLEMENT_SERVICE_FEE_ADDRESS": (
+        "",
+        "Recipient of settlement service fee of contracts settled by watchtower",
     ),
-    'GP_LP_SERVICE_FEE': (
-        0, 'Service fee for contracts created with BCH bull(General Protocol LP)',
+    "GP_LP_SERVICE_FEE": (
+        0,
+        "Service fee for contracts created with BCH bull(General Protocol LP)",
     ),
-    'GP_LP_SERVICE_FEE_ADDRESS': (
-        '', 'Service fee address for contracts created with BCH bull(General Protocol LP)',
+    "GP_LP_SERVICE_FEE_ADDRESS": (
+        "",
+        "Service fee address for contracts created with BCH bull(General Protocol LP)",
     ),
-    'GP_LP_SERVICE_FEE_NAME': (
-        'Paytaca fee', 'Service fee name displayed for contracts created with BCH bull(General Protocol LP)',
+    "GP_LP_SERVICE_FEE_NAME": (
+        "Paytaca fee",
+        "Service fee name displayed for contracts created with BCH bull(General Protocol LP)",
     ),
-    'GP_LP_SERVICE_FEE_DESCRIPTION': (
-        '', 'Service fee name displayed for contracts created with BCH bull(General Protocol LP)',
+    "GP_LP_SERVICE_FEE_DESCRIPTION": (
+        "",
+        "Service fee name displayed for contracts created with BCH bull(General Protocol LP)",
     ),
 }
 CONSTANCE_CONFIG_FIELDSETS = {
-    'Anyhedge (P2P)': (
-        'P2P_SETTLEMENT_SERVICE_FEE',
-        'P2P_SETTLEMENT_SERVICE_FEE_ADDRESS',
+    "Anyhedge (P2P)": (
+        "P2P_SETTLEMENT_SERVICE_FEE",
+        "P2P_SETTLEMENT_SERVICE_FEE_ADDRESS",
     ),
-    'Anyhedge (BCH Bull)': (
-        'GP_LP_SERVICE_FEE',
-        'GP_LP_SERVICE_FEE_ADDRESS',
-        'GP_LP_SERVICE_FEE_NAME',
-        'GP_LP_SERVICE_FEE_DESCRIPTION',
+    "Anyhedge (BCH Bull)": (
+        "GP_LP_SERVICE_FEE",
+        "GP_LP_SERVICE_FEE_ADDRESS",
+        "GP_LP_SERVICE_FEE_NAME",
+        "GP_LP_SERVICE_FEE_DESCRIPTION",
     ),
 }
 
@@ -231,7 +240,10 @@ CONSTANCE_CONFIG_FIELDSETS = {
 import firebase_admin
 
 # Initialize the default app (either use `GOOGLE_APPLICATION_CREDENTIALS` environment variable, or pass a firebase_admin.credentials.Certificate instance)
-google_app_credentials_path = os.path.join(BASE_DIR, config('GOOGLE_APP_CREDENTIALS_PATH', 'compose/firebase-admin-credentials.json'))
+google_app_credentials_path = os.path.join(
+    BASE_DIR,
+    config("GOOGLE_APP_CREDENTIALS_PATH", "compose/firebase-admin-credentials.json"),
+)
 google_app_cert = firebase_admin.credentials.Certificate(google_app_credentials_path)
 firebase_app = firebase_admin.initialize_app(google_app_cert)
 
@@ -240,19 +252,18 @@ PUSH_NOTIFICATIONS_SETTINGS = {
     # For Firebase (Android)
     # -----------------------------------------
     "FIREBASE_APP": firebase_app,
-
     # For Google cloud messaging (Android)
     # -----------------------------------------
     # "GCM_API_KEY": "[your api key]",
-
     # For Apple Push Notification Services (IOS)
     # -----------------------------------------
-    "APNS_CERTIFICATE": os.path.join(BASE_DIR, config('APNS_CERTIFICATE_PATH', 'certificate.pem')),
-    "APNS_AUTH_KEY_ID": config('APNS_AUTH_KEY_ID', None),
-    "APNS_TEAM_ID": config('APNS_TEAM_ID', None),
-    "APNS_USE_ALTERNATIVE_PORT": config('APNS_USE_ALTERNATIVE_PORT', None),
-    "APNS_TOPIC": config('APNS_TOPIC', None),
-
+    "APNS_CERTIFICATE": os.path.join(
+        BASE_DIR, config("APNS_CERTIFICATE_PATH", "certificate.pem")
+    ),
+    "APNS_AUTH_KEY_ID": config("APNS_AUTH_KEY_ID", None),
+    "APNS_TEAM_ID": config("APNS_TEAM_ID", None),
+    "APNS_USE_ALTERNATIVE_PORT": config("APNS_USE_ALTERNATIVE_PORT", None),
+    "APNS_TOPIC": config("APNS_TOPIC", None),
     # For Webpush
     # -----------------------------------------
     # "WNS_PACKAGE_SECURITY_ID": "[your package security id, e.g: 'ms-app://e-3-4-6234...']",
@@ -262,109 +273,108 @@ PUSH_NOTIFICATIONS_SETTINGS = {
 }
 
 
-DB_NUM = [3,4,5]
-if DEPLOYMENT_INSTANCE == 'prod':
-    DB_NUM = [0,1,2]
+DB_NUM = [3, 4, 5]
+if DEPLOYMENT_INSTANCE == "prod":
+    DB_NUM = [0, 1, 2]
 
-REDIS_HOST = decipher(config('REDIS_HOST'))
-REDIS_PASSWORD = decipher(config('REDIS_PASSWORD', ''))
-REDIS_PORT = decipher(config('REDIS_PORT'))
+REDIS_HOST = decipher(config("REDIS_HOST"))
+REDIS_PASSWORD = decipher(config("REDIS_PASSWORD", ""))
+REDIS_PORT = decipher(config("REDIS_PORT"))
 CELERY_IMPORTS = (
-    'main.tasks',
-    'smartbch.tasks',
-    'anyhedge.tasks',
-    'ramp.tasks',
-    'rampp2p.tasks.task_contract',
-    'rampp2p.tasks.task_marketprice',
-    'rampp2p.tasks.task_transaction',
-    'rampp2p.tasks.task_order',
-    'stablehedge.tasks',
-    'paytacapos.tasks'
+    "main.tasks",
+    "smartbch.tasks",
+    "anyhedge.tasks",
+    "ramp.tasks",
+    "rampp2p.tasks.task_contract",
+    "rampp2p.tasks.task_marketprice",
+    "rampp2p.tasks.task_transaction",
+    "rampp2p.tasks.task_order",
+    "stablehedge.tasks",
+    "paytacapos.tasks",
 )
 
 # CELERY_BROKER_URL = 'pyamqp://guest:guest@rabbitmq:5672//'
 # CELERY_RESULT_BACKEND = 'rpc://'
-CELERY_RESULT_EXPIRES = 300 # 5 minutes
+CELERY_RESULT_EXPIRES = 300  # 5 minutes
 
 if REDIS_PASSWORD:
-    redis_prefix = ''
-    if DEPLOYMENT_INSTANCE == 'prod':
-        redis_prefix = 'user'
-        
-    CELERY_BROKER_URL = 'redis://%s:%s@%s:%s/%s' % (redis_prefix, REDIS_PASSWORD, REDIS_HOST, REDIS_PORT, DB_NUM[0])
-    
-    CELERY_RESULT_BACKEND = 'redis://%s:%s@%s:%s/%s' % (redis_prefix, REDIS_PASSWORD, REDIS_HOST, REDIS_PORT, DB_NUM[1])
-    
+    redis_prefix = ""
+    if DEPLOYMENT_INSTANCE == "prod":
+        redis_prefix = "user"
+
+    CELERY_BROKER_URL = "redis://%s:%s@%s:%s/%s" % (
+        redis_prefix,
+        REDIS_PASSWORD,
+        REDIS_HOST,
+        REDIS_PORT,
+        DB_NUM[0],
+    )
+
+    CELERY_RESULT_BACKEND = "redis://%s:%s@%s:%s/%s" % (
+        redis_prefix,
+        REDIS_PASSWORD,
+        REDIS_HOST,
+        REDIS_PORT,
+        DB_NUM[1],
+    )
+
     REDISKV = redis.StrictRedis(
-        host=REDIS_HOST,
-        password=REDIS_PASSWORD,
-        port=6379,
-        db=DB_NUM[2]
+        host=REDIS_HOST, password=REDIS_PASSWORD, port=6379, db=DB_NUM[2]
     )
 else:
-    CELERY_BROKER_URL = 'redis://%s:%s/%s' % (REDIS_HOST, REDIS_PORT, DB_NUM[0])
+    CELERY_BROKER_URL = "redis://%s:%s/%s" % (REDIS_HOST, REDIS_PORT, DB_NUM[0])
 
-    CELERY_RESULT_BACKEND = 'redis://%s:%s/%s' % (REDIS_HOST, REDIS_PORT, DB_NUM[1])
-    REDISKV = redis.StrictRedis(
-        host=REDIS_HOST,
-        port=6379,
-        db=DB_NUM[2]
-    )
+    CELERY_RESULT_BACKEND = "redis://%s:%s/%s" % (REDIS_HOST, REDIS_PORT, DB_NUM[1])
+    REDISKV = redis.StrictRedis(host=REDIS_HOST, port=6379, db=DB_NUM[2])
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/3.0/howto/static-files/
 
-STATIC_URL = '/static/'
-STATIC_ROOT = os.path.join(BASE_DIR, 'static')
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
+STATIC_URL = "/static/"
+STATIC_ROOT = os.path.join(BASE_DIR, "static")
+STATICFILES_STORAGE = "whitenoise.storage.CompressedStaticFilesStorage"
 
-MEDIA_URL = '/media/'
-MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+MEDIA_URL = "/media/"
+MEDIA_ROOT = os.path.join(BASE_DIR, "media")
 
-TOKEN_IMAGES_DIR = config('TOKEN_IMAGES_DIR', default='/images')
+TOKEN_IMAGES_DIR = config("TOKEN_IMAGES_DIR", default="/images")
 
 CELERY_TASK_ACKS_LATE = True
 CELERYD_PREFETCH_MULTIPLIER = 1
-CELERYD_MAX_TASKS_PER_CHILD = 5
-
+CELERYD_MAX_TASKS_PER_CHILD = 200  # Increased from 5 to reduce worker restarts
+CELERY_WORKER_MAX_MEMORY_PER_CHILD = 250000  # 250MB limit per worker child process
 
 
 CELERY_BEAT_SCHEDULE = {
-    'update_oracle_prices': {
-        'task': 'anyhedge.tasks.check_new_price_messages',
-        'schedule': 60,
+    "update_oracle_prices": {
+        "task": "anyhedge.tasks.check_new_price_messages",
+        "schedule": 60,
     },
-    'update_anyhedge_contract_settlements': {
-        'task': 'anyhedge.tasks.update_matured_contracts',
-        'schedule': 60,
+    "update_anyhedge_contract_settlements": {
+        "task": "anyhedge.tasks.update_matured_contracts",
+        "schedule": 60,
     },
-    'update_anyhedge_contracts_for_liquidation': {
-        'task': 'anyhedge.tasks.update_contracts_for_liquidation',
-        'schedule': 120,
+    "update_anyhedge_contracts_for_liquidation": {
+        "task": "anyhedge.tasks.update_contracts_for_liquidation",
+        "schedule": 120,
     },
-    'parse_contracts_liquidity_fee': {
-        'task': 'anyhedge.tasks.parse_contracts_liquidity_fee',
-        'schedule': 5 * 60,
+    "parse_contracts_liquidity_fee": {
+        "task": "anyhedge.tasks.parse_contracts_liquidity_fee",
+        "schedule": 5 * 60,
     },
-    'get_latest_block': {
-        'task': 'main.tasks.get_latest_block',
-        'schedule': 5
+    "get_latest_block": {"task": "main.tasks.get_latest_block", "schedule": 5},
+    "manage_blocks": {"task": "main.tasks.manage_blocks", "schedule": 7},
+    "find_wallet_history_missing_tx_timestamps": {
+        "task": "main.tasks.find_wallet_history_missing_tx_timestamps",
+        "schedule": 60 * 2,
     },
-    'manage_blocks': {
-        'task': 'main.tasks.manage_blocks',
-        'schedule': 7
+    "resolve_wallet_history_usd_values": {
+        "task": "main.tasks.resolve_wallet_history_usd_values",
+        "schedule": 60 * 2,
     },
-    'find_wallet_history_missing_tx_timestamps': {
-        'task': 'main.tasks.find_wallet_history_missing_tx_timestamps',
-        'schedule': 60 * 2,
-    },
-    'resolve_wallet_history_usd_values': {
-        'task': 'main.tasks.resolve_wallet_history_usd_values',
-        'schedule': 60 * 2,
-    },
-    'fetch_latest_usd_price': {
-        'task': 'main.tasks.fetch_latest_usd_price',
-        'schedule': 60 * 2,
+    "fetch_latest_usd_price": {
+        "task": "main.tasks.fetch_latest_usd_price",
+        "schedule": 60 * 2,
     },
     # 'preload_smartbch_blocks': {
     #     'task': 'smartbch.tasks.preload_new_blocks_task',
@@ -386,43 +396,37 @@ CELERY_BEAT_SCHEDULE = {
     #     'task': 'smartbch.tasks.parse_missed_records_task',
     #     'schedule': 60 * 20 # run every 20 minutes.
     # },
-    'update_shift_status': {
-        'task': 'ramp.tasks.update_shift_status',
-        'schedule': 60
+    "update_shift_status": {"task": "ramp.tasks.update_shift_status", "schedule": 60},
+    "update_market_prices": {
+        "task": "rampp2p.tasks.task_marketprice.update_market_prices",
+        "schedule": 15,  # run every 15 seconds
     },
-    'update_market_prices': {
-        'task': 'rampp2p.tasks.task_marketprice.update_market_prices',
-        'schedule': 15 # run every 15 seconds
+    "check_unfunded_gifts": {
+        "task": "paytacagifts.tasks.check_unfunded_gifts",
+        "schedule": 5,
     },
-    'check_unfunded_gifts': {
-        'task': 'paytacagifts.tasks.check_unfunded_gifts',
-        'schedule': 5
+    "check_unclaimed_gifts": {
+        "task": "paytacagifts.tasks.check_unclaimed_gifts",
+        "schedule": 7,
     },
-    'check_unclaimed_gifts': {
-        'task': 'paytacagifts.tasks.check_unclaimed_gifts',
-        'schedule': 7
+    "bulk_rebroadcast": {"task": "main.tasks.bulk_rebroadcast", "schedule": 30},
+    "cancel_expired_orders": {
+        "task": "rampp2p.tasks.task_order.cancel_expired_orders",
+        "schedule": 60,  # run every 1 minute
     },
-    'bulk_rebroadcast': {
-        'task': 'main.tasks.bulk_rebroadcast',
-        'schedule': 30
-    },
-    'cancel_expired_orders': {
-        'task': 'rampp2p.tasks.task_order.cancel_expired_orders',
-        'schedule': 60 # run every 1 minute
-    },
-
     # auto rebalancing 30 minutes before automatic shorting
-    'rebalance_fund_allocation': {
-        'task': 'stablehedge.tasks.check_treasury_contracts_for_rebalance',
-        'schedule': crontab(minute=0, hour="*/6"), # every 6 hours
+    "rebalance_fund_allocation": {
+        "task": "stablehedge.tasks.check_treasury_contracts_for_rebalance",
+        "schedule": crontab(minute=0, hour="*/6"),  # every 6 hours
     },
-    'short_treasury_contract_funds': {
-        'task': 'stablehedge.tasks.check_treasury_contract_short',
-        'schedule': crontab(minute=30, hour="*/6"), # minute 30 at every 6th hour
-    }
+    "short_treasury_contract_funds": {
+        "task": "stablehedge.tasks.check_treasury_contract_short",
+        "schedule": crontab(minute=30, hour="*/6"),  # minute 30 at every 6th hour
+    },
 }
 
 from corsheaders.defaults import default_headers
+
 CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_HEADERS = list(default_headers) + [
     "x-paypro-version",
@@ -441,46 +445,41 @@ CORS_ALLOW_HEADERS = list(default_headers) + [
     "x-authmemo-wallethash",
     "x-authmemo-pass",
     "x-auth-asset-wallethash",
-    "x-auth-asset-pass"
-
+    "x-auth-asset-pass",
+    "x-auth-cosigner-auth-message",
+    "x-auth-cosigner-auth-pubkey",
+    "x-auth-cosigner-auth-signature",
 ]
 
 REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
-        'rest_framework.authentication.BasicAuthentication',
-        'rest_framework.authentication.TokenAuthentication',
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
+        "rest_framework.authentication.BasicAuthentication",
+        "rest_framework.authentication.TokenAuthentication",
     ],
     # Parser classes priority-wise for Swagger
-    'DEFAULT_PARSER_CLASSES': [
-        'rest_framework.parsers.FormParser',
-        'rest_framework.parsers.MultiPartParser',
-        'rest_framework.parsers.JSONParser',
+    "DEFAULT_PARSER_CLASSES": [
+        "rest_framework.parsers.FormParser",
+        "rest_framework.parsers.MultiPartParser",
+        "rest_framework.parsers.JSONParser",
     ],
-    'DEFAULT_RENDERER_CLASSES': [
-        'rest_framework.renderers.JSONRenderer'
-    ],
-    'DEFAULT_FILTER_BACKENDS': [
-        'django_filters.rest_framework.DjangoFilterBackend'
-    ],
+    "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
+    "DEFAULT_FILTER_BACKENDS": ["django_filters.rest_framework.DjangoFilterBackend"],
 }
 
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
-    'SLIDING_TOKEN_REFRESH_LIFETIME': timedelta(days=1),
-    'SLIDING_TOKEN_LIFETIME': timedelta(days=30),
-    'SLIDING_TOKEN_REFRESH_LIFETIME_LATE_USER': timedelta(days=1),
-    'SLIDING_TOKEN_LIFETIME_LATE_USER': timedelta(days=30),
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
+    "SLIDING_TOKEN_REFRESH_LIFETIME": timedelta(days=1),
+    "SLIDING_TOKEN_LIFETIME": timedelta(days=30),
+    "SLIDING_TOKEN_REFRESH_LIFETIME_LATE_USER": timedelta(days=1),
+    "SLIDING_TOKEN_LIFETIME_LATE_USER": timedelta(days=30),
 }
 
-SWAGGER_SETTINGS = {
-    "SECURITY_SETTINGS": {},
-    "SECURITY_DEFINITIONS": {}
-}
+SWAGGER_SETTINGS = {"SECURITY_SETTINGS": {}, "SECURITY_DEFINITIONS": {}}
 
-SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
-#Telegram bot settings
+# Telegram bot settings
 # TELEGRAM_BOT_TOKEN = config('TELEGRAM_BOT_TOKEN', default='')
 # TELEGRAM_BOT_TOKEN = "1764241013:AAGA5L8vuZf8CBJH3iHkFsp84pRbFzSGwrc"
 # TELEGRAM_BOT_USER = decipher(config('TELEGRAM_BOT_USER'))
@@ -489,14 +488,14 @@ SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 # Slack credentials and configurations
 
-SLACK_BOT_USER_TOKEN = config('SLACK_BOT_USER_TOKEN')
-SLACK_VERIFICATION_TOKEN = config('SLACK_VERIFICATION_TOKEN')
-SLACK_CLIENT_ID = config('SLACK_CLIENT_ID')
-SLACK_CLIENT_SECRET = config('SLACK_CLIENT_SECRET')
-SLACK_SIGNING_SECRET = config('SLACK_SIGNING_SECRET')
+SLACK_BOT_USER_TOKEN = config("SLACK_BOT_USER_TOKEN")
+SLACK_VERIFICATION_TOKEN = config("SLACK_VERIFICATION_TOKEN")
+SLACK_CLIENT_ID = config("SLACK_CLIENT_ID")
+SLACK_CLIENT_SECRET = config("SLACK_CLIENT_SECRET")
+SLACK_SIGNING_SECRET = config("SLACK_SIGNING_SECRET")
 
-SLACK_DESTINATION_ADDR = 'https://watchtower.scibizinformatics.com/slack/notify/'
-SLACK_THEME_COLOR = '#82E0AA'
+SLACK_DESTINATION_ADDR = "https://watchtower.scibizinformatics.com/slack/notify/"
+SLACK_THEME_COLOR = "#82E0AA"
 
 
 MAX_BLOCK_TRANSACTIONS = 500
@@ -508,126 +507,93 @@ BITDB_QUERY_LIMIT_PER_PAGE = 1000
 TRANSACTIONS_PER_CHUNK = 100
 
 # Sideshift credentials
-SIDESHIFT_SECRET_KEY = config('SIDESHIFT_SECRET_KEY')
-SIDESHIFT_AFFILIATE_ID = config('SIDESHIFT_AFFILIATE_ID')
+SIDESHIFT_SECRET_KEY = config("SIDESHIFT_SECRET_KEY")
+SIDESHIFT_AFFILIATE_ID = config("SIDESHIFT_AFFILIATE_ID")
 
 LOGGING = {
-    'version': 1,
-    'disable_existing_loggers': False,
-    'formatters': {
-        'console': {
-            'format': '[%(asctime)s %(name)s] %(levelname)s [%(pathname)s:%(lineno)d] - %(message)s',
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "console": {
+            "format": "[%(asctime)s %(name)s] %(levelname)s [%(pathname)s:%(lineno)d] - %(message)s",
         },
     },
-    'handlers': {
-        'console': {
-            'class': 'logging.StreamHandler',
-            'formatter': 'console'
-        },
+    "handlers": {
+        "console": {"class": "logging.StreamHandler", "formatter": "console"},
     },
-    'loggers': {
-        '': {
-            'level': 'WARNING',
-            'handlers': ['console'],
-            'propagate': False
+    "loggers": {
+        "": {"level": "WARNING", "handlers": ["console"], "propagate": False},
+        "django": {"handlers": ["console"], "level": "INFO", "propagate": False},
+        "main": {"handlers": ["console"], "level": "INFO", "propagate": False},
+        "chat": {"handlers": ["console"], "level": "INFO", "propagate": False},
+        "django.template": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
         },
-        'django': {
-            'handlers': ['console'],
-            'level': 'INFO',
-            'propagate': False
+        "ramp": {"handlers": ["console"], "level": "INFO", "propagate": False},
+        "rampp2p": {"handlers": ["console"], "level": "INFO", "propagate": False},
+        "notifications": {"handlers": ["console"], "level": "INFO", "propagate": False},
+        "paytacagifts": {"handlers": ["console"], "level": "INFO", "propagate": False},
+        "stablehedge": {
+            "handlers": ["console"],
+            "level": "DEBUG",
+            "propagate": False,
         },
-        'main': {
-            'handlers': ['console'],
-            'level': 'INFO',
-            'propagate': False
+        "multisig": {
+            "handlers": ["console"],
+            "level": "DEBUG",
+            "propagate": False,
         },
-        'chat': {
-            'handlers': ['console'],
-            'level': 'INFO',
-            'propagate': False
+        "memos": {
+            "handlers": ["console"],
+            "level": "DEBUG",
+            "propagate": False,
         },
-        'django.template': {
-            'handlers': ['console'],
-            'level': 'INFO',
-            'propagate': False
+        "jpp": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
         },
-        'ramp': {
-            'handlers': ['console'],
-            'level': 'INFO',
-            'propagate': False    
-        },
-        'rampp2p': {
-            'handlers': ['console'],
-            'level': 'INFO',
-            'propagate': False    
-        },
-        'notifications': {
-            'handlers': ['console'],
-            'level': 'INFO',
-            'propagate': False    
-        },
-        'paytacagifts': {
-            'handlers': ['console'],
-            'level': 'INFO',
-            'propagate': False    
-        },
-        'stablehedge': {
-            'handlers': ['console'],
-            'level': 'DEBUG',
-            'propagate': False,
-        },
-        'multisig': {
-            'handlers': ['console'],
-            'level': 'DEBUG',
-            'propagate': False,
-        },
-        'memos': {
-            'handlers': ['console'],
-            'level': 'DEBUG',
-            'propagate': False,
-        },
-        'jpp': {
-            'handlers': ['console'],
-            'level': 'INFO',
-            'propagate': False,
-        }
     },
 }
 
-REDIS_CHANNEL_DB = [0, 1][DEPLOYMENT_INSTANCE == 'prod']
-REDIS_CHANNEL = f"redis://:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}/{REDIS_CHANNEL_DB}"
+REDIS_CHANNEL_DB = [0, 1][DEPLOYMENT_INSTANCE == "prod"]
+REDIS_CHANNEL = (
+    f"redis://:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}/{REDIS_CHANNEL_DB}"
+)
 
 CHANNEL_LAYERS = {
-    'default': {
-        'BACKEND': 'channels_redis.core.RedisChannelLayer',
-        'CONFIG': {
-            'hosts': [REDIS_CHANNEL],
-            "capacity": 1000,  # messages per channel
-            "expiry": 300,      # seconds a message stays in Redis
-        }
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [REDIS_CHANNEL],
+            "capacity": 500,  # Reduced from 1000 to save Redis memory
+            "expiry": 120,  # Reduced from 300 seconds (2 min instead of 5)
+        },
     }
 }
 
 
 # websocket vars
-WATCH_ROOM = 'watch_room'
+WATCH_ROOM = "watch_room"
 
-START_BLOCK = int(decipher(config('START_BLOCK')))
+START_BLOCK = int(decipher(config("START_BLOCK")))
 
 
 SMARTBCH = {
     "START_BLOCK": safe_cast(
-        decipher(config('SBCH_START_BLOCK', None)),
+        decipher(config("SBCH_START_BLOCK", None)),
         var_type=decimal.Decimal,
         default=None,
     ),
     "BLOCK_TO_PRELOAD": safe_cast(
-        decipher(config('SBCH_BLOCK_TO_PRELOAD', None)),
+        decipher(config("SBCH_BLOCK_TO_PRELOAD", None)),
         var_type=int,
         default=None,
     ),
     "BLOCKS_PER_TASK": safe_cast(
-        decipher(config('SBCH_BLOCKS_PER_TASK', 50)),
+        decipher(config("SBCH_BLOCKS_PER_TASK", 50)),
         var_type=int,
         default=50,
     ),
@@ -636,153 +602,159 @@ SMARTBCH = {
 
 PAYTACAPOS = {
     "POS_ID_MAX_DIGITS": 4,
-    "TOTP_SECRET_KEY": decipher(config('TOTP_SECRET_KEY')),
+    "TOTP_SECRET_KEY": decipher(config("TOTP_SECRET_KEY")),
 }
 
 ANYHEDGE = {
-    "ANYHEDGE_LP_BASE_URL": config("ANYHEDGE_LP_BASE_URL", "https://liquidity.anyhedge.com"),
+    "ANYHEDGE_LP_BASE_URL": config(
+        "ANYHEDGE_LP_BASE_URL", "https://liquidity.anyhedge.com"
+    ),
     "ANYHEDGE_DEFAULT_ORACLE_RELAY": config("ANYHEDGE_DEFAULT_ORACLE_RELAY", ""),
     "ANYHEDGE_DEFAULT_ORACLE_PORT": config("ANYHEDGE_DEFAULT_ORACLE_PORT", 0),
     "ANYHEDGE_DEFAULT_ORACLE_PUBKEY": config("ANYHEDGE_DEFAULT_ORACLE_PUBKEY", ""),
-    "ANYHEDGE_SETTLEMENT_SERVICE_AUTH_TOKEN": config("ANYHEDGE_SETTLEMENT_SERVICE_AUTH_TOKEN", ""),
+    "ANYHEDGE_SETTLEMENT_SERVICE_AUTH_TOKEN": config(
+        "ANYHEDGE_SETTLEMENT_SERVICE_AUTH_TOKEN", ""
+    ),
 }
 
 
-BCH_NETWORK = config('BCH_NETWORK', default='chipnet')
-RPC_USER = decipher(config('RPC_USER'))
+BCH_NETWORK = config("BCH_NETWORK", default="chipnet")
+RPC_USER = decipher(config("RPC_USER"))
 
 FULCRUM_PORT = 50001
-BCHN_HOST = config('BCHN_CHIPNET_HOST', 'bchn')
-if BCH_NETWORK == 'mainnet':
-    BCHN_HOST = config('BCHN_MAINNET_HOST', 'bchn')
+BCHN_HOST = config("BCHN_CHIPNET_HOST", "bchn")
+if BCH_NETWORK == "mainnet":
+    BCHN_HOST = config("BCHN_MAINNET_HOST", "bchn")
     FULCRUM_PORT = 60001
-BCHN_RPC_PASSWORD = decipher(config('BCHN_RPC_PASSWORD'))
+BCHN_RPC_PASSWORD = decipher(config("BCHN_RPC_PASSWORD"))
 
-BCHN_NODE = f'http://{RPC_USER}:{BCHN_RPC_PASSWORD}@{BCHN_HOST}:8332'
+BCHN_NODE = f"http://{RPC_USER}:{BCHN_RPC_PASSWORD}@{BCHN_HOST}:8332"
 
 # BCHD_RPC_PASSWORD = decipher(config('BCHD_RPC_PASSWORD'))
 # BCHD_NODE = f'http://{RPC_USER}:{BCHD_RPC_PASSWORD}@bchd:18334'
-BCHD_NODE = 'bchd.greyh.at:8335'
+BCHD_NODE = "bchd.greyh.at:8335"
 
 # Disable BCHD connections (defaults to True)
-DISABLE_BCHD = config('DISABLE_BCHD', default=True, cast=bool)
+DISABLE_BCHD = config("DISABLE_BCHD", default=True, cast=bool)
 
-WT_DEFAULT_CASHTOKEN_ID = 'wt_cashtoken_token_id'
+WT_DEFAULT_CASHTOKEN_ID = "wt_cashtoken_token_id"
 
-bcmr_url_type = ''
-domain_prefix = ''
+bcmr_url_type = ""
+domain_prefix = ""
 
-if BCH_NETWORK == 'chipnet':
-    bcmr_url_type = '-chipnet'
-    domain_prefix = 'chipnet.'
+if BCH_NETWORK == "chipnet":
+    bcmr_url_type = "-chipnet"
+    domain_prefix = "chipnet."
 
-PAYTACA_BCMR_URL = f'https://bcmr{bcmr_url_type}.paytaca.com/api'
-DOMAIN = f'https://{domain_prefix}watchtower.cash'
+PAYTACA_BCMR_URL = f"https://bcmr{bcmr_url_type}.paytaca.com/api"
+DOMAIN = f"https://{domain_prefix}watchtower.cash"
 
-if DEPLOYMENT_INSTANCE == 'local':
-    DOMAIN = 'http://localhost:8000'
+if DEPLOYMENT_INSTANCE == "local":
+    DOMAIN = "http://localhost:8000"
 
 
 DEFAULT_TOKEN_DETAILS = {
-    'nft': {
-        'name': 'CashToken NFT',
-        'symbol': 'CASH-NFT'
-    },
-    'fungible': {
-        'name': 'CashToken',
-        'symbol': 'CASH'
-    }
+    "nft": {"name": "CashToken NFT", "symbol": "CASH-NFT"},
+    "fungible": {"name": "CashToken", "symbol": "CASH"},
 }
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = config('ENV', 'prod') != 'prod'
-ENV = config('ENV', 'prod')
+DEBUG = config("ENV", "prod") != "prod"
+ENV = config("ENV", "prod")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = config('ENV', 'prod') != 'prod'
-ENV = config('ENV', 'prod')
+DEBUG = config("ENV", "prod") != "prod"
+ENV = config("ENV", "prod")
 
-SATOSHI_PER_BCH = 10 ** 8 # 100,000,000 sats = 1 BCH
-DUST_LIMIT_CAP = 1000 # dust limit is 546 sats
+SATOSHI_PER_BCH = 10**8  # 100,000,000 sats = 1 BCH
+DUST_LIMIT_CAP = 1000  # dust limit is 546 sats
 
 # P2P Exchange Config
-BCHJS_TOKEN = config('BCHJS_TOKEN', '')
-SERVICER_PK = config('SERVICER_PK', '')
-SERVICER_ADDR = config('SERVICER_ADDR', '')
-SERVICE_FEE = config('SERVICE_FEE', 1000)
-ARBITRATION_FEE = config('ARBITRATION_FEE', 1000)
-CONTRACT_FEE = config('CONTRACT_FEE', 1000)
-SMART_CONTRACT_VERSION = config('SMART_CONTRACT_VERSION', '0.8.0')
+BCHJS_TOKEN = config("BCHJS_TOKEN", "")
+SERVICER_PK = config("SERVICER_PK", "")
+SERVICER_ADDR = config("SERVICER_ADDR", "")
+SERVICE_FEE = config("SERVICE_FEE", 1000)
+ARBITRATION_FEE = config("ARBITRATION_FEE", 1000)
+CONTRACT_FEE = config("CONTRACT_FEE", 1000)
+SMART_CONTRACT_VERSION = config("SMART_CONTRACT_VERSION", "0.8.0")
 
-PAYTACAPOS_PAYOUT_XPUBKEY = config('PAYTACAPOS_PAYOUT_XPUBKEY', '')
-PAYTACAPOS_PAYOUT_WALLET_HASH = config('PAYTACAPOS_PAYOUT_WALLET_HASH', '')
+PAYTACAPOS_PAYOUT_XPUBKEY = config("PAYTACAPOS_PAYOUT_XPUBKEY", "")
+PAYTACAPOS_PAYOUT_WALLET_HASH = config("PAYTACAPOS_PAYOUT_WALLET_HASH", "")
 
 from requests.compat import urljoin
-IMAGE_UPLOAD_FOLDER = 'image_uploads'
+
+IMAGE_UPLOAD_FOLDER = "image_uploads"
 IMAGE_UPLOAD_PATH = urljoin(MEDIA_URL, IMAGE_UPLOAD_FOLDER)
 IMAGE_UPLOAD_ROOT = os.path.join(MEDIA_ROOT, IMAGE_UPLOAD_FOLDER)
 
-P2P_EXCHANGE_SLACKBOT_USER_TOKEN=config('P2P_EXCHANGE_SLACKBOT_USER_TOKEN', '')
-P2P_EXCHANGE_SLACK_CHANNEL=config('P2P_EXCHANGE_SLACK_CHANNEL', '#paytaca-p2pexchange-alerts')
+P2P_EXCHANGE_SLACKBOT_USER_TOKEN = config("P2P_EXCHANGE_SLACKBOT_USER_TOKEN", "")
+P2P_EXCHANGE_SLACK_CHANNEL = config(
+    "P2P_EXCHANGE_SLACK_CHANNEL", "#paytaca-p2pexchange-alerts"
+)
 
 # authentication
-FERNET_KEY = config('FERNET_KEY', '')
+FERNET_KEY = config("FERNET_KEY", "")
 
 # Used for fallback computation of tx fee
 TX_FEE_RATE = 1.2
 
-MQTT_HOST = config('MQTT_HOST', '')
-MQTT_PORT = config('MQTT_PORT', '', cast=int)
+MQTT_HOST = config("MQTT_HOST", "")
+MQTT_PORT = config("MQTT_PORT", "", cast=int)
 
 # CoinGecko
 
-COINGECKO_API_KEY = config('COINGECKO_API_KEY', '')
+COINGECKO_API_KEY = config("COINGECKO_API_KEY", "")
 
 
 # cashaddress library
 # Altering third party library cashaddress to support p2sh32
-# might not be the best fix due to alteration of Address.__init__ 
+# might not be the best fix due to alteration of Address.__init__
 from cashaddress.convert import Address
 
 Address.VERSION_MAP["legacy"] += [
-    ('P2SH32', 5, False),
-    ('P2SH32-TESTNET', 196, True),
+    ("P2SH32", 5, False),
+    ("P2SH32-TESTNET", 196, True),
 ]
 
 Address.VERSION_MAP["cash"] += [
-    ('P2SH32', 11, False),
-    ('P2SH32-TESTNET', 11, True),
-
-    ('CT-P2SH', 24, False),
-    ('CT-P2SH32', 27, False),
-    ('CT-P2PKH', 16, False),
-    ('CT-P2SH-TESTNET', 24, True),
-    ('CT-P2SH32-TESTNET', 27, True),
-    ('CT-P2PKH-TESTNET', 16, True),
+    ("P2SH32", 11, False),
+    ("P2SH32-TESTNET", 11, True),
+    ("CT-P2SH", 24, False),
+    ("CT-P2SH32", 27, False),
+    ("CT-P2PKH", 16, False),
+    ("CT-P2SH-TESTNET", 24, True),
+    ("CT-P2SH32-TESTNET", 27, True),
+    ("CT-P2PKH-TESTNET", 16, True),
 ]
 
 # hack-ish way to for updating Addre
 Address__init__ = Address.__init__
+
+
 def new_init(self, *args, **kwargs):
     response = Address__init__(self, *args, **kwargs)
-    if len(self.payload) == 32 and \
-        "P2SH" in self.version and \
-        "P2SH32" not in self.version:
-
+    if (
+        len(self.payload) == 32
+        and "P2SH" in self.version
+        and "P2SH32" not in self.version
+    ):
         self.version = self.version.replace("P2SH", "P2SH32")
 
     return response
+
+
 Address.__init__ = new_init
 
 
 # stablehedge configs
-STABLEHEDGE_FERNET_KEY = config('STABLEHEDGE_FERNET_KEY')
+STABLEHEDGE_FERNET_KEY = config("STABLEHEDGE_FERNET_KEY")
 STABLEHEDGE = {
-    "FERNET_KEY": config('STABLEHEDGE_FERNET_KEY', ''),
-    "AUTH_KEY_WALLET_WIF": config('STABLEHEDGE_AUTH_KEY_WALLET_WIF', ''),
+    "FERNET_KEY": config("STABLEHEDGE_FERNET_KEY", ""),
+    "AUTH_KEY_WALLET_WIF": config("STABLEHEDGE_AUTH_KEY_WALLET_WIF", ""),
 }
 
 MULTISIG = {
-    "ENABLE_AUTH": False,
-    "TIMESTAMP_DRIFT_SECONDS": 60 * 2  # ±60 * n seconds allowed
+    "ENABLE_AUTH": config("MULTISIG_ENABLE_AUTH", default=True, cast=bool),
+    "TIMESTAMP_DRIFT_SECONDS": 60 * 2,  # ±60 * n seconds allowed
+    "JS_SERVER": config("MULTISIG_JS_SERVER", "http://localhost:3004"),
 }

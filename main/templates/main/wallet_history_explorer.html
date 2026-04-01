@@ -96,6 +96,64 @@
           </div>
         </div>
       </div>
+
+      <!-- Statistics Panel -->
+      <div class="row" id="statsPanel" style="margin-bottom: 20px;">
+        <div class="col-md-6">
+          <div class="panel panel-default">
+            <div class="panel-heading">
+              <h3 class="panel-title">BCH Transaction Statistics</h3>
+            </div>
+            <div class="panel-body">
+              <table class="table table-condensed" style="margin-bottom: 0;">
+                <tr>
+                  <td><strong>Min:</strong></td>
+                  <td id="minBchReceived" style="text-align: right; font-family: monospace;">0.00000000 BCH</td>
+                </tr>
+                <tr>
+                  <td><strong>Max:</strong></td>
+                  <td id="maxBchReceived" style="text-align: right; font-family: monospace;">0.00000000 BCH</td>
+                </tr>
+                <tr>
+                  <td><strong>Average:</strong></td>
+                  <td id="avgBchReceived" style="text-align: right; font-family: monospace;">0.00000000 BCH</td>
+                </tr>
+                <tr>
+                  <td><strong>Median:</strong></td>
+                  <td id="medianBchReceived" style="text-align: right; font-family: monospace;">0.00000000 BCH</td>
+                </tr>
+              </table>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-6">
+          <div class="panel panel-default">
+            <div class="panel-heading">
+              <h3 class="panel-title" id="statsFiatTitle">USD Transaction Statistics</h3>
+            </div>
+            <div class="panel-body">
+              <table class="table table-condensed" style="margin-bottom: 0;">
+                <tr>
+                  <td><strong>Min:</strong></td>
+                  <td id="minFiatReceived" style="text-align: right; font-family: monospace;">$0.00</td>
+                </tr>
+                <tr>
+                  <td><strong>Max:</strong></td>
+                  <td id="maxFiatReceived" style="text-align: right; font-family: monospace;">$0.00</td>
+                </tr>
+                <tr>
+                  <td><strong>Average:</strong></td>
+                  <td id="avgFiatReceived" style="text-align: right; font-family: monospace;">$0.00</td>
+                </tr>
+                <tr>
+                  <td><strong>Median:</strong></td>
+                  <td id="medianFiatReceived" style="text-align: right; font-family: monospace;">$0.00</td>
+                </tr>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
       
       <h3>Transaction History</h3>
       <p id="resultSummary" class="text-muted"></p>
@@ -183,6 +241,7 @@
   let currentStartDate = '';
   let currentEndDate = '';
   let allHistoryData = []; // Store all data for client-side pagination
+  let historicalPricesCache = {}; // Cache for historical prices by timestamp
   const PAGE_SIZE = 20;
   
   $(document).ready(function() {
@@ -239,6 +298,151 @@
     }
   }
   
+  function getCacheKey(timestamp) {
+    // Normalize timestamp to minute level for caching
+    const date = new Date(timestamp);
+    date.setSeconds(0, 0);
+    return date.toISOString();
+  }
+
+  function calculateMedian(values) {
+    if (values.length === 0) return 0;
+
+    // Sort the array
+    const sorted = values.slice().sort(function(a, b) { return a - b; });
+    const mid = Math.floor(sorted.length / 2);
+
+    if (sorted.length % 2 === 0) {
+      // Even number of elements - average the two middle values
+      return (sorted[mid - 1] + sorted[mid]) / 2;
+    } else {
+      // Odd number of elements - return the middle value
+      return sorted[mid];
+    }
+  }
+
+  function fetchHistoricalBchPrice(timestamp) {
+    return new Promise(function(resolve, reject) {
+      const cacheKey = getCacheKey(timestamp);
+      
+      // Check cache first
+      if (historicalPricesCache[cacheKey] !== undefined) {
+        console.log('Cache hit for', currentFiatCurrency, 'at', cacheKey);
+        resolve(historicalPricesCache[cacheKey]);
+        return;
+      }
+      
+      console.log('Cache miss for', currentFiatCurrency, 'at', cacheKey, '- fetching from API');
+      
+      // Fetch historical price from API
+      $.ajax({
+        url: '/api/bch-prices/historical/?currency=' + encodeURIComponent(currentFiatCurrency) + '&timestamp=' + encodeURIComponent(timestamp),
+        method: 'GET',
+        success: function(response) {
+          if (response && response.price_value) {
+            const price = parseFloat(response.price_value);
+            historicalPricesCache[cacheKey] = price;
+            console.log('Fetched price from API:', price, 'for', currentFiatCurrency, 'at', cacheKey);
+            resolve(price);
+          } else {
+            historicalPricesCache[cacheKey] = null;
+            console.log('No price returned from API for', currentFiatCurrency, 'at', cacheKey);
+            resolve(null);
+          }
+        },
+        error: function(xhr) {
+          historicalPricesCache[cacheKey] = null;
+          console.error('Error fetching price from API:', xhr.status, xhr.responseText);
+          resolve(null);
+        }
+      });
+    });
+  }
+  
+  function fetchMissingHistoricalPrices(transactions) {
+    return new Promise(function(resolve, reject) {
+      const BATCH_SIZE = 10; // Process 10 requests at a time to avoid overwhelming the API
+      const requests = [];
+      
+      if (!transactions || transactions.length === 0) {
+        resolve(transactions);
+        return;
+      }
+      
+      // Collect all transactions that need historical prices
+      // Use a Map to group transactions by cache key (minute-level)
+      const cacheKeyToIndices = new Map();
+      transactions.forEach(function(tx, index) {
+        const hasPrice = (tx.fiat_amounts && tx.fiat_amounts[currentFiatCurrency] !== undefined) ||
+                         (tx.market_prices && tx.market_prices[currentFiatCurrency]) ||
+                         (tx.usd_price && currentFiatCurrency === 'USD');
+        
+        if (!hasPrice && tx.tx_timestamp) {
+          const cacheKey = getCacheKey(tx.tx_timestamp);
+          if (!cacheKeyToIndices.has(cacheKey)) {
+            cacheKeyToIndices.set(cacheKey, []);
+            requests.push({ cacheKey: cacheKey, timestamp: tx.tx_timestamp });
+          }
+          cacheKeyToIndices.get(cacheKey).push(index);
+        }
+      });
+      
+      console.log('Unique timestamps needing historical prices:', requests.length, '(after deduplication)');
+      
+      if (requests.length === 0) {
+        resolve(transactions);
+        return;
+      }
+      
+      // Process in batches
+      const updatedTransactions = transactions.slice();
+      let currentBatch = 0;
+      
+      function processBatch() {
+        const start = currentBatch * BATCH_SIZE;
+        const end = Math.min(start + BATCH_SIZE, requests.length);
+        const batch = requests.slice(start, end);
+
+        console.log('Processing batch', currentBatch + 1, 'of', Math.ceil(requests.length / BATCH_SIZE));
+
+        const promises = batch.map(function(req) {
+          return fetchHistoricalBchPrice(req.timestamp).then(function(price) {
+            if (price !== null) {
+              // Get all transaction indices that share this cache key
+              const indices = cacheKeyToIndices.get(req.cacheKey);
+              indices.forEach(function(idx) {
+                if (!updatedTransactions[idx].historical_prices) {
+                  updatedTransactions[idx].historical_prices = {};
+                }
+                updatedTransactions[idx].historical_prices[currentFiatCurrency] = price;
+              });
+            }
+            return price;
+          });
+        });
+
+        Promise.all(promises).then(function() {
+          currentBatch++;
+          if (start + BATCH_SIZE < requests.length) {
+            // Process next batch
+            setTimeout(processBatch, 100); // Small delay between batches
+          } else {
+            // All batches complete
+            console.log('All historical prices fetched');
+            resolve(updatedTransactions);
+          }
+        }).catch(function(err) {
+          console.error('Batch error:', err);
+          // Continue with what we have
+          resolve(updatedTransactions);
+        });
+      }
+      
+      // Start processing batches
+      processBatch();
+    });
+  }
+
   function loadHistory(page) {
     currentWalletHash = $('#walletHash').val().trim();
     currentFiatCurrency = $('#fiatCurrency').val();
@@ -249,6 +453,9 @@
       showError('Please enter a wallet hash');
       return;
     }
+
+    // Clear historical prices cache when currency changes
+    historicalPricesCache = {};
 
     // Update URL
     const url = new URL(window.location);
@@ -290,11 +497,75 @@
 
     // Make API call
     $.ajax({
-      url: `/api/history/wallet/${encodeURIComponent(currentWalletHash)}/`,
+      url: '/api/history/wallet/' + encodeURIComponent(currentWalletHash) + '/',
       method: 'GET',
       data: apiParams,
       success: function(response) {
-        displayResults(response, page);
+        console.log('API response received, type:', Array.isArray(response) ? 'array' : 'object');
+        
+        // Fetch historical prices for transactions that need them
+        let transactions = Array.isArray(response) ? response : (response.history || []);
+        console.log('Number of transactions:', transactions.length);
+        
+        // Check if any transactions need historical prices
+        let needsHistoricalPrices = false;
+        for (var i = 0; i < transactions.length; i++) {
+          var tx = transactions[i];
+          var hasPrice = (tx.fiat_amounts && tx.fiat_amounts[currentFiatCurrency] !== undefined) ||
+                         (tx.market_prices && tx.market_prices[currentFiatCurrency]) ||
+                         (tx.usd_price && currentFiatCurrency === 'USD');
+          if (!hasPrice && tx.tx_timestamp) {
+            needsHistoricalPrices = true;
+            break;
+          }
+        }
+        
+        if (!needsHistoricalPrices) {
+          console.log('No historical prices needed, displaying results immediately');
+          displayResults(response, page);
+          $('#submitBtn').prop('disabled', false);
+          $('#loadingSpinner').hide();
+          return;
+        }
+        
+        console.log('Fetching historical prices...');
+        
+        // Set a timeout to display results even if historical prices take too long
+        let historicalPricesTimeout = setTimeout(function() {
+          console.log('Historical prices timeout - displaying results without all prices');
+          displayResults(response, page);
+          $('#submitBtn').prop('disabled', false);
+          $('#loadingSpinner').hide();
+        }, 30000); // 30 second timeout
+        
+        fetchMissingHistoricalPrices(transactions).then(function(updatedTransactions) {
+          clearTimeout(historicalPricesTimeout);
+          console.log('Historical prices fetched, displaying results');
+          let processedResponse;
+          if (Array.isArray(response)) {
+            // Legacy format
+            processedResponse = updatedTransactions;
+          } else {
+            // New format - create copy of response with updated history
+            processedResponse = {};
+            for (var key in response) {
+              if (response.hasOwnProperty(key)) {
+                processedResponse[key] = response[key];
+              }
+            }
+            processedResponse.history = updatedTransactions;
+          }
+          displayResults(processedResponse, page);
+          $('#submitBtn').prop('disabled', false);
+          $('#loadingSpinner').hide();
+        }).catch(function(err) {
+          clearTimeout(historicalPricesTimeout);
+          console.error('Error fetching historical prices:', err);
+          // Display results anyway, just without historical prices
+          displayResults(response, page);
+          $('#submitBtn').prop('disabled', false);
+          $('#loadingSpinner').hide();
+        });
       },
       error: function(xhr) {
         let errorMsg = 'An error occurred while fetching the wallet history.';
@@ -304,8 +575,6 @@
           errorMsg = xhr.responseJSON.error;
         }
         showError(errorMsg);
-      },
-      complete: function() {
         $('#submitBtn').prop('disabled', false);
         $('#loadingSpinner').hide();
       }
@@ -359,17 +628,21 @@
       $('.miner-fee-col').hide();
     }
     
-    // Calculate totals for ALL incoming transactions across all pages
+    // Calculate totals and statistics for ALL incoming transactions across all pages
     let allTransactions = isLegacyFormat ? allHistoryData : historyData;
     let totalBch = 0;
     let totalFiat = 0;
     let totalIncomingCount = 0;
+    let bchAmounts = [];
+    let fiatAmounts = [];
     
     allTransactions.forEach(function(tx) {
       if (tx.record_type === 'incoming') {
         const bchAmount = parseFloat(tx.amount) || 0;
-        totalBch += Math.abs(bchAmount);
+        const absBchAmount = Math.abs(bchAmount);
+        totalBch += absBchAmount;
         totalIncomingCount++;
+        bchAmounts.push(absBchAmount);
         
         // Calculate fiat amount
         let fiatValue = 0;
@@ -377,13 +650,36 @@
           fiatValue = parseFloat(tx.fiat_amounts[currentFiatCurrency]);
         } else if (tx.market_prices && tx.market_prices[currentFiatCurrency]) {
           const price = parseFloat(tx.market_prices[currentFiatCurrency]);
-          fiatValue = Math.abs(bchAmount) * price;
+          fiatValue = absBchAmount * price;
         } else if (tx.usd_price && currentFiatCurrency === 'USD') {
-          fiatValue = Math.abs(bchAmount) * parseFloat(tx.usd_price);
+          fiatValue = absBchAmount * parseFloat(tx.usd_price);
+        } else if (tx.historical_prices && tx.historical_prices[currentFiatCurrency]) {
+          // Use historical price fetched from API
+          const price = parseFloat(tx.historical_prices[currentFiatCurrency]);
+          fiatValue = absBchAmount * price;
         }
         totalFiat += Math.abs(fiatValue);
+        fiatAmounts.push(Math.abs(fiatValue));
       }
     });
+    
+    // Calculate statistics
+    let minBch = 0, maxBch = 0, avgBch = 0, medianBch = 0;
+    let minFiat = 0, maxFiat = 0, avgFiat = 0, medianFiat = 0;
+    
+    if (bchAmounts.length > 0) {
+      minBch = Math.min.apply(null, bchAmounts);
+      maxBch = Math.max.apply(null, bchAmounts);
+      avgBch = totalBch / bchAmounts.length;
+      medianBch = calculateMedian(bchAmounts);
+    }
+    
+    if (fiatAmounts.length > 0) {
+      minFiat = Math.min.apply(null, fiatAmounts);
+      maxFiat = Math.max.apply(null, fiatAmounts);
+      avgFiat = totalFiat / fiatAmounts.length;
+      medianFiat = calculateMedian(fiatAmounts);
+    }
     
     // Update totals display
     $('#totalBchReceived').text(totalBch.toFixed(8) + ' BCH');
@@ -391,7 +687,31 @@
       style: 'currency',
       currency: currentFiatCurrency
     }));
-    $('#totalFiatTitle').text(`Total ${currentFiatCurrency} Received`);
+    $('#totalFiatTitle').text('Total ' + currentFiatCurrency + ' Received');
+    
+    // Update statistics display
+    $('#minBchReceived').text(minBch.toFixed(8) + ' BCH');
+    $('#maxBchReceived').text(maxBch.toFixed(8) + ' BCH');
+    $('#avgBchReceived').text(avgBch.toFixed(8) + ' BCH');
+    $('#medianBchReceived').text(medianBch.toFixed(8) + ' BCH');
+    
+    $('#minFiatReceived').text(minFiat.toLocaleString('en-US', {
+      style: 'currency',
+      currency: currentFiatCurrency
+    }));
+    $('#maxFiatReceived').text(maxFiat.toLocaleString('en-US', {
+      style: 'currency',
+      currency: currentFiatCurrency
+    }));
+    $('#avgFiatReceived').text(avgFiat.toLocaleString('en-US', {
+      style: 'currency',
+      currency: currentFiatCurrency
+    }));
+    $('#medianFiatReceived').text(medianFiat.toLocaleString('en-US', {
+      style: 'currency',
+      currency: currentFiatCurrency
+    }));
+    $('#statsFiatTitle').text(currentFiatCurrency + ' Transaction Statistics');
     
     // Build table rows
     let rows = '';
@@ -419,27 +739,35 @@
       
       // Get fiat amount
       let fiatAmount = 'N/A';
+      let fiatValue = null;
+      let priceSource = null;
       if (tx.fiat_amounts && tx.fiat_amounts[currentFiatCurrency] !== undefined) {
-        const fiatValue = parseFloat(tx.fiat_amounts[currentFiatCurrency]);
-        fiatAmount = fiatValue.toLocaleString('en-US', {
-          style: 'currency',
-          currency: currentFiatCurrency
-        });
+        fiatValue = parseFloat(tx.fiat_amounts[currentFiatCurrency]);
+        priceSource = 'input';
       } else if (tx.market_prices && tx.market_prices[currentFiatCurrency]) {
-        // Fallback: calculate from market price
+        // Fallback: calculate from historical market price stored at transaction time
         const price = parseFloat(tx.market_prices[currentFiatCurrency]);
-        const fiatValue = Math.abs(bchAmount) * price;
-        fiatAmount = fiatValue.toLocaleString('en-US', {
-          style: 'currency',
-          currency: currentFiatCurrency
-        });
+        fiatValue = Math.abs(bchAmount) * price;
+        priceSource = 'market';
       } else if (tx.usd_price && currentFiatCurrency === 'USD') {
         // Fallback to USD price if available
-        const fiatValue = Math.abs(bchAmount) * parseFloat(tx.usd_price);
+        fiatValue = Math.abs(bchAmount) * parseFloat(tx.usd_price);
+        priceSource = 'usd';
+      } else if (tx.historical_prices && tx.historical_prices[currentFiatCurrency]) {
+        // Use historical price fetched from API
+        const price = parseFloat(tx.historical_prices[currentFiatCurrency]);
+        fiatValue = Math.abs(bchAmount) * price;
+        priceSource = 'historical';
+      }
+
+      if (fiatValue !== null) {
         fiatAmount = fiatValue.toLocaleString('en-US', {
           style: 'currency',
-          currency: 'USD'
+          currency: currentFiatCurrency
         });
+      } else {
+        // Add tooltip explaining why N/A
+        fiatAmount = '<span title="Historical price not available for this date">N/A</span>';
       }
       
       // Calculate miner fee in BCH and fiat
@@ -458,6 +786,10 @@
             feeFiatValue = feeBch * price;
           } else if (tx.usd_price && currentFiatCurrency === 'USD') {
             feeFiatValue = feeBch * parseFloat(tx.usd_price);
+          } else if (tx.historical_prices && tx.historical_prices[currentFiatCurrency]) {
+            // Use historical price fetched from API
+            const price = parseFloat(tx.historical_prices[currentFiatCurrency]);
+            feeFiatValue = feeBch * price;
           }
           
           if (feeFiatValue !== null) {
