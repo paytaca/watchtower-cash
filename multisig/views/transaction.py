@@ -416,27 +416,24 @@ class ProposalStatusView(APIView):
                 proposal.save(update_fields=["status"])
 
             if new_status == Proposal.Status.BROADCAST_INITIATED:
-                    transaction_broadcast = TransactionBroadcast.objects.filter(
-                        txid=spending_txid
-                    ).first()
-                    if transaction_broadcast:
-                        proposal.on_premise_transaction_broadcast = (
-                            transaction_broadcast
-                        )
-                        proposal.save(
-                            update_fields=["on_premise_transaction_broadcast"]
-                        )
+                transaction_broadcast = TransactionBroadcast.objects.filter(
+                    txid=spending_txid
+                ).first()
 
-                    if (
-                        not transaction_broadcast
-                        and new_status == Proposal.Status.BROADCAST_INITIATED
-                    ):
-                        proposal.off_premise_transaction_broadcast = spending_txid
-                        proposal.save(
-                            update_fields=["off_premise_transaction_broadcast"]
-                        )
+                if transaction_broadcast:
+                    proposal.on_premise_transaction_broadcast = (
+                        transaction_broadcast
+                    )
+                    proposal.save(
+                        update_fields=["on_premise_transaction_broadcast"]
+                    )
+                else:
+                    proposal.off_premise_transaction_broadcast = spending_txid
+                    proposal.save(
+                        update_fields=["off_premise_transaction_broadcast"]
+                    )
 
-                    response_data["txid"] = spending_txid
+                response_data["txid"] = spending_txid
 
             response_data["status"] = new_status
             response_data["wallet"] = proposal.wallet.id
