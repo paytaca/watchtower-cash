@@ -83,7 +83,6 @@
 
 
   
-import axios from 'axios'
 import {
   encodeTransactionCommon,
   hashTransaction,
@@ -897,73 +896,6 @@ export class Pst {
     return this.status 
   }
   
-  async resolveStatusByInputs(network='mainnet') {
-    for (const input of this.inputs) {
-      const txid = typeof input.outpointTransactionHash === 'string'
-        ? input.outpointTransactionHash
-        : binToHex(input.outpointTransactionHash)
-
-      try {
-
-        let url = network === 'mainnet' ? 
-          `https://watchtower.cash/api/transactions/outputs/?txid=${txid}`: 
-          `https://chipnet.watchtower.cash/api/transactions/outputs/?txid=${txid}`
-        const response = await axios.get(url)
-        const outputs = response.data?.results || []
-        const outputIndex = input.outpointIndex
-        const outputData = outputs.find(o => Number(o.index) === Number(outputIndex))
-
-        if (outputData?.spending_txid) {
-          const spendingTxid = outputData.spending_txid
-          const spendingTxHex = await this.options?.provider?.getRawTransaction(spendingTxid)
-
-          if (spendingTxHex) {
-            const decodedSpendingTx = decodeTransactionBch(hexToBin(spendingTxHex))
-            const inputs = decodedSpendingTx.inputs.map(input => {
-              return {
-                  ...input,
-                  unlockingBytecode: []
-              }
-            })
-            const spendingTxUnsigned = (new MultisigTransactionBuilder())
-              .addInputs(inputs)
-              .addOutputs(decodedSpendingTx.outputs)
-              .build()
-            const spendingTxUnsignedTransactionHash = hashTransaction(
-              encodeTransactionBch(decodeTransactionBch(hexToBin(spendingTxUnsigned)))
-            )
-
-            if (spendingTxUnsignedTransactionHash === this.unsignedTransactionHash) {
-              this.status = {
-                status: STATUS.BROADCASTED,
-                txid: spendingTxid,
-                outpointTransactionHash: txid,
-                outpointIndex: outputIndex
-              }
-            } else {
-              this.status = {
-                status: STATUS.CONFLICTED,
-                txid: spendingTxid,
-                outpointTransactionHash: txid,
-                outpointIndex: outputIndex
-              }
-            }
-            return this.status
-          }
-        }
-
-        this.status = {
-          status: STATUS.PENDING
-        }
-        
-        return this.status
-      } catch (error) {
-        console.error(`Error checking input status for txid ${txid}:`, error.message)
-      }
-    }
-    return this.status
-  }
-
   /**
    * Returns an array of decoded signer signature data objects for the given master fingerprint.
    *
