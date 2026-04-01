@@ -446,6 +446,9 @@ CORS_ALLOW_HEADERS = list(default_headers) + [
     "x-authmemo-pass",
     "x-auth-asset-wallethash",
     "x-auth-asset-pass",
+    "x-auth-cosigner-auth-message",
+    "x-auth-cosigner-auth-pubkey",
+    "x-auth-cosigner-auth-signature",
 ]
 
 REST_FRAMEWORK = {
@@ -751,7 +754,7 @@ STABLEHEDGE = {
 }
 
 MULTISIG = {
-    "ENABLE_AUTH": False,
+    "ENABLE_AUTH": config("MULTISIG_ENABLE_AUTH", default=True, cast=bool),
     "TIMESTAMP_DRIFT_SECONDS": 60 * 2,  # ±60 * n seconds allowed
     "JS_SERVER": config("MULTISIG_JS_SERVER", "http://localhost:3004"),
 }
