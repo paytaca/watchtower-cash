@@ -385,7 +385,7 @@ export const withTimeout = async (promise, ms, error) => {
  *
  * @example
  * // Example usage:
- * const data = await retryWithBackoff(() => axios.get('/api/data'), 3, 1000);
+ * const data = await retryWithBackoff(() => fetch('/api/data'), 3, 1000);
  * console.log(data);
  */
 export async function retryWithBackoff(fn, retries = 2, delay = 500) {

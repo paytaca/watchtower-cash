@@ -1,4 +1,3 @@
-import axios from 'axios'
 import { CashAddressNetworkPrefix, decodeCashAddress } from "bitauth-libauth-v3";
 import { ElectrumNetworkProvider } from 'cashscript';
 
@@ -106,13 +105,13 @@ export class WatchtowerNetworkProvider {
     //     }
     // }
     async getAddressUtxos(address, addressPath) {
-        const response =  await axios.get(`${this.hostname}/api/multisig/wallets/utxos/${address}`) 
-        response?.data?.forEach(utxo => {
+        const data = await fetch(`${this.hostname}/api/multisig/wallets/utxos/${address}`).then(r => r.json())
+        data?.forEach(utxo => {
             utxo.addressPath = addressPath
             utxo.address = address
             return utxo
         })
-        return response?.data || []
+        return data || []
     }
 
     async getWalletHashUtxos(walletHash, utxoType = 'bch', tokenFilter = 'ft') {
@@ -123,7 +122,7 @@ export class WatchtowerNetworkProvider {
         if (utxoType === 'cashtoken' && tokenFilter === 'nft') {
             url += `&is_cashtoken_nft=true`
         }
-        return await axios.get(url) 
+        return await fetch(url).then(r => r.json())
 
     }
 
@@ -148,7 +147,11 @@ export class WatchtowerNetworkProvider {
      * @returns {Promise<{ success: boolean, txid: string }>}
      */
     async broadcastTransaction(rawTxHex) { 
-        return  await axios.post(`${this.hostname}/api/broadcast/`, { transaction: rawTxHex })
+        return await fetch(`${this.hostname}/api/broadcast/`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ transaction: rawTxHex })
+        }).then(r => r.json())
     }
 
     async getRawTransaction(txid) {
@@ -166,7 +169,7 @@ export class WatchtowerNetworkProvider {
       
         url += `?type=${type}&all=${all}&page=${page}`
         
-        return await axios.get(url)
+        return await fetch(url).then(r => r.json())
       }
       
 
@@ -190,12 +193,16 @@ export class WatchtowerNetworkProvider {
             chipnet: process.env.WATCHTOWER_CHIP_PROJECT_ID
         }
 
-        return await axios.post(`${this.hostname}/api/subscription/`, {
-            project_id: projectId[this.network],
-            addresses,
-            address_index: addressIndex,
-            wallet_hash: walletHash
-        }) 
+        return await fetch(`${this.hostname}/api/subscription/`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                project_id: projectId[this.network],
+                addresses,
+                address_index: addressIndex,
+                wallet_hash: walletHash
+            })
+        }).then(r => r.json()) 
     }
       
 }
@@ -231,12 +238,15 @@ export class WatchtowerCoordinationServer {
      * @return {Promise<import('./wallet').MultisigWallet>}
      */
     async createWallet(wallet) {
-        const response = await axios.post(
+        const response = await fetch(
             `${this.hostname}/api/multisig/wallets/`,
-            wallet, 
-            { headers: await wallet.generateAuthCredentials() }
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', ...await wallet.generateAuthCredentials() },
+                body: JSON.stringify(wallet)
+            }
         )
-        return response.data   
+        return response.json()   
     }
 
     /**
@@ -245,50 +255,65 @@ export class WatchtowerCoordinationServer {
      */
     async uploadWallet({ wallet, authCredentialsGenerator }) {
         if (!authCredentialsGenerator) return null
-        const response = await axios.post(
+        const response = await fetch(
             `${this.hostname}/api/multisig/wallets/`,
-            wallet, 
-            { headers: await authCredentialsGenerator.generateAuthCredentials() }
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', ...await authCredentialsGenerator.generateAuthCredentials() },
+                body: JSON.stringify(wallet)
+            }
         )
-        return response.data   
+        return response.json()   
     } 
 
     async updateWalletLastIssuedDepositAddressIndex(wallet, lastIssuedDepositAddressIndex, network) {
-        const response = await axios.post(
+        const response = await fetch(
             `${this.hostname}/api/multisig/wallets/${wallet.walletHash}/last-issued-deposit-address-index`,
-            { network: network || this.network, lastIssuedDepositAddressIndex }, 
-            { headers: await wallet.generateAuthCredentials() }
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', ...await wallet.generateAuthCredentials() },
+                body: JSON.stringify({ network: network || this.network, lastIssuedDepositAddressIndex })
+            }
         )
-        return response.data
+        return response.json()
     }
 
     async updateWalletLastUsedDepositAddressIndex(wallet, lastUsedDepositAddressIndex, network) {
-        const response = await axios.post(
+        const response = await fetch(
             `${this.hostname}/api/multisig/wallets/${wallet.walletHash}/last-used-deposit-address-index`,
-            { network: network || this.network, lastUsedDepositAddressIndex }, 
-            { headers: await wallet.generateAuthCredentials() }
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', ...await wallet.generateAuthCredentials() },
+                body: JSON.stringify({ network: network || this.network, lastUsedDepositAddressIndex })
+            }
         )
-        return response.data
+        return response.json()
     }
 
     async updateWalletLastUsedChangeAddressIndex(wallet, lastUsedChangeAddressIndex, network) {
-        const response = await axios.post(
+        const response = await fetch(
             `${this.hostname}/api/multisig/wallets/${wallet.walletHash}/last-used-change-address-index`,
-            { network: network || this.network, lastUsedChangeAddressIndex }, 
-            { headers: await wallet.generateAuthCredentials() }
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', ...await wallet.generateAuthCredentials() },
+                body: JSON.stringify({ network: network || this.network, lastUsedChangeAddressIndex })
+            }
         )
-        return response.data
+        return response.json()
     }
 
     
     
     async uploadPst(pst) {
-        const response = await axios.post(
+        const response = await fetch(
             `${this.hostname}/api/multisig/psts/`,
-            pst, 
-            { headers: await pst.wallet.generateAuthCredentials() }
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', ...await pst.wallet.generateAuthCredentials() },
+                body: JSON.stringify(pst)
+            }
         )
-        return response.data
+        return response.json()
     }
      
     // --
@@ -297,43 +322,46 @@ export class WatchtowerCoordinationServer {
         const authCredentials = await authCredentialsGenerator.generateAuthCredentials()
         
         if (!authCredentials) return null
-        const response = await axios.post(
+        const response = await fetch(
             `${this.hostname}/api/multisig/coordinator/server-identities/`,
-            serverIdentity,
-            { headers: { ...authCredentials } }
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', ...authCredentials },
+                body: JSON.stringify(serverIdentity)
+            }
         )
-        return response.data
+        return response.json()
     }
 
     async getServerIdentity({ publicKey, authCredentialsGenerator }) {
         const authCredentials = await authCredentialsGenerator.generateAuthCredentials()
-        const response = await axios.get(
+        const response = await fetch(
             `${this.hostname}/api/multisig/coordinator/server-identities/${publicKey}/`,
             { headers: { ...authCredentials } }
         )
-        return response.data
+        return response.json()
     }
 
     async getWallet({ identifier }) {
-        const response = await axios.get(
+        const response = await fetch(
             `${this.hostname}/api/multisig/wallets/${identifier}/`
         )
-        return response.data
+        return response.json()
     }
 
     async getSignerWallets({ publicKey }) {        
-        const response = await axios.get(
+        const response = await fetch(
             `${this.hostname}/api/multisig/signers/${publicKey}/wallets/`
         )
-        return response.data
+        return response.json()
     }
 
 
     async getSignerWalletsByMasterFingerprint({ masterFingerprint }) {
-        const response = await axios.get(
+        const response = await fetch(
             `${this.hostname}/api/multisig/signers/${masterFingerprint}/wallets/`
         )
-        return response.data
+        return response.json()
     }
 
     /**
@@ -346,12 +374,15 @@ export class WatchtowerCoordinationServer {
      * @param {*} params.authCredentialsGenerator
      */
     async uploadProposal({ payload, authCosignerAuthCredentials, authCredentials }) {
-        const response = await axios.post(
+        const response = await fetch(
             `${this.hostname}/api/multisig/proposals/`,
-            payload, 
-            { headers: { ...authCredentials, ...authCosignerAuthCredentials } }
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', ...authCredentials, ...authCosignerAuthCredentials },
+                body: JSON.stringify(payload)
+            }
         )
-        return response.data
+        return response.json()
     }
 
     /**
@@ -369,11 +400,11 @@ export class WatchtowerCoordinationServer {
         if (!authCosignerCredentials && authCredentialsGenerator) {
             credentials = await authCredentialsGenerator.generateCosignerAuthCredentials()    
         }
-        const response = await axios.delete(
+        const response = await fetch(
             `${this.hostname}/api/multisig/proposals/${id}/?wallet_id=${walletId}`, 
-            { headers: { ...credentials } }
+            { method: 'DELETE', headers: { ...credentials } }
         )
-        return response.data
+        return response.json()
     }
 
     async getProposalStatus({ unsignedTransactionHash, queryFilter }) {
@@ -382,22 +413,22 @@ export class WatchtowerCoordinationServer {
         if (queryFilter?.includeDeleted) {
             url += '?include_deleted=true'
         }
-        const response = await axios.get(url)
-        return response?.data
+        const response = await fetch(url)
+        return response?.json()
     }
 
     async getProposalByUnsignedTransactionHash(unsignedTransactionHash) {
-        const response = await axios.get(
+        const response = await fetch(
             `${this.hostname}/api/multisig/proposals/${unsignedTransactionHash}/`
         )
-        return response.data
+        return response.json()
     }
 
     async getProposalCoordinator({ unsignedTransactionHash }) {
-        const response = await axios.get(
+        const response = await fetch(
             `${this.hostname}/api/multisig/proposals/${unsignedTransactionHash}/coordinator/`
         )
-        return response?.data
+        return response?.json()
     }
 
     /**
@@ -409,24 +440,24 @@ export class WatchtowerCoordinationServer {
      * @returns {Promise<import('./pst.js').DecodedSignerSignatureData[]>} Array of decoded signature data relevant to the provided master fingerprint.
      */
     async getSignerSignatures({ masterFingerprint, proposalUnsignedTransactionHash }) {
-        const response = await axios.get(
+        const response = await fetch(
             `${this.hostname}/api/multisig/proposals/${proposalUnsignedTransactionHash}/signatures/${masterFingerprint}/`
         )
-        return response.data
+        return response.json()
     }
 
     async getSignatures({ proposalUnsignedTransactionHash }) {
-        const response = await axios.get(
+        const response = await fetch(
             `${this.hostname}/api/multisig/proposals/${proposalUnsignedTransactionHash}/signatures/`
         )
-        return response.data
+        return response.json()
     }
 
     async getPsbts({ proposalUnsignedTransactionHash }) {
-        const response = await axios.get(
+        const response = await fetch(
             `${this.hostname}/api/multisig/proposals/${proposalUnsignedTransactionHash}/psbts/`
         )
-        return response.data
+        return response.json()
     }
 
     /**
@@ -440,14 +471,16 @@ export class WatchtowerCoordinationServer {
      * @returns {Promise<Object>} Response data from the signature submission.
      */
     async submitPsbt({ content, standard = 'psbt', encoding = 'base64', proposalUnsignedTransactionHash, walletId, authCosignerAuthCredentials }) {
-        // const authCosignerAuthCredentials = await authCredentialsGenerator.generateCosignerAuthCredentials()
-        const response = await axios.post(
+        const response = await fetch(
             `${this.hostname}/api/multisig/proposals/${proposalUnsignedTransactionHash}/psbts/?wallet_id=${walletId}`,
-            { content, standard, encoding },
-            { headers: { ...authCosignerAuthCredentials } }
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', ...authCosignerAuthCredentials },
+                body: JSON.stringify({ content, standard, encoding })
+            }
         )
 
-        return response?.data
+        return response?.json()
     }
 
      /**
@@ -463,25 +496,28 @@ export class WatchtowerCoordinationServer {
       * }>>} Array of proposals associated with the given wallet.
       */
     async getWalletProposals(walletIdentifier, status='pending') {
-        const response = await axios.get(
+        const response = await fetch(
             `${this.hostname}/api/multisig/wallets/${walletIdentifier}/proposals/?status=${status}`
         )
-        return response.data
+        return response.json()
     }
 
     async uploadWalletWcSession({ walletIdentifier, payload, authCosignerAuthCredentials }) {
-        const response = await axios.post(
+        const response = await fetch(
             `${this.hostname}/api/multisig/wallets/${walletIdentifier}/walletconnect/sessions/`,
-            payload,
-            { headers: { ...authCosignerAuthCredentials } }
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', ...authCosignerAuthCredentials },
+                body: JSON.stringify(payload)
+            }
         )
-        return response.data
+        return response.json()
     }
 
     async getWalletWcSessions({ walletIdentifier }) {
-        const response = await axios.get(
+        const response = await fetch(
             `${this.hostname}/api/multisig/wallets/${walletIdentifier}/walletconnect/sessions/`,
         )
-        return response.data
+        return response.json()
     }
 }
