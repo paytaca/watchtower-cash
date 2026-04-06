@@ -740,7 +740,7 @@ class UnifiedAssetPriceView(generics.GenericAPIView):
 
                             price_log, created = AssetPriceLog.objects.update_or_create(
                                 currency=currency,
-                                relative_currency="BCH",
+                                relative_currency=token_category[:8], # Using this to not clash actual {currency}/{BCH} prices
                                 currency_ft_token=token_obj,
                                 source="calculated",
                                 timestamp=calculated_timestamp,
