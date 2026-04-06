@@ -553,6 +553,11 @@ class AssetPriceLogDetailView(generics.RetrieveAPIView):
 class UnifiedAssetPriceView(generics.GenericAPIView):
     """
     Unified API endpoint for getting prices of both BCH and tokens
+
+    For cashtoken assets, returns:
+        TOKENS per currency (e.g. TOKEN/USD, TOKEN/BCH)
+    For non cashtoken assets (BCH asset), returns:
+        currency per asset (e.g. USD/BCH, PHP/BCH)
     """
 
     serializer_class = serializers.UnifiedAssetPriceSerializer
