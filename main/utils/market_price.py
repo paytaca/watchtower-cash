@@ -218,8 +218,8 @@ def get_and_save_latest_bch_rates(currencies=[], max_age=30):
             'relative_currency': "BCH",
             'timestamp': bch_rate[1],
             'source': bch_rate[2],
-            'currency_ft_token': True,
-            'relative_currency_ft_token': True,
+            'currency_ft_token': None,
+            'relative_currency_ft_token': None,
         }
 
         price_log_check = AssetPriceLog.objects.filter(**price_log_data)

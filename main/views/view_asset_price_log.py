@@ -556,6 +556,7 @@ class UnifiedAssetPriceView(generics.GenericAPIView):
 
     For cashtoken assets, returns:
         TOKENS per currency (e.g. TOKEN/USD, TOKEN/BCH)
+
     For non cashtoken assets (BCH asset), returns:
         currency per asset (e.g. USD/BCH, PHP/BCH)
     """
