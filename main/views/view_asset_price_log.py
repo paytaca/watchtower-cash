@@ -130,6 +130,8 @@ class HistoricalBCHPriceView(generics.GenericAPIView):
             "relative_currency": "BCH",
             "timestamp__gte": min_time,
             "timestamp__lte": max_time,
+            "currency_ft_token__isnull": True,
+            "relative_currency_ft_token__isnull": True,
         }
 
         # For ARS, use coingecko-yadio source

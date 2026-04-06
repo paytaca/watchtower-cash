@@ -37,6 +37,8 @@ def fetch_currency_value_for_timestamp(timestamp, currency="USD", relative_curre
         relative_currency=relative_currency,
         timestamp__gt = timestamp_range_low,
         timestamp__lt = timestamp_range_high,
+        currency_ft_token__isnull = True,
+        relative_currency_ft_token__isnull = True,
     ).annotate(
         diff=models.Func(models.F("timestamp"), timestamp, function="GREATEST") - models.Func(models.F("timestamp"), timestamp, function="LEAST")
     ).order_by("diff").first()
@@ -215,7 +217,9 @@ def get_and_save_latest_bch_rates(currencies=[], max_age=30):
             'currency': currency,
             'relative_currency': "BCH",
             'timestamp': bch_rate[1],
-            'source': bch_rate[2]
+            'source': bch_rate[2],
+            'currency_ft_token': True,
+            'relative_currency_ft_token': True,
         }
 
         price_log_check = AssetPriceLog.objects.filter(**price_log_data)
