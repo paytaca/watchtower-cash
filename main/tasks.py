@@ -3119,6 +3119,8 @@ def get_latest_bch_price(currency):
         relative_currency="BCH",
         timestamp__gt = timezone.now()-timezone.timedelta(seconds=max_age),
         timestamp__lte = timezone.now()+timezone.timedelta(seconds=max_age),
+        currency_ft_token__isnull=True,
+        relative_currency_ft_token__isnull=True,
     ).order_by("-timestamp").first()
 
     latest = get_latest()

@@ -130,6 +130,8 @@ class HistoricalBCHPriceView(generics.GenericAPIView):
             "relative_currency": "BCH",
             "timestamp__gte": min_time,
             "timestamp__lte": max_time,
+            "currency_ft_token__isnull": True,
+            "relative_currency_ft_token__isnull": True,
         }
 
         # For ARS, use coingecko-yadio source
@@ -551,6 +553,12 @@ class AssetPriceLogDetailView(generics.RetrieveAPIView):
 class UnifiedAssetPriceView(generics.GenericAPIView):
     """
     Unified API endpoint for getting prices of both BCH and tokens
+
+    For cashtoken assets, returns:
+        TOKENS per currency (e.g. TOKEN/USD, TOKEN/BCH)
+
+    For non cashtoken assets (BCH asset), returns:
+        currency per asset (e.g. USD/BCH, PHP/BCH)
     """
 
     serializer_class = serializers.UnifiedAssetPriceSerializer
@@ -737,8 +745,8 @@ class UnifiedAssetPriceView(generics.GenericAPIView):
                             )
 
                             price_log, created = AssetPriceLog.objects.update_or_create(
-                                currency=currency,
-                                relative_currency="BCH",
+                                currency=token_category[:8],  # Using this to not clash actual {currency}/{BCH} prices
+                                relative_currency=currency,
                                 currency_ft_token=token_obj,
                                 source="calculated",
                                 timestamp=calculated_timestamp,
