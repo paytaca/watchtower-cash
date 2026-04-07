@@ -281,6 +281,8 @@ def save_wallet_history_currency(wallet_hash, currency):
             relative_currency="BCH",
             timestamp__gte = timestamp_range_low,
             timestamp__lte = timestamp_range_high,
+            cashtoken_ft__isnull=True,
+            relative_currency_ft_token__isnull=True,
         ).annotate(
             diff=models.Func(models.F("timestamp"), timestamp, function="GREATEST") - models.Func(models.F("timestamp"), timestamp, function="LEAST")
         ).order_by("diff")
@@ -292,6 +294,8 @@ def save_wallet_history_currency(wallet_hash, currency):
             closest = AssetPriceLog.objects.filter(
                 currency=currency,
                 relative_currency="BCH",
+                cashtoken_ft__isnull=True,
+                relative_currency_ft_token__isnull=True,
             ).annotate(
                 diff=models.Func(models.F("timestamp"), timestamp, function="GREATEST") - models.Func(models.F("timestamp"), timestamp, function="LEAST")
             ).order_by("diff").first()
