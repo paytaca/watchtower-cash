@@ -348,6 +348,7 @@ class ProposalStatusView(APIView):
             "proposal_unsigned_transaction_hash": proposal.unsigned_transaction_hash,
             "status": current_status,
             "inputs": [],
+            "txid": proposal.txid
         }
 
         psbts = list(proposal.psbts.values_list("content", flat=True))
@@ -421,20 +422,23 @@ class ProposalStatusView(APIView):
                 ).first()
 
                 if transaction_broadcast:
+
                     proposal.on_premise_transaction_broadcast = (
                         transaction_broadcast
                     )
+                    proposal.txid = spending_txid
                     proposal.save(
-                        update_fields=["on_premise_transaction_broadcast"]
+                        update_fields=["on_premise_transaction_broadcast", "txid"]
                     )
                 else:
                     proposal.off_premise_transaction_broadcast = spending_txid
+                    proposal.txid = spending_txid
                     proposal.save(
-                        update_fields=["off_premise_transaction_broadcast"]
+                        update_fields=["off_premise_transaction_broadcast", "txid"]
                     )
 
                 response_data["txid"] = spending_txid
-
+                
             response_data["status"] = new_status
             response_data["wallet"] = proposal.wallet.id
             response_data["inputs"].append(
