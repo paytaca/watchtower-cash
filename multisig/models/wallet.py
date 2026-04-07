@@ -22,7 +22,7 @@ class MultisigWallet(models.Model):
         self.save()
 
     def __str__(self):
-        return self.name or self.id
+        return f"{self.name or self.id}"
 
     class Meta:
         constraints = [
@@ -48,5 +48,5 @@ class Signer(models.Model):
                 models.UniqueConstraint(fields=['wallet', 'auth_public_key'], name='unique_signer')
             ]
     def __str__(self):
-        return f"{self.name}"
+        return f"{self.name or self.id}"
 
