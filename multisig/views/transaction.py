@@ -381,13 +381,22 @@ class ProposalStatusView(APIView):
             if spending_txid:
                 inp.spending_txid = spending_txid
                 inp.save(update_fields=["spending_txid"])
-                spending_transaction = NODE.BCH._get_raw_transaction(spending_txid)
-
+                # Try on-premise broadcast first
+                transaction_broadcast = TransactionBroadcast.objects.filter(txid=spending_txid).first()
+                if transaction_broadcast and transaction_broadcast.tx_hex:
+                    spending_transaction = transaction_broadcast.tx_hex
+                else:
+                    try:
+                        raw_transaction = NODE.BCH._get_raw_transaction(spending_txid)
+                        spending_transaction = raw_transaction.get("hex")
+                    except Exception as e:
+                        LOGGER.error(f"Failed to get raw transaction from node {e}")
+                
             spending_transaction_unsigned_transaction_hash = None
             if spending_transaction:
                 get_unsigned_transaction_hash_resp = (
                     js_client.get_unsigned_transaction_hash(
-                        spending_transaction["hex"]
+                        spending_transaction
                     )
                 )
                 spending_transaction_unsigned_transaction_hash = (
