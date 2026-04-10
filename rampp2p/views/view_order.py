@@ -752,14 +752,11 @@ class OrderViewSet(viewsets.GenericViewSet):
     def create_order_payment_methods(self, payment_method_ids=[], order=None):
         payment_methods = models.PaymentMethod.objects.filter(id__in=payment_method_ids)
         for payment_method in payment_methods:
-            data = {
-                "order": order.id,
-                "payment_method": payment_method.id,
-                "payment_type": payment_method.payment_type.id,
-            }
-            order_method = serializers.OrderPaymentSerializer(data=data)
-            if order_method.is_valid():
-                order_method.save()
+            models.OrderPayment.objects.get_or_create(
+                order=order,
+                payment_method=payment_method,
+                defaults={"payment_type": payment_method.payment_type},
+            )
 
     def require_singular_cashin_order(self, wallet_hash=None):
         cancellable_cashin_orders = self.cancellable_cash_in_orders(wallet_hash)

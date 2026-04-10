@@ -271,26 +271,30 @@ class OrderPaymentViewSet(viewsets.GenericViewSet):
             if image_file is None:
                 raise ValidationError("image is required")
 
-            order = models.Order.objects.get(pk=order_id)
-            payment_method = models.PaymentMethod.objects.get(pk=payment_method_id)
+            with transaction.atomic():
+                order = models.Order.objects.get(pk=order_id)
+                payment_method = models.PaymentMethod.objects.get(pk=payment_method_id)
 
-            self._validate_awaiting_payment(order)
+                self._validate_awaiting_payment(order)
 
-            buyer = None
-            if order.ad_snapshot.trade_type == models.TradeType.SELL:
-                buyer = order.owner
-            else:
-                buyer = order.ad_snapshot.ad.owner
-            if request.user.wallet_hash != buyer.wallet_hash:
-                raise ValidationError("Only the buyer can upload payment proof")
+                buyer = None
+                if order.ad_snapshot.trade_type == models.TradeType.SELL:
+                    buyer = order.owner
+                else:
+                    buyer = order.ad_snapshot.ad.owner
+                if request.user.wallet_hash != buyer.wallet_hash:
+                    raise ValidationError("Only the buyer can upload payment proof")
 
-            order_payment, _ = models.OrderPayment.objects.get_or_create(
-                order=order,
-                payment_method=payment_method,
-                defaults={"payment_type": payment_method.payment_type},
-            )
+                if payment_method.owner.wallet_hash != buyer.wallet_hash:
+                    raise ValidationError("Payment method does not belong to buyer")
 
-            order.payment_methods.add(payment_method)
+                order_payment, _ = models.OrderPayment.objects.get_or_create(
+                    order=order,
+                    payment_method=payment_method,
+                    defaults={"payment_type": payment_method.payment_type},
+                )
+
+                order.payment_methods.add(payment_method)
 
             filesize = image_file.size
             if filesize > 5 * 1024 * 1024:
@@ -328,7 +332,7 @@ class OrderPaymentViewSet(viewsets.GenericViewSet):
 
     def _validate_awaiting_payment(self, order):
         """Validates that `order` is awaiting fiat payment. Raises ValidationError
-        when order's last status is not ESCRW nor PD_PN"""
+        when order's last status is not ESCROWED nor PAID_PENDING"""
 
         last_status = order.status
         if (
