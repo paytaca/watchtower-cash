@@ -1,5 +1,6 @@
 from main.views.view_address import *
 from main.views.view_address_scan import *
+from main.views.view_address_discover import *
 from main.views.view_asset_price_log import *
 from main.views.view_telegram import *
 from main.views.view_subscribe import *
