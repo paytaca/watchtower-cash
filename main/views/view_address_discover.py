@@ -28,11 +28,14 @@ class WalletAddressDiscoverViewSet(viewsets.GenericViewSet):
         """
         Checks a batch of address sets for transaction history against the BCH node.
 
-        For each address set (receiving + change), queries the Electrum/Fulcrum server
-        to determine if the address has any transaction history. An address with zero
-        balance but transaction history is still flagged as having history — important
-        for recovering wallets used by other software (e.g. Electron Cash CashFusion)
-        where coins may have moved through many addresses.
+        For each address set (receiving + change), efficiently queries the Electrum/Fulcrum
+        server to determine if the address has any transaction history. Uses blockchain.address.get_first_use
+        for O(1) checks instead of loading full transaction history — efficient even for
+        addresses with thousands of transactions (e.g., exchange hot wallets).
+
+        An address with zero balance but transaction history is still flagged as having
+        history — important for recovering wallets used by other software (e.g., Electron
+        Cash CashFusion) where coins may have moved through many addresses.
 
         This endpoint does NOT subscribe addresses — it only reports which addresses
         have history. The client is expected to follow up with a call to
@@ -60,8 +63,9 @@ class WalletAddressDiscoverViewSet(viewsets.GenericViewSet):
             change_has_history = False
 
             try:
-                receiving_txs = NODE.BCH.get_address_transactions(receiving_address)
-                receiving_has_history = bool(receiving_txs)
+                receiving_has_history = NODE.BCH.check_address_history(
+                    receiving_address
+                )
             except Exception:
                 LOGGER.warning(
                     "Failed to check transaction history for receiving address: %s",
@@ -69,8 +73,7 @@ class WalletAddressDiscoverViewSet(viewsets.GenericViewSet):
                 )
 
             try:
-                change_txs = NODE.BCH.get_address_transactions(change_address)
-                change_has_history = bool(change_txs)
+                change_has_history = NODE.BCH.check_address_history(change_address)
             except Exception:
                 LOGGER.warning(
                     "Failed to check transaction history for change address: %s",
