@@ -25,6 +25,11 @@ router.register(
     r"wallet/address-scan", views.WalletAddressScanViewSet, basename="address-scan"
 )
 router.register(
+    r"wallet/address-discover",
+    views.WalletAddressDiscoverViewSet,
+    basename="address-discover",
+)
+router.register(
     r"wallet/preferences", views.WalletPreferencesViewSet, basename="wallet-preferences"
 )
 router.register(
