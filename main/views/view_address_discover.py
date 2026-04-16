@@ -56,42 +56,45 @@ class WalletAddressDiscoverViewSet(viewsets.GenericViewSet):
         results = []
         for address_set in address_sets:
             address_index = address_set["address_index"]
-            receiving_address = address_set["receiving"]
-            change_address = address_set["change"]
+            receiving_address = address_set.get("receiving")
+            change_address = address_set.get("change")
 
             receiving_has_history = False
             change_has_history = False
 
-            try:
-                receiving_has_history = NODE.BCH.check_address_history(
-                    receiving_address
-                )
-            except Exception:
-                LOGGER.warning(
-                    "Failed to check transaction history for receiving address: %s",
-                    receiving_address,
-                )
+            result = {
+                "address_index": address_index
+            }
 
-            try:
-                change_has_history = NODE.BCH.check_address_history(change_address)
-            except Exception:
-                LOGGER.warning(
-                    "Failed to check transaction history for change address: %s",
-                    change_address,
-                )
-
-            results.append(
-                {
-                    "address_index": address_index,
-                    "receiving": {
+            if receiving_address:
+                try:
+                    receiving_has_history = NODE.BCH.check_address_history(
+                        receiving_address
+                    )
+                    result["receiving"] = {
                         "address": receiving_address,
-                        "has_history": receiving_has_history,
-                    },
-                    "change": {
+                        "has_history": receiving_has_history
+                    }
+
+                except Exception:
+                    LOGGER.warning(
+                        "Failed to check transaction history for receiving address: %s",
+                        receiving_address,
+                    )
+
+            if change_address:
+                try:
+                    change_has_history = NODE.BCH.check_address_history(change_address)
+                    result["change"] = {
                         "address": change_address,
-                        "has_history": change_has_history,
-                    },
-                }
-            )
+                        "has_history": change_has_history
+                    }
+                except Exception:
+                    LOGGER.warning(
+                        "Failed to check transaction history for change address: %s",
+                        change_address,
+                    )
+
+            results.append(result)
 
         return Response({"results": results}, status=status.HTTP_200_OK)
