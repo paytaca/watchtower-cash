@@ -47,7 +47,7 @@ class Command(BaseCommand):
             return
 
         logger.info(f"Connecting to {relay_url}")
-        ws = websocket.create_connection(relay_url)
+        ws = websocket.create_connection(relay_url, timeout=5)
 
         sub_id = "watchtower-push"
         req = [
