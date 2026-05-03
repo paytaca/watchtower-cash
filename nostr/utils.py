@@ -32,10 +32,13 @@ def send_nostr_push_notification(pubkey_hex):
 
     # Reuse existing push dispatch — zero new push logic
     logger.info(f"Sending push to wallet hashes: {wallet_hashes}")
-    gcm_response, apns_response = send_push_notification_to_wallet_hashes(
-        wallet_hashes,
-        "New message",
-        title="New message",
-        extra={"type": "nostr_event", "pubkey": pubkey_hex},
-    )
-    logger.info(f"Push send complete. GCM: {gcm_response}, APNS: {apns_response}")
+    try:
+        gcm_response, apns_response = send_push_notification_to_wallet_hashes(
+            wallet_hashes,
+            "You have received a new message",
+            title="Chat",
+            extra={"type": "nostr_event", "pubkey": pubkey_hex},
+        )
+        logger.info(f"Push send complete. GCM: {gcm_response}, APNS: {apns_response}")
+    except Exception as e:
+        logger.exception(f"Push send failed with exception: {e}")
