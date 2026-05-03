@@ -111,7 +111,7 @@ wcwidth==0.1.8
 web3==7.0.0
 websockets==10.4
 websocket-client>=1.8.0
-bitcoincash-oauth-django==0.2.6
+bitcoincash-oauth-django==0.2.7
 whitenoise==5.0.1
 zipp==3.0.0
 zope.event==4.4
