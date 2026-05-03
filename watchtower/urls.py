@@ -33,6 +33,7 @@ from paytacapos.urls import urlpatterns as paytacapos_urlpatterns
 from smartbch.urls import urlpatterns as sbch_urlpatterns
 from anyhedge.urls import urlpatterns as anyhedge_urlpatterns
 from notifications.urls import urlpatterns as notifications_urlpatterns
+from nostr.urls import urlpatterns as nostr_urlpatterns
 from jpp.urls import urlpatterns as jpp_urlpatterns
 from django.conf.urls.static import static
 from django.conf import settings
@@ -204,6 +205,7 @@ urlpatterns = [
     path("api/paytacapos/", include(paytacapos_urlpatterns)),
     path("api/anyhedge/", include(anyhedge_urlpatterns)),
     path("api/push-notifications/", include(notifications_urlpatterns)),
+    path("api/nostr/", include(nostr_urlpatterns)),
     path("api/jpp/", include(jpp_urlpatterns)),
     path("api/ramp/", include(ramp_urlpatterns)),
     path("api/ramp-p2p/", include(ramp_p2p_urlpatterns)),

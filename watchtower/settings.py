@@ -89,6 +89,8 @@ INSTALLED_APPS = [
     "anyhedge",
     "chat",
     "notifications",
+    "nostr",
+    "bitcoincash_oauth_django",
     "jpp",
     "ramp",
     "rampp2p",
@@ -534,6 +536,7 @@ LOGGING = {
         "ramp": {"handlers": ["console"], "level": "INFO", "propagate": False},
         "rampp2p": {"handlers": ["console"], "level": "INFO", "propagate": False},
         "notifications": {"handlers": ["console"], "level": "INFO", "propagate": False},
+        "nostr": {"handlers": ["console"], "level": "INFO", "propagate": False},
         "paytacagifts": {"handlers": ["console"], "level": "INFO", "propagate": False},
         "stablehedge": {
             "handlers": ["console"],
