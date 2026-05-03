@@ -90,6 +90,7 @@ INSTALLED_APPS = [
     "chat",
     "notifications",
     "nostr",
+    "bitcoincash_oauth_django",
     "jpp",
     "ramp",
     "rampp2p",
