@@ -89,6 +89,7 @@ INSTALLED_APPS = [
     "anyhedge",
     "chat",
     "notifications",
+    "nostr",
     "jpp",
     "ramp",
     "rampp2p",
