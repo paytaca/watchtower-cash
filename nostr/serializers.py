@@ -30,6 +30,11 @@ class PushRegisterSerializer(serializers.Serializer):
         device_id = validated_data['device_id']
         platform = validated_data['platform']
 
+        # iOS device IDs are UUIDs with dashes; HexIntegerField can't parse dashes.
+        # Strip dashes so the value is a plain hex string (32 chars).
+        if platform == 'ios' and isinstance(device_id, str):
+            device_id = device_id.replace('-', '').upper()
+
         # Upsert the device record in the existing push_notifications tables
         if platform == 'android':
             device, _ = GCMDevice.objects.update_or_create(
