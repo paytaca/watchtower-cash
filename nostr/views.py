@@ -1,15 +1,13 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.permissions import IsAuthenticated
 from drf_yasg.utils import swagger_auto_schema
-from bitcoincash_oauth_django.authentication import BitcoinCashOAuthAuthentication
+from bitcoincash_oauth_django.drf_views import IsBitcoinCashAuthenticated
 from .serializers import PushRegisterSerializer, PushUnregisterSerializer
 
 
 class PushRegisterView(APIView):
-    authentication_classes = [BitcoinCashOAuthAuthentication]
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsBitcoinCashAuthenticated]
     serializer_class = PushRegisterSerializer
 
     @swagger_auto_schema(
@@ -24,8 +22,7 @@ class PushRegisterView(APIView):
 
 
 class PushUnregisterView(APIView):
-    authentication_classes = [BitcoinCashOAuthAuthentication]
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsBitcoinCashAuthenticated]
     serializer_class = PushUnregisterSerializer
 
     @swagger_auto_schema(
