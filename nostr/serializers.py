@@ -2,6 +2,7 @@ from django.db import transaction
 from django.utils import timezone
 from rest_framework import serializers
 from push_notifications.models import GCMDevice, APNSDevice
+from notifications.models import DeviceWallet
 from .models import NostrPubkeyDevice
 
 
@@ -56,6 +57,15 @@ class PushRegisterSerializer(serializers.Serializer):
                     'last_active': timezone.now(),
                 },
             )
+            # Also link to existing push notification infrastructure
+            DeviceWallet.objects.update_or_create(
+                gcm_device=device,
+                wallet_hash=wallet_hash,
+                defaults={
+                    'multi_wallet_index': multi_wallet_index,
+                    'last_active': timezone.now(),
+                },
+            )
         else:
             device, _ = APNSDevice.objects.update_or_create(
                 registration_id=registration_id,
@@ -73,6 +83,15 @@ class PushRegisterSerializer(serializers.Serializer):
                 apns_device=device,
                 defaults={
                     'wallet_hash': wallet_hash,
+                    'multi_wallet_index': multi_wallet_index,
+                    'last_active': timezone.now(),
+                },
+            )
+            # Also link to existing push notification infrastructure
+            DeviceWallet.objects.update_or_create(
+                apns_device=device,
+                wallet_hash=wallet_hash,
+                defaults={
                     'multi_wallet_index': multi_wallet_index,
                     'last_active': timezone.now(),
                 },

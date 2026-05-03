@@ -90,10 +90,12 @@ class Command(BaseCommand):
                     event = msg[2]
                     if not isinstance(event, dict):
                         continue
+                    event_id = event.get("id", "unknown")
                     for tag in event.get("tags", []):
                         if isinstance(tag, list) and len(tag) >= 2 and tag[0] == "p":
                             recipient_pubkey = tag[1]
                             if recipient_pubkey in pubkeys:
+                                logger.info(f"Detected gift-wrap event {event_id} for pubkey {recipient_pubkey[:16]}... sending push")
                                 send_nostr_push_notification(recipient_pubkey)
 
                 elif msg_type == "EOSE":
