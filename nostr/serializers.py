@@ -85,11 +85,14 @@ class PushUnregisterSerializer(serializers.Serializer):
 
         # Delete matching NostrPubkeyDevice rows for this pubkey + device_id
         # We match across both GCM and APNS devices
-        NostrPubkeyDevice.objects.filter(
+        gcm_deleted = NostrPubkeyDevice.objects.filter(
             pubkey_hex=pubkey,
             gcm_device__device_id=device_id,
         ).delete()
-        NostrPubkeyDevice.objects.filter(
+        apns_deleted = NostrPubkeyDevice.objects.filter(
             pubkey_hex=pubkey,
             apns_device__device_id=device_id,
         ).delete()
+
+        # Return total count of deleted records for consistency
+        return (gcm_deleted[0] or 0) + (apns_deleted[0] or 0)
