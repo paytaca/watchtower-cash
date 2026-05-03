@@ -5,6 +5,8 @@ from push_notifications.models import GCMDevice, APNSDevice
 from .models import NostrPubkeyDevice
 
 
+import re
+
 class PushRegisterSerializer(serializers.Serializer):
     pubkey = serializers.CharField(max_length=64)
     wallet_hash = serializers.CharField(max_length=70)
@@ -12,6 +14,11 @@ class PushRegisterSerializer(serializers.Serializer):
     registration_id = serializers.CharField()
     device_id = serializers.CharField()
     platform = serializers.ChoiceField(choices=[('android', 'Android'), ('ios', 'iOS')])
+
+    def validate_pubkey(self, value):
+        if not re.match(r'^[0-9a-fA-F]{64}$', value):
+            raise serializers.ValidationError("pubkey must be a 64-character hex string.")
+        return value.lower()
 
     @transaction.atomic
     def save(self):
