@@ -56,3 +56,39 @@ class DeviceStatusView(APIView):
             'gcm_devices': list(gcm_devices),
             'apns_devices': list(apns_devices),
         })
+
+
+class TestPushNotificationView(APIView):
+    """Send a test push notification to a wallet hash"""
+
+    def post(self, request, *args, **kwargs):
+        from notifications.utils.send import send_push_notification_to_wallet_hashes
+
+        wallet_hash = request.data.get('wallet_hash')
+        if not wallet_hash:
+            return Response({'error': 'wallet_hash is required'}, status=400)
+
+        message = request.data.get('message', 'Test push notification')
+        title = request.data.get('title', 'Test')
+
+        try:
+            gcm_response, apns_response = send_push_notification_to_wallet_hashes(
+                [wallet_hash],
+                message,
+                title=title,
+                extra={'type': 'test'},
+            )
+
+            return Response({
+                'success': True,
+                'wallet_hash': wallet_hash,
+                'message': message,
+                'title': title,
+                'gcm_response': str(gcm_response) if gcm_response else None,
+                'apns_response': str(apns_response) if apns_response else None,
+            })
+        except Exception as e:
+            return Response({
+                'success': False,
+                'error': str(e),
+            }, status=500)
