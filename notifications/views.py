@@ -31,3 +31,28 @@ class DeviceUnsubscribeView(APIView):
         result = serializer.save()
         response_serializer = DeviceWalletSerializer(result, many=True)
         return Response(response_serializer.data, status=200)
+
+
+class DeviceStatusView(APIView):
+    """Get registered push notification devices for a wallet hash"""
+
+    def get(self, request, *args, **kwargs):
+        wallet_hash = request.query_params.get('wallet_hash')
+        if not wallet_hash:
+            return Response({'error': 'wallet_hash parameter required'}, status=400)
+
+        gcm_devices = GCMDevice.objects.filter(
+            device_wallets__wallet_hash=wallet_hash,
+            active=True
+        ).values('registration_id', 'device_id', 'cloud_message_type')
+
+        apns_devices = APNSDevice.objects.filter(
+            device_wallets__wallet_hash=wallet_hash,
+            active=True
+        ).values('registration_id', 'device_id')
+
+        return Response({
+            'wallet_hash': wallet_hash,
+            'gcm_devices': list(gcm_devices),
+            'apns_devices': list(apns_devices),
+        })

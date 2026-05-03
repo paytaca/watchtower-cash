@@ -4,6 +4,7 @@ from rest_framework import routers
 from .views import (
     DeviceSubscriptionView,
     DeviceUnsubscribeView,
+    DeviceStatusView,
 )
 
 router = routers.DefaultRouter()
@@ -11,4 +12,5 @@ router = routers.DefaultRouter()
 urlpatterns = router.urls + [
     re_path(r"^subscribe/$", DeviceSubscriptionView.as_view(), name='device-subscription'),
     re_path(r"^unsubscribe/$", DeviceUnsubscribeView.as_view(), name='device-unsubscribe'),
+    re_path(r"^devices/$", DeviceStatusView.as_view(), name='device-status'),
 ]
