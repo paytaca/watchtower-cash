@@ -1,10 +1,13 @@
 import json
 import time
+import logging
 import websocket
 from django.core.management.base import BaseCommand
 from django.db import connection
 from nostr.utils import send_nostr_push_notification
 from nostr.models import NostrPubkeyDevice
+
+logger = logging.getLogger(__name__)
 
 RELAY_URL = "wss://relay.paytaca.com"
 SUBSCRIPTION_KINDS = [1059]
@@ -24,26 +27,26 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         relay_url = options['relay']
-        self.stdout.write(self.style.SUCCESS(f"Starting Nostr relay watcher for {relay_url}"))
+        logger.info(f"Starting Nostr relay watcher for {relay_url}")
 
         while True:
             try:
                 self.run_watcher(relay_url)
             except KeyboardInterrupt:
-                self.stdout.write(self.style.WARNING("Watcher stopped by user"))
+                logger.info("Watcher stopped by user")
                 break
             except Exception as e:
-                self.stdout.write(self.style.ERROR(f"Watcher crashed: {e}"))
+                logger.error(f"Watcher crashed: {e}")
                 time.sleep(5)
 
     def run_watcher(self, relay_url):
         pubkeys = self.get_registered_pubkeys()
         if not pubkeys:
-            self.stdout.write(self.style.NOTICE("No registered pubkeys, waiting..."))
+            logger.info("No registered pubkeys, waiting...")
             time.sleep(PUBKEY_REFRESH_INTERVAL)
             return
 
-        self.stdout.write(self.style.SUCCESS(f"Connecting to {relay_url}"))
+        logger.info(f"Connecting to {relay_url}")
         ws = websocket.create_connection(relay_url)
 
         sub_id = "watchtower-push"
@@ -56,7 +59,7 @@ class Command(BaseCommand):
             },
         ]
         ws.send(json.dumps(req))
-        self.stdout.write(self.style.SUCCESS(f"Subscribed to {len(pubkeys)} pubkeys"))
+        logger.info(f"Subscribed to {len(pubkeys)} pubkeys")
 
         last_pubkey_refresh = time.time()
 
@@ -66,7 +69,7 @@ class Command(BaseCommand):
                 if time.time() - last_pubkey_refresh > PUBKEY_REFRESH_INTERVAL:
                     new_pubkeys = self.get_registered_pubkeys()
                     if set(new_pubkeys) != set(pubkeys):
-                        self.stdout.write(self.style.NOTICE("Pubkey list changed, reconnecting..."))
+                        logger.info("Pubkey list changed, reconnecting...")
                         ws.close()
                         return
                     last_pubkey_refresh = time.time()
@@ -94,11 +97,11 @@ class Command(BaseCommand):
                                 send_nostr_push_notification(recipient_pubkey)
 
                 elif msg_type == "EOSE":
-                    self.stdout.write(self.style.NOTICE("End of stored events"))
+                    logger.info("End of stored events")
 
                 elif msg_type == "CLOSED":
                     reason = msg[2] if len(msg) >= 3 else "unknown"
-                    self.stdout.write(self.style.WARNING(f"Subscription closed: {reason}"))
+                    logger.warning(f"Subscription closed: {reason}")
                     ws.close()
                     return
 
@@ -106,10 +109,10 @@ class Command(BaseCommand):
                 # Timeout is expected — loop around to check pubkey refresh
                 continue
             except websocket.WebSocketConnectionClosedException:
-                self.stdout.write(self.style.WARNING("WebSocket closed, reconnecting..."))
+                logger.warning("WebSocket closed, reconnecting...")
                 return
             except Exception as e:
-                self.stdout.write(self.style.ERROR(f"Error processing message: {e}"))
+                logger.error(f"Error processing message: {e}")
                 time.sleep(1)
 
     def get_registered_pubkeys(self):
@@ -121,5 +124,5 @@ class Command(BaseCommand):
                 NostrPubkeyDevice.objects.values_list('pubkey_hex', flat=True).distinct()
             )
         except Exception as e:
-            self.stdout.write(self.style.ERROR(f"Failed to fetch pubkeys: {e}"))
+            logger.error(f"Failed to fetch pubkeys: {e}")
             return []
