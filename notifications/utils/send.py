@@ -122,10 +122,6 @@ def parse_send_message_for_apns(message, **kwargs):
     return (message, filtered_kwargs)
 
 
-import logging
-
-logger = logging.getLogger(__name__)
-
 def send_push_notification_to_wallet_hashes(wallet_hash_list, message, **kwargs):
     """
     Sends a push notification to GCMDevices & APNSDevices given a list of wallet hashes
@@ -143,7 +139,6 @@ def send_push_notification_to_wallet_hashes(wallet_hash_list, message, **kwargs)
                 the response for each can be an exception
     """
     gcm_devices, apns_devices = get_wallet_hashes_devices(wallet_hash_list)
-    logger.info(f"Push send: found {gcm_devices.count()} GCM and {apns_devices.count()} APNS devices for wallets {wallet_hash_list}")
 
     # message & kwargs are parsed for each os since they each expect some different sets of parameters
     # NOTE: the following functions only filter out kwargs that are not used
@@ -155,7 +150,6 @@ def send_push_notification_to_wallet_hashes(wallet_hash_list, message, **kwargs)
     apns_send_response = None
     try:
         gcm_wallets = gcm_devices.values_list("device_wallets__wallet_hash", "device_wallets__multi_wallet_index").distinct()
-        logger.info(f"GCM wallets to notify: {list(gcm_wallets)}")
         for wallet_hash, multi_wallet_index in gcm_wallets:
             if not isinstance(gcm_message.data, dict):
                 gcm_message.data = {}
@@ -167,12 +161,9 @@ def send_push_notification_to_wallet_hashes(wallet_hash_list, message, **kwargs)
                 gcm_devices, wallet_hash_list, multi_wallet_index, 
             )
 
-            logger.info(f"GCM({multi_wallet_index}) devices count: {filtered_gcm_devices.count()}")
             if not filtered_gcm_devices: continue
-            logger.info(f"Sending GCM message to {filtered_gcm_devices.count()} devices")
             _gcm_send_response = filtered_gcm_devices.send_message(gcm_message, **gcm_kwargs)
             _gcm_send_response = parse_gcm_response(_gcm_send_response)
-            logger.info(f"GCM send response: {_gcm_send_response}")
 
             if not isinstance(gcm_send_response, list): gcm_send_response = []
             if isinstance(_gcm_send_response, list):
@@ -188,7 +179,6 @@ def send_push_notification_to_wallet_hashes(wallet_hash_list, message, **kwargs)
 
     try:
         apns_wallets = apns_devices.values_list("device_wallets__wallet_hash", "device_wallets__multi_wallet_index").distinct()
-        logger.info(f"APNS wallets to notify: {list(apns_wallets)}")
         for wallet_hash, multi_wallet_index in apns_wallets:
             if "extra" not in apns_kwargs: apns_kwargs["extra"] = {}
             apns_kwargs["extra"]["wallet_hash"] = wallet_hash
@@ -198,11 +188,8 @@ def send_push_notification_to_wallet_hashes(wallet_hash_list, message, **kwargs)
                 apns_devices, wallet_hash_list, multi_wallet_index, 
             )
 
-            logger.info(f"APNS({multi_wallet_index}) devices: {list(filtered_apns_devices.values_list('registration_id', flat=True))}")
             if not filtered_apns_devices: continue
-            logger.info(f"Sending APNS message to {filtered_apns_devices.count()} devices")
             _apns_send_response = filtered_apns_devices.send_message(apns_message, **apns_kwargs)
-            logger.info(f"APNS send response: {_apns_send_response}")
 
             if not isinstance(apns_send_response, list): apns_send_response = []
             apns_send_response += _apns_send_response
