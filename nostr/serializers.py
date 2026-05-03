@@ -30,12 +30,9 @@ class PushRegisterSerializer(serializers.Serializer):
         device_id = validated_data['device_id']
         platform = validated_data['platform']
 
-        # iOS device IDs are UUIDs with dashes; HexIntegerField can't parse dashes.
-        # Strip dashes so the value is a plain hex string (32 chars).
-        if platform == 'ios' and isinstance(device_id, str):
-            device_id = device_id.replace('-', '').upper()
-
-        # Upsert the device record in the existing push_notifications tables
+        # Upsert the device record in the existing push_notifications tables.
+        # For iOS, device_id is a UUID (128-bit) which doesn't fit in HexIntegerField,
+        # so we only store registration_id. For Android, device_id is a 64-bit hex number.
         if platform == 'android':
             device, _ = GCMDevice.objects.update_or_create(
                 registration_id=registration_id,
@@ -48,7 +45,7 @@ class PushRegisterSerializer(serializers.Serializer):
             # Remove any existing APNS link for this pubkey+device combo
             NostrPubkeyDevice.objects.filter(
                 pubkey_hex=pubkey,
-                apns_device__device_id=device_id,
+                gcm_device=device,
             ).delete()
             nostr_device, _ = NostrPubkeyDevice.objects.update_or_create(
                 pubkey_hex=pubkey,
@@ -63,14 +60,13 @@ class PushRegisterSerializer(serializers.Serializer):
             device, _ = APNSDevice.objects.update_or_create(
                 registration_id=registration_id,
                 defaults={
-                    'device_id': device_id,
                     'active': True,
                 },
             )
             # Remove any existing GCM link for this pubkey+device combo
             NostrPubkeyDevice.objects.filter(
                 pubkey_hex=pubkey,
-                gcm_device__device_id=device_id,
+                apns_device=device,
             ).delete()
             nostr_device, _ = NostrPubkeyDevice.objects.update_or_create(
                 pubkey_hex=pubkey,
@@ -87,24 +83,17 @@ class PushRegisterSerializer(serializers.Serializer):
 
 class PushUnregisterSerializer(serializers.Serializer):
     pubkey = serializers.CharField(max_length=64)
-    device_id = serializers.CharField()
 
     @transaction.atomic
     def save(self):
         validated_data = self.validated_data
         pubkey = validated_data['pubkey']
-        device_id = validated_data['device_id']
 
-        # Delete matching NostrPubkeyDevice rows for this pubkey + device_id
-        # We match across both GCM and APNS devices
-        gcm_deleted = NostrPubkeyDevice.objects.filter(
+        # Delete all matching NostrPubkeyDevice rows for this pubkey
+        # (across both GCM and APNS devices)
+        deleted = NostrPubkeyDevice.objects.filter(
             pubkey_hex=pubkey,
-            gcm_device__device_id=device_id,
-        ).delete()
-        apns_deleted = NostrPubkeyDevice.objects.filter(
-            pubkey_hex=pubkey,
-            apns_device__device_id=device_id,
         ).delete()
 
-        # Return total count of deleted records for consistency
-        return (gcm_deleted[0] or 0) + (apns_deleted[0] or 0)
+        # Return total count of deleted records
+        return deleted[0] or 0
