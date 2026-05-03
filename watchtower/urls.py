@@ -42,6 +42,7 @@ from rampp2p.urls import urlpatterns as ramp_p2p_urlpatterns
 from paytacagifts.urls import urlpatterns as paytacagifts_urlpatterns
 from cts.urls import urlpatterns as cts_urlpatterns
 from authentication.urls import urlpatterns as auth_urlpatterns
+from bitcoincash_oauth_django.urls import urlpatterns as bch_oauth_urlpatterns
 from stablehedge.urls import urlpatterns as stablehedge_urlpatterns
 from multisig.urls import urlpatterns as multisig_urlpatterns
 from memos.urls import urlpatterns as memos_urlpatterns
@@ -211,6 +212,7 @@ urlpatterns = [
     path("api/ramp-p2p/", include(ramp_p2p_urlpatterns)),
     path("api/cts/", include(cts_urlpatterns)),
     path("api/auth/", include(auth_urlpatterns)),
+    path("api/bch-auth/", include(bch_oauth_urlpatterns)),
     path("api/stablehedge/", include(stablehedge_urlpatterns)),
     path(r"test/", include(test_urls)),
     path(
