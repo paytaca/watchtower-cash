@@ -307,11 +307,13 @@ class UTXO(APIView):
                     query = Q(wallet=wallet) & Q(spent=False) & Q(token__tokenid=tokenid_or_category)
                 else:
                     query = Q(wallet=wallet) & Q(spent=False)
+                query = query & ~Q(address__address_path='')
 
                 utxos_values = _get_token_utxos(query, show_address_index=True, minting_baton=baton, confirmed=confirmed)
 
             elif wallet.wallet_type == 'bch':
                 query = Q(wallet=wallet) & Q(spent=False)
+                query = query & ~Q(address__address_path='')
 
                 if is_cashtoken or tokenid_or_category:
                     query = query & Q(token__tokenid=settings.WT_DEFAULT_CASHTOKEN_ID)

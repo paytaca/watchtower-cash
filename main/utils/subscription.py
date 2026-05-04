@@ -13,7 +13,8 @@ from main.models import (
     Subscription,
     Address,
     Project,
-    Wallet
+    Wallet,
+    Transaction
 )
 from main import mqtt
 from main.tasks import get_slp_utxos, get_bch_utxos, publish_subscribed_addresses_to_mqtt_task
@@ -61,10 +62,15 @@ def remove_duplicate_wallet_address_path(address_obj):
     (subs_deleted, _) = subscriptions.delete()
     (recipients_deleted, _) = recipients.delete()
     addresses_updated = duplicates_qs.update(wallet=None, address_path='')
+    transactions_updated = Transaction.objects.filter(
+        address__in=duplicates_qs,
+        wallet=address_obj.wallet
+    ).update(wallet=None)
     return {
         "subscriptions": subs_deleted,
         "recipients": recipients_deleted,
         "addresses": addresses_updated,
+        "transactions": transactions_updated,
     }
 
 
