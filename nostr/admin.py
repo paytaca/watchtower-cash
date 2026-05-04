@@ -1,13 +1,12 @@
 from django.contrib import admin
-from .models import NostrPubkeyDevice
+from .models import NostrPubkey
 
 
-@admin.register(NostrPubkeyDevice)
-class NostrPubkeyDeviceAdmin(admin.ModelAdmin):
+@admin.register(NostrPubkey)
+class NostrPubkeyAdmin(admin.ModelAdmin):
     list_display = (
         'pubkey_hex',
         'wallet_hash',
-        'multi_wallet_index',
         'created_at',
         'last_active',
     )

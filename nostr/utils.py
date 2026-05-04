@@ -1,7 +1,7 @@
 import logging
 from django.core.cache import cache
 from notifications.utils.send import send_push_notification_to_wallet_hashes
-from .models import NostrPubkeyDevice
+from .models import NostrPubkey
 
 logger = logging.getLogger(__name__)
 THROTTLE_SECONDS = 30
@@ -20,7 +20,7 @@ def send_nostr_push_notification(pubkey_hex):
         return
     cache.set(cache_key, True, THROTTLE_SECONDS)
 
-    wallet_hashes = list(NostrPubkeyDevice.objects.filter(
+    wallet_hashes = list(NostrPubkey.objects.filter(
         pubkey_hex=pubkey_hex,
     ).values_list('wallet_hash', flat=True).distinct())
 

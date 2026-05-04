@@ -2,19 +2,19 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from drf_yasg.utils import swagger_auto_schema
-from .serializers import PushRegisterSerializer, PushUnregisterSerializer
+from .serializers import PubkeyRegisterSerializer, PubkeyUnregisterSerializer
 from .authentication import BitcoinCashOAuthAuthentication
-from .models import NostrPubkeyDevice
+from .models import NostrPubkey
 
 
-class PushRegisterView(APIView):
+class PubkeyRegisterView(APIView):
     authentication_classes = [BitcoinCashOAuthAuthentication]
     permission_classes = []
-    serializer_class = PushRegisterSerializer
+    serializer_class = PubkeyRegisterSerializer
 
     @swagger_auto_schema(
-        request_body=PushRegisterSerializer,
-        responses={201: PushRegisterSerializer},
+        request_body=PubkeyRegisterSerializer,
+        responses={201: PubkeyRegisterSerializer},
     )
     def post(self, request, *args, **kwargs):
         serializer = self.serializer_class(data=request.data)
@@ -23,14 +23,14 @@ class PushRegisterView(APIView):
         return Response({"status": "registered"}, status=status.HTTP_201_CREATED)
 
 
-class PushUnregisterView(APIView):
+class PubkeyUnregisterView(APIView):
     authentication_classes = [BitcoinCashOAuthAuthentication]
     permission_classes = []
-    serializer_class = PushUnregisterSerializer
+    serializer_class = PubkeyUnregisterSerializer
 
     @swagger_auto_schema(
-        request_body=PushUnregisterSerializer,
-        responses={200: PushUnregisterSerializer},
+        request_body=PubkeyUnregisterSerializer,
+        responses={200: PubkeyUnregisterSerializer},
     )
     def post(self, request, *args, **kwargs):
         serializer = self.serializer_class(data=request.data)
@@ -39,12 +39,12 @@ class PushUnregisterView(APIView):
         return Response({"status": "unregistered"}, status=status.HTTP_200_OK)
 
 
-class PushCheckView(APIView):
-    """Check if a Nostr pubkey has registered push notifications."""
+class PubkeyCheckView(APIView):
+    """Check if a Nostr pubkey is registered with watchtower."""
     permission_classes = []
 
     def get(self, request, pubkey_hex, *args, **kwargs):
-        is_registered = NostrPubkeyDevice.objects.filter(pubkey_hex=pubkey_hex).exists()
+        is_registered = NostrPubkey.objects.filter(pubkey_hex=pubkey_hex).exists()
         return Response({
             "pubkey_hex": pubkey_hex,
             "registered": is_registered,

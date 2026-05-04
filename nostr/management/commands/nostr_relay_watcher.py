@@ -5,7 +5,7 @@ import websocket
 from django.core.management.base import BaseCommand
 from django.db import connection
 from nostr.utils import send_nostr_push_notification
-from nostr.models import NostrPubkeyDevice
+from nostr.models import NostrPubkey
 
 logger = logging.getLogger(__name__)
 
@@ -118,12 +118,12 @@ class Command(BaseCommand):
                 time.sleep(1)
 
     def get_registered_pubkeys(self):
-        """Fetch all distinct pubkeys from the NostrPubkeyDevice registry."""
+        """Fetch all distinct pubkeys from the NostrPubkey registry."""
         try:
             # Ensure fresh connection in case DB was idle
             connection.ensure_connection()
             return list(
-                NostrPubkeyDevice.objects.values_list('pubkey_hex', flat=True).distinct()
+                NostrPubkey.objects.values_list('pubkey_hex', flat=True).distinct()
             )
         except Exception as e:
             logger.error(f"Failed to fetch pubkeys: {e}")
