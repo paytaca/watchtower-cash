@@ -88,6 +88,7 @@ def new_subscription(**kwargs):
     telegram_id = kwargs.get('telegram_id', None)
     chat_identity = kwargs.get('chat_identity', None)
     remove_duplicate_path = kwargs.get('remove_duplicate_path', False)
+    advance_subscription = kwargs.get('advance_subscription', False)
 
     new_addresses = set()
     if address or addresses:
@@ -137,12 +138,25 @@ def new_subscription(**kwargs):
                         token_address = bch_address_converter(address)
 
                     try:
-                        address_obj, _ = Address.objects.get_or_create(
+                        address_obj, created = Address.objects.get_or_create(
                             address=address,
                             token_address=token_address
                         )
                         # Store address string for async MQTT publishing
                         new_addresses.add(address_obj.address)
+
+                        # Handle advance_subscription flag
+                        # CRITICAL: Never change False -> True
+                        # Only allow True -> False or setting on new addresses
+                        if created:
+                            # New address - set the flag based on parameter
+                            address_obj.advance_subscription = advance_subscription
+                        else:
+                            # Existing address - only update if currently True
+                            # This prevents overriding regular subscriptions (False) with advance (True)
+                            if address_obj.advance_subscription == True and advance_subscription == False:
+                                address_obj.advance_subscription = False
+                            # If already False, keep it False regardless of parameter
 
                         if project:
                             address_obj.project = project
