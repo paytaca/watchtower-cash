@@ -5,6 +5,7 @@ from rest_framework import (
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
+from django.db import transaction
 from django.db.models import Q, F, Value
 from django.db.models.functions import Substr, Cast
 from django.db.models.fields import BigIntegerField
@@ -73,42 +74,66 @@ class AdvanceSubscriptionViewSet(viewsets.GenericViewSet):
             receiving_addr = pair["receiving"]
             change_addr = pair["change"]
 
-            # Check if addresses already exist with advance_subscription=False
+            # Check if addresses already exist
             receiving_obj = Address.objects.filter(address=receiving_addr).first()
-            receiving_is_regular = receiving_obj and receiving_obj.advance_subscription == False
-
             change_obj = Address.objects.filter(address=change_addr).first()
+            
+            # Skip if either address exists as regular subscription (advance_subscription=False)
+            receiving_is_regular = receiving_obj and receiving_obj.advance_subscription == False
             change_is_regular = change_obj and change_obj.advance_subscription == False
-
-            # Skip if either address already exists as regular subscription
+            
             if receiving_is_regular or change_is_regular:
                 LOGGER.info(
                     f"Skipping advance subscription for index {address_index}: "
-                    f"receiving={receiving_is_regular}, change={change_is_regular}"
+                    f"regular subscription exists (receiving={receiving_is_regular}, change={change_is_regular})"
                 )
                 skipped_count += 2  # Both addresses in the pair
                 continue
-
-            # Subscribe the address pair
-            try:
-                result = new_subscription(
-                    wallet_hash=wallet_hash,
-                    project_id=project_id,
-                    address_index=address_index,
-                    addresses={
-                        "receiving": receiving_addr,
-                        "change": change_addr
-                    },
-                    advance_subscription=True
+            
+            # Skip if both addresses already exist with advance_subscription=True
+            receiving_is_advance = receiving_obj and receiving_obj.advance_subscription == True
+            change_is_advance = change_obj and change_obj.advance_subscription == True
+            
+            if receiving_is_advance and change_is_advance:
+                LOGGER.info(
+                    f"Skipping advance subscription for index {address_index}: "
+                    f"pair already advance subscribed"
                 )
+                skipped_count += 2
+                continue
 
-                if result.get("success"):
-                    subscribed_count += 2  # Both addresses in the pair
+            # Subscribe the address pair atomically
+            try:
+                with transaction.atomic():
+                    result = new_subscription(
+                        wallet_hash=wallet_hash,
+                        project_id=project_id,
+                        address_index=address_index,
+                        addresses={
+                            "receiving": receiving_addr,
+                            "change": change_addr
+                        },
+                        advance_subscription=True
+                    )
+
+                    if not result.get("success"):
+                        error_msg = result.get("error", "Unknown error")
+                        LOGGER.error(f"Failed to advance subscribe index {address_index}: {error_msg}")
+                        raise Exception(f"Subscription failed for index {address_index}: {error_msg}")
+                    
+                    # Verify both addresses were created
+                    receiving_exists = Address.objects.filter(address=receiving_addr).exists()
+                    change_exists = Address.objects.filter(address=change_addr).exists()
+                    
+                    if not (receiving_exists and change_exists):
+                        LOGGER.error(
+                            f"Incomplete pair at index {address_index}: "
+                            f"receiving={receiving_exists}, change={change_exists}"
+                        )
+                        raise Exception(f"Incomplete pair subscription for index {address_index}")
+                    
+                    subscribed_count += 2
                     LOGGER.info(f"Advance subscribed addresses for index {address_index}")
-                else:
-                    error_msg = result.get("error", "Unknown error")
-                    LOGGER.error(f"Failed to advance subscribe index {address_index}: {error_msg}")
-                    skipped_count += 2
 
             except Exception as e:
                 LOGGER.error(f"Error advance subscribing index {address_index}: {str(e)}")
@@ -152,6 +177,7 @@ class AdvanceSubscriptionViewSet(viewsets.GenericViewSet):
                         'receiving_advance_subscribed': openapi.Schema(type=openapi.TYPE_INTEGER, description='Receiving addresses (0/X) with advance_subscription=True'),
                         'change_advance_subscribed': openapi.Schema(type=openapi.TYPE_INTEGER, description='Change addresses (1/X) with advance_subscription=True'),
                         'pairs_advance_subscribed': openapi.Schema(type=openapi.TYPE_INTEGER, description='Number of complete pairs (both receiving and change) with advance_subscription=True'),
+                        'highest_pair_index': openapi.Schema(type=openapi.TYPE_INTEGER, description='Highest index where both receiving and change are advance subscribed (-1 if none)'),
                     }
                 )
             ),
@@ -168,6 +194,7 @@ class AdvanceSubscriptionViewSet(viewsets.GenericViewSet):
         - receiving_advance_subscribed: Count of receiving addresses (0/X)
         - change_advance_subscribed: Count of change addresses (1/X)
         - pairs_advance_subscribed: Count of indices where BOTH receiving and change are advance subscribed
+        - highest_pair_index: Highest index where both receiving and change are advance subscribed (-1 if none)
         
         This helps the Paytaca app determine if it needs to top up the advance subscription buffer.
         """
@@ -245,7 +272,11 @@ class AdvanceSubscriptionViewSet(viewsets.GenericViewSet):
         change_indices = set(change_qs.values_list('address_index', flat=True))
         
         # Count complete pairs (indices where BOTH receiving AND change are advance subscribed)
-        complete_pairs = len(receiving_indices & change_indices)
+        complete_pairs_indices = receiving_indices & change_indices
+        complete_pairs = len(complete_pairs_indices)
+        
+        # Find the highest index that forms a complete pair
+        highest_pair_index = max(complete_pairs_indices) if complete_pairs_indices else -1
         
         data = {
             "wallet_hash": wallet_hash,
@@ -253,6 +284,7 @@ class AdvanceSubscriptionViewSet(viewsets.GenericViewSet):
             "receiving_advance_subscribed": receiving_count,
             "change_advance_subscribed": change_count,
             "pairs_advance_subscribed": complete_pairs,
+            "highest_pair_index": highest_pair_index,
         }
         
         return Response(data, status=status.HTTP_200_OK)
