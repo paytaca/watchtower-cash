@@ -1266,12 +1266,20 @@ class LastAddressIndexView(APIView):
     )
     def get(self, request, *args, **kwargs):
         """
-        Get the last receiving address index of a wallet
+        Get the last receiving address index of a wallet.
+        
+        The last address index is defined as the highest consecutive index 
+        starting from 0 where either the receiving (0/X) OR change (1/X) 
+        address is NOT advance subscribed (advance_subscription=False).
+        
+        This ensures that only addresses actively used by Paytaca (not just
+        pre-subscribed for WizardConnect) are counted towards the last index.
         """
         wallet_hash = kwargs.get("wallethash", None)
         with_tx = request.query_params.get("with_tx", False)
         exclude_pos = request.query_params.get("exclude_pos", False)
         posid = request.query_params.get("posid", None)
+        
         if posid is not None:
             try:
                 posid = int(posid)
@@ -1281,56 +1289,120 @@ class LastAddressIndexView(APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-        queryset = Address.objects.annotate(
-            address_index=Cast(
-                Substr(F("address_path"), Value("0/(\d+)")), BigIntegerField()
-            ),
-        ).filter(
+        # Get all addresses for the wallet that are NOT advance subscribed
+        base_queryset = Address.objects.filter(
             wallet__wallet_hash=wallet_hash,
-            address_index__isnull=False,
+            advance_subscription=False,  # Only regular (used) addresses
         )
-        fields = ["address", "address_index"]
-        ordering = ["-address_index"]
-
-        if isinstance(with_tx, str) and with_tx.lower() == "false":
-            with_tx = False
-
-        if isinstance(exclude_pos, str) and exclude_pos.lower() == "false":
-            exclude_pos = False
-
-        if with_tx:
-            queryset = queryset.annotate(
-                tx_count=Count("transactions__txid", distinct=True)
+        
+        # Build base annotation for extracting address index from path
+        # This handles both receiving (0/X) and change (1/X) addresses
+        def get_annotated_queryset(path_prefix):
+            """Get addresses with a specific path prefix (0/ or 1/) and extract index"""
+            return base_queryset.filter(
+                address_path__startswith=f'{path_prefix}/'
+            ).annotate(
+                address_index=Cast(
+                    Substr(F("address_path"), Value(f"{path_prefix}/(\\d+)")), BigIntegerField()
+                )
+            ).filter(
+                address_index__isnull=False
             )
-            queryset = queryset.filter(tx_count__gt=0)
-            ordering = ["-tx_count", "-address_index"]
-            fields.append("tx_count")
-
+        
+        # Get receiving and change addresses separately
+        receiving_qs = get_annotated_queryset('0')
+        change_qs = get_annotated_queryset('1')
+        
+        # Apply POS filtering if needed
         if isinstance(posid, int) and posid >= 0:
-            POSID_MULTIPLIER = Value(10**POS_ID_MAX_DIGITS)
-            queryset = queryset.annotate(posid=F("address_index") % POSID_MULTIPLIER)
-            queryset = queryset.annotate(
-                payment_index=Floor(F("address_index") / POSID_MULTIPLIER)
+            POSID_MULTIPLIER = 10**POS_ID_MAX_DIGITS
+            receiving_qs = receiving_qs.annotate(
+                posid=F("address_index") % POSID_MULTIPLIER
+            ).annotate(
+                payment_index=Floor(F("address_index") / Value(POSID_MULTIPLIER))
+            ).filter(
+                address_index__gte=POSID_MULTIPLIER,
+                posid=posid
             )
-            queryset = queryset.filter(address_index__gte=POSID_MULTIPLIER)
-            queryset = queryset.filter(posid=posid)
-            # queryset = queryset.filter(address_index__gte=models.Value(0))
-            fields.append("posid")
-            fields.append("payment_index")
+            change_qs = change_qs.annotate(
+                posid=F("address_index") % POSID_MULTIPLIER
+            ).annotate(
+                payment_index=Floor(F("address_index") / Value(POSID_MULTIPLIER))
+            ).filter(
+                address_index__gte=POSID_MULTIPLIER,
+                posid=posid
+            )
         elif exclude_pos:
-            POSID_MULTIPLIER = Value(10**POS_ID_MAX_DIGITS)
-            MAX_UNHARDENED_ADDRESS_INDEX = Value(2**32 - 1)
-            queryset = queryset.exclude(
+            POSID_MULTIPLIER = 10**POS_ID_MAX_DIGITS
+            MAX_UNHARDENED_ADDRESS_INDEX = 2**32 - 1
+            receiving_qs = receiving_qs.exclude(
                 address_index__gte=POSID_MULTIPLIER,
                 address_index__lte=MAX_UNHARDENED_ADDRESS_INDEX,
             )
-
-        queryset = queryset.values(*fields).order_by(*ordering)
-        if len(queryset):
-            address = queryset[0]
-        else:
-            address = None
-
+            change_qs = change_qs.exclude(
+                address_index__gte=POSID_MULTIPLIER,
+                address_index__lte=MAX_UNHARDENED_ADDRESS_INDEX,
+            )
+        
+        # Apply transaction filter if needed
+        if isinstance(with_tx, str) and with_tx.lower() == "false":
+            with_tx = False
+            
+        if with_tx:
+            receiving_qs = receiving_qs.annotate(
+                tx_count=Count("transactions__txid", distinct=True)
+            ).filter(tx_count__gt=0)
+            change_qs = change_qs.annotate(
+                tx_count=Count("transactions__txid", distinct=True)
+            ).filter(tx_count__gt=0)
+        
+        # Get the indices (OR logic: used if either receiving OR change is used)
+        receiving_indices = set(receiving_qs.values_list('address_index', flat=True))
+        change_indices = set(change_qs.values_list('address_index', flat=True))
+        used_indices = receiving_indices | change_indices
+        
+        # Find last consecutive index starting from 0
+        last_consecutive_index = -1
+        if used_indices:
+            sorted_indices = sorted(used_indices)
+            for idx in sorted_indices:
+                if idx == last_consecutive_index + 1:
+                    last_consecutive_index = idx
+                else:
+                    break  # Gap found, stop
+        
+        # Get the actual address object for the last index
+        address = None
+        if last_consecutive_index >= 0:
+            # Try receiving address first
+            address_obj = receiving_qs.filter(
+                address_index=last_consecutive_index
+            ).first()
+            
+            if not address_obj:
+                # Try change address
+                address_obj = change_qs.filter(
+                    address_index=last_consecutive_index
+                ).first()
+            
+            if address_obj:
+                address_data = {
+                    "address": address_obj.address,
+                    "address_index": last_consecutive_index
+                }
+                
+                # Add optional fields if they were requested
+                if with_tx and hasattr(address_obj, 'tx_count'):
+                    address_data["tx_count"] = address_obj.tx_count
+                    
+                if isinstance(posid, int) and posid >= 0:
+                    if hasattr(address_obj, 'posid'):
+                        address_data["posid"] = address_obj.posid
+                    if hasattr(address_obj, 'payment_index'):
+                        address_data["payment_index"] = address_obj.payment_index
+                
+                address = address_data
+        
         data = {
             "wallet_hash": wallet_hash,
             "address": address,
