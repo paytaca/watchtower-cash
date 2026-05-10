@@ -18,6 +18,7 @@ from main.models import (
 )
 from main import mqtt
 from main.tasks import get_slp_utxos, get_bch_utxos, publish_subscribed_addresses_to_mqtt_task
+from main.utils.cache import clear_last_address_index_cache
 
 import logging
 import web3
@@ -199,6 +200,22 @@ def new_subscription(**kwargs):
                                     wallet.save()
                                 address_obj.wallet = wallet
                                 address_obj.save()
+                                
+                                # Clear last address index cache when a non-advance-subscribed address is added
+                                # or when an address changes from advance_subscription=True to False
+                                # This is important because the last consecutive index may have changed
+                                # We don't invalidate when adding advance_subscription=True addresses because
+                                # they don't affect the LastAddressIndexView (which filters by advance_subscription=False)
+                                should_clear_cache = False
+                                if created and address_obj.advance_subscription == False:
+                                    # New regular (non-advance) address added
+                                    should_clear_cache = True
+                                elif advance_flag_changed and address_obj.advance_subscription == False:
+                                    # Existing address changed from True -> False
+                                    should_clear_cache = True
+                                
+                                if should_clear_cache:
+                                    clear_last_address_index_cache(wallet_hash)
 
                         if remove_duplicate_path:
                             result = remove_duplicate_wallet_address_path(address_obj)                            

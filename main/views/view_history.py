@@ -15,6 +15,7 @@ from django.db.models import (
 )
 import pickle
 import base64
+import json
 from django.conf import settings
 from django.db.models.functions import Substr, Cast, Floor
 from django.db.models import ExpressionWrapper, FloatField, Subquery, OuterRef
@@ -1289,6 +1290,13 @@ class LastAddressIndexView(APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
+        # Check cache first
+        cache = settings.REDISKV
+        cache_key = f"wallet:last_address_index:{wallet_hash}:{with_tx}:{exclude_pos}:{posid}"
+        cached_result = cache.get(cache_key)
+        if cached_result:
+            return Response(json.loads(cached_result))
+
         # Get all addresses for the wallet that are NOT advance subscribed
         base_queryset = Address.objects.filter(
             wallet__wallet_hash=wallet_hash,
@@ -1356,20 +1364,22 @@ class LastAddressIndexView(APIView):
                 tx_count=Count("transactions__txid", distinct=True)
             ).filter(tx_count__gt=0)
         
-        # Get the indices (OR logic: used if either receiving OR change is used)
-        receiving_indices = set(receiving_qs.values_list('address_index', flat=True))
-        change_indices = set(change_qs.values_list('address_index', flat=True))
-        used_indices = receiving_indices | change_indices
-        
-        # Find last consecutive index starting from 0
+        # OPTIMIZED: Instead of loading all indices into memory, check incrementally
+        # This stops at the first gap, avoiding loading thousands of records
         last_consecutive_index = -1
-        if used_indices:
-            sorted_indices = sorted(used_indices)
-            for idx in sorted_indices:
-                if idx == last_consecutive_index + 1:
-                    last_consecutive_index = idx
-                else:
-                    break  # Gap found, stop
+        MAX_ADDRESS_CHECK = 10000  # Reasonable upper limit for address index
+        
+        for potential_index in range(MAX_ADDRESS_CHECK):
+            # Check if this index exists in either receiving or change addresses
+            # Using exists() is more efficient than fetching the full object
+            exists_in_receiving = receiving_qs.filter(address_index=potential_index).exists()
+            exists_in_change = change_qs.filter(address_index=potential_index).exists()
+            
+            if exists_in_receiving or exists_in_change:
+                last_consecutive_index = potential_index
+            else:
+                # First gap found, stop checking
+                break
         
         # Get the actual address object for the last index
         address = None
@@ -1407,6 +1417,13 @@ class LastAddressIndexView(APIView):
             "wallet_hash": wallet_hash,
             "address": address,
         }
+
+        # Cache the result for 24 hours
+        # This is safe because the cache is invalidated when:
+        # 1. New addresses are added to the wallet
+        # 2. Addresses receive transactions (which may affect with_tx variant)
+        # 3. advance_subscription flag changes on addresses
+        cache.set(cache_key, json.dumps(data), timeout=86400)
 
         return Response(data)
 

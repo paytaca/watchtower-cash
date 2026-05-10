@@ -226,6 +226,12 @@ class Address(PostgresModel):
     class Meta:
         verbose_name = 'Address'
         verbose_name_plural = 'Addresses'
+        indexes = [
+            models.Index(
+                fields=['wallet', 'advance_subscription', 'address_path'],
+                name='addr_wallet_advsub_path_idx'
+            ),
+        ]
 
     def __str__(self):
         return self.address

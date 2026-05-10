@@ -54,6 +54,10 @@ def clear_transaction_cache(transaction_instance):
         history_cache_keys = cache.keys(f'wallet:history:{wallet_hash}:{asset_key}:*')
         if history_cache_keys:
             cache.delete(*history_cache_keys)
+        
+        # Clear last address index cache since an address has received a transaction
+        # This affects the "with_tx" variant of the last address index endpoint
+        clear_last_address_index_cache(wallet_hash)
 
 
 def clear_cache_for_spent_transactions(transaction_queryset):
@@ -109,7 +113,10 @@ def clear_cache_for_spent_transactions(transaction_queryset):
         # Clear wallet history cache
         history_cache_keys = cache.keys(f'wallet:history:{wallet_hash}:*')
         if history_cache_keys:
-            cache.delete(*history_cache_keys) 
+            cache.delete(*history_cache_keys)
+        
+        # Clear last address index cache since addresses received transactions
+        clear_last_address_index_cache(wallet_hash) 
 
 
 def clear_wallet_balance_cache(wallet_hash, token_categories=None):
@@ -208,6 +215,23 @@ def clear_pos_wallet_history_cache(wallet_hash, posid):
         # Delete cached response and corresponding count entry
         cache.delete(cache_key)
         cache.delete(f"{decoded_key}:count")
+
+
+def clear_last_address_index_cache(wallet_hash):
+    """
+    Clear the last address index cache for a given wallet hash.
+    This should be called when addresses are created or updated.
+    """
+    if not wallet_hash:
+        return
+    
+    cache = settings.REDISKV
+    
+    # Clear all variations of last address index cache for this wallet
+    # The cache key pattern is: wallet:last_address_index:{wallet_hash}:{with_tx}:{exclude_pos}:{posid}
+    cache_keys = cache.keys(f'wallet:last_address_index:{wallet_hash}:*')
+    if cache_keys:
+        cache.delete(*cache_keys)
 
 
 def clear_wallet_history_cache_for_txid(wallet_hash, txid):
