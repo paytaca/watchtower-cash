@@ -18,6 +18,7 @@ from main.models import (
 )
 from main import mqtt
 from main.tasks import get_slp_utxos, get_bch_utxos, publish_subscribed_addresses_to_mqtt_task
+from main.utils.cache import clear_last_address_index_cache
 
 import logging
 import web3
@@ -160,6 +161,9 @@ def new_subscription(**kwargs):
                                 address_obj.advance_subscription = False
                                 advance_flag_changed = True
                             # If already False, keep it False regardless of parameter
+                            # NOTE: False -> True transitions are prevented by design (line 150)
+                            # This is intentional - once an address is used (False), it should
+                            # never be marked as advance-subscribed (True) again
                         
                         # CRITICAL FIX: Always save advance_subscription flag when changed
                         # This ensures the flag persists even without a project or wallet
@@ -199,6 +203,32 @@ def new_subscription(**kwargs):
                                     wallet.save()
                                 address_obj.wallet = wallet
                                 address_obj.save()
+                                
+                                # Clear last address index cache when a non-advance-subscribed address is added
+                                # or when an address changes from advance_subscription=True to False
+                                # This is important because the last consecutive index may have changed
+                                # We don't invalidate when adding advance_subscription=True addresses because
+                                # they don't affect the LastAddressIndexView (which filters by advance_subscription=False)
+                                #
+                                # Cache invalidation logic:
+                                # - New regular address (created=True, advance_subscription=False): INVALIDATE
+                                #   → Affects last consecutive index calculation
+                                # - Address changes True → False (advance_flag_changed=True): INVALIDATE
+                                #   → Advance address is now being used, affects calculation
+                                # - New advance address (created=True, advance_subscription=True): NO INVALIDATION
+                                #   → Doesn't affect query (filtered out by advance_subscription=False)
+                                # - Address changes False → True: IMPOSSIBLE (prevented by design, line 150)
+                                #   → Once used, addresses stay used
+                                should_clear_cache = False
+                                if created and address_obj.advance_subscription == False:
+                                    # New regular (non-advance) address added
+                                    should_clear_cache = True
+                                elif advance_flag_changed and address_obj.advance_subscription == False:
+                                    # Existing address changed from True -> False
+                                    should_clear_cache = True
+                                
+                                if should_clear_cache:
+                                    clear_last_address_index_cache(wallet_hash)
 
                         if remove_duplicate_path:
                             result = remove_duplicate_wallet_address_path(address_obj)                            
