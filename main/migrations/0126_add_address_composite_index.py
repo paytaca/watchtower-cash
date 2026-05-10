@@ -4,6 +4,23 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
+    """
+    Re-creates the composite index that was removed by migration 0125.
+    
+    Migration history:
+    - 0124: Created the composite index via migration
+    - 0125: Django auto-generated migration that REMOVED the index because 
+            the Address model's Meta class didn't declare it
+    - 0126: This migration RE-CREATES the index permanently now that the 
+            Address.Meta.indexes list includes it
+    
+    This ensures the database schema matches the model definition and prevents
+    Django from trying to remove the index again in future migrations.
+    
+    NOTE: Migration 0125 was already run on the production server before this
+    fix was created, so the index is currently missing in production and will
+    be restored when this migration runs.
+    """
 
     dependencies = [
         ('main', '0125_auto_20260510_0218'),

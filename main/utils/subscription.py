@@ -161,6 +161,9 @@ def new_subscription(**kwargs):
                                 address_obj.advance_subscription = False
                                 advance_flag_changed = True
                             # If already False, keep it False regardless of parameter
+                            # NOTE: False -> True transitions are prevented by design (line 150)
+                            # This is intentional - once an address is used (False), it should
+                            # never be marked as advance-subscribed (True) again
                         
                         # CRITICAL FIX: Always save advance_subscription flag when changed
                         # This ensures the flag persists even without a project or wallet
@@ -206,6 +209,16 @@ def new_subscription(**kwargs):
                                 # This is important because the last consecutive index may have changed
                                 # We don't invalidate when adding advance_subscription=True addresses because
                                 # they don't affect the LastAddressIndexView (which filters by advance_subscription=False)
+                                #
+                                # Cache invalidation logic:
+                                # - New regular address (created=True, advance_subscription=False): INVALIDATE
+                                #   → Affects last consecutive index calculation
+                                # - Address changes True → False (advance_flag_changed=True): INVALIDATE
+                                #   → Advance address is now being used, affects calculation
+                                # - New advance address (created=True, advance_subscription=True): NO INVALIDATION
+                                #   → Doesn't affect query (filtered out by advance_subscription=False)
+                                # - Address changes False → True: IMPOSSIBLE (prevented by design, line 150)
+                                #   → Once used, addresses stay used
                                 should_clear_cache = False
                                 if created and address_obj.advance_subscription == False:
                                     # New regular (non-advance) address added

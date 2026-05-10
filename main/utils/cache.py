@@ -221,6 +221,17 @@ def clear_last_address_index_cache(wallet_hash):
     """
     Clear the last address index cache for a given wallet hash.
     This should be called when addresses are created or updated.
+    
+    Performance Note: Uses Redis KEYS command which can be slow on large datasets.
+    However, this is acceptable because:
+    1. Cache key pattern is highly specific (wallet_hash scoped)
+    2. Typically returns at most 8-16 keys (4 boolean combinations × 2-4 posid variants)
+    3. Called infrequently (only when addresses are added/updated)
+    
+    Future optimization: If this becomes a bottleneck, consider:
+    - Using Redis SCAN instead of KEYS
+    - Maintaining a Redis SET of cache keys per wallet for faster lookup
+    - Using Redis Hash with HGETALL/HDEL for grouped invalidation
     """
     if not wallet_hash:
         return
@@ -229,6 +240,7 @@ def clear_last_address_index_cache(wallet_hash):
     
     # Clear all variations of last address index cache for this wallet
     # The cache key pattern is: wallet:last_address_index:{wallet_hash}:{with_tx}:{exclude_pos}:{posid}
+    # This typically matches 8-16 keys: with_tx (True/False) × exclude_pos (True/False) × posid (None + specific IDs)
     cache_keys = cache.keys(f'wallet:last_address_index:{wallet_hash}:*')
     if cache_keys:
         cache.delete(*cache_keys)
