@@ -1423,7 +1423,7 @@ class LastAddressIndexView(APIView):
         # 1. New addresses are added to the wallet
         # 2. Addresses receive transactions (which may affect with_tx variant)
         # 3. advance_subscription flag changes on addresses
-        cache.set(cache_key, json.dumps(data), timeout=86400)
+        cache.set(cache_key, json.dumps(data), 86400)
 
         return Response(data)
 
