@@ -163,6 +163,14 @@ class PosDeviceViewSet(
         serializer.is_valid(raise_exception=True)
         data = serializer.save_link_request()
         return Response(data)
+    
+    @swagger_auto_schema(method="post", request_body=PosDeviceSetupNfcPaymentSerializer, responses={ 200: PosDeviceLinkSerializer })
+    @decorators.action(methods=["post"], detail=False)
+    def generate_nfc_setup_code(self, request, *args, **kwargs):
+        serializer = PosDeviceSetupNfcPaymentSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.save_setup_request()
+        return Response(data)
 
     @swagger_auto_schema(
         method="get",
@@ -267,6 +275,14 @@ class PosDeviceViewSet(
 
         serializer = SalesSummarySerializer(sales_summary)
         return Response(serializer.data)
+    
+    @swagger_auto_schema(method="post", request_body=None)
+    @decorators.action(methods=["post"], detail=True, url_path="enable-nfc-payments", authentication_classes=[WalletAuthentication], permission_classes=[permissions.IsAuthenticated])
+    def enable_nfc_payments(self, request, *args, **kwargs):
+        instance = self.get_object()
+        instance.nfc_payments_enabled = True
+        instance.save()
+        return Response(self.serializer_class(instance).data)
 
 
 class MerchantViewSet(viewsets.ModelViewSet):

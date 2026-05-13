@@ -255,6 +255,39 @@ class PosDeviceLinkRequestV2Serializer(PermissionSerializerMixin, serializers.Se
         expires = now + timezone.timedelta(seconds=code_ttl)
         return { "code": code, "expires": expires.timestamp() }
 
+class PosDeviceSetupNfcPaymentSerializer(serializers.Serializer):
+    HARD_MIN_TTL = 60 * 5
+    HARD_MAX_TTL = 86_400 * 7
+    
+    @classmethod
+    def generate_redis_key(cls, code):
+        return f"posdevicenfcsetup:{code}"
+    
+    @classmethod
+    def retrieve_setup_request_data(cls, code):
+        redis_key = cls.generate_redis_key(code)
+        encoded_data = REDIS_CLIENT.get(redis_key)
+        try:
+            return json.loads(encoded_data)
+        except (json.JSONDecodeError, TypeError):
+            return None
+    
+    def save_setup_request(self):
+        code = uuid4().hex
+        redis_key = self.generate_redis_key(code)
+        data = json.dumps(self.validated_data).encode()
+
+        try:
+            code_ttl = self.validated_data["code_ttl"]
+        except:
+            code_ttl = 86_400 # seconds
+        code_ttl = max(code_ttl, self.HARD_MIN_TTL)
+        code_ttl = min(code_ttl, self.HARD_MAX_TTL)
+
+        REDIS_CLIENT.set(redis_key, data, ex=code_ttl)
+        now = timezone.now()
+        expires = now + timezone.timedelta(seconds=code_ttl)
+        return { "code": code, "expires": expires.timestamp() }
 
 class UnlinkDeviceSerializer(serializers.Serializer):
     verifying_pubkey = serializers.CharField()
@@ -482,7 +515,6 @@ class LinkedDeviceInfoV2Serializer(serializers.ModelSerializer):
 
         return instance
 
-
 class PosDeviceSerializer(PermissionSerializerMixin, serializers.ModelSerializer):
     posid = serializers.IntegerField(help_text="Resolves to a new posid if negative value")
     wallet_hash = serializers.CharField()
@@ -502,6 +534,7 @@ class PosDeviceSerializer(PermissionSerializerMixin, serializers.ModelSerializer
             "merchant_id",
             "branch_id",
             "linked_device",
+            "nfc_payments_enabled",
         ]
 
     def __init__(self, *args, supress_merchant_info_validations=False, **kwargs):
