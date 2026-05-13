@@ -60,6 +60,8 @@ class PosDevice(models.Model):
         related_name="pos_device",
     )
 
+    nfc_payments_enabled = models.BooleanField(default=False)
+
     merchant = models.ForeignKey(
         "Merchant",
         on_delete=models.PROTECT, related_name="devices",
