@@ -26,6 +26,7 @@ class BranchFilter(filters.FilterSet):
 
 
 class MerchantFilter(filters.FilterSet):
+    ids = filters.CharFilter(method="ids_filter")
     wallet_hashes = filters.CharFilter(method="wallet_hashes_filter")
     country = filters.CharFilter(field_name="location__country", lookup_expr="icontains")
     city = filters.CharFilter(field_name="location__city", lookup_expr="icontains")
@@ -63,6 +64,16 @@ class MerchantFilter(filters.FilterSet):
 
         wallet_hashes = [wallet_hash.strip() for wallet_hash in value.split(",") if wallet_hash.strip()]
         return queryset.filter(wallet_hash__in=wallet_hashes)
+
+    def ids_filter(self, queryset, name, value):
+        if not isinstance(value, str):
+            return queryset
+
+        ids = [merchant_id.strip() for merchant_id in value.split(",") if merchant_id.strip()]
+        if not ids:
+            return queryset
+
+        return queryset.filter(id__in=ids)
 
     def name_address_filter(self, queryset, name, value):
         return queryset.filter( 
