@@ -1,28 +1,104 @@
 from django.urls import path
-from .views import (
-  MultisigWalletListCreateView,
-  RenameMultisigWalletView,
-  MultisigWalletDetailView,
-  MultisigTransactionProposalListCreateView,
-  MultisigTransactionProposalDetailView,
-  SignerSignaturesAddView,
-  SignaturesAddView,
-  BroadcastTransactionProposalView,
-  FinalizeTransactionProposalView,
-  TransactionProposalStatusView,
-  MultisigWalletUtxosView
+from multisig.views.auth import (
+    ServerIdentityListCreateView,
+    ServerIdentityDetailView,
+)
+from multisig.views.wallet import (
+    MultisigWalletDetailView,
+    MultisigWalletListCreateView,
+    SignerWalletListView,
+    KeyRecordListView,
+)
+from multisig.views.walletconnect import WalletConnectSessionListCreateAPIView
+from multisig.views.transaction import (
+    ProposalCoordinatorDetailView,
+    ProposalListCreateView,
+    ProposalDetailView,
+    ProposalStatusView,
+    PsbtListCreateView,
+    WalletProposalListView,
+    ProposalInputListView,
+    ProposalSignatureListView,
+    ProposalSignatureDetailView,
+    SignatureBySignerIdentifierList,
 )
 
 urlpatterns = [
-    path('wallets/utxos/<str:address>/', MultisigWalletUtxosView.as_view(), name='wallet-utxos'),
-    path('wallets/', MultisigWalletListCreateView.as_view(), name='wallet-list-create'),
-    path('wallets/<str:wallet_identifier>/', MultisigWalletDetailView.as_view(), name='wallet_detail') ,
-    path('wallets/<int:pk>/rename/', RenameMultisigWalletView.as_view(), name='wallet-rename'),
-    path('wallets/<str:wallet_identifier>/transaction-proposals/', MultisigTransactionProposalListCreateView.as_view(), name='transaction-proposal-list-create'),
-    path('transaction-proposals/<str:proposal_identifier>/', MultisigTransactionProposalDetailView.as_view(), name='transaction-proposal-detail'),
-    path('transaction-proposals/<str:proposal_identifier>/signatures/', SignaturesAddView.as_view(), name='transaction-proposal-signatures-add'),
-    path('transaction-proposals/<str:proposal_identifier>/signatures/<str:signer_identifier>/', SignerSignaturesAddView.as_view(), name='transaction-proposal-signer-signatures-add'),
-    path('transaction-proposals/<str:proposal_identifier>/broadcast/', BroadcastTransactionProposalView.as_view(), name='transaction-proposal-broadcast'),
-    path('transaction-proposals/<str:proposal_identifier>/finalize/', FinalizeTransactionProposalView.as_view(), name='transaction-proposal-finalize'),
-    path('transaction-proposals/<str:proposal_identifier>/status/', TransactionProposalStatusView.as_view(), name='transaction-proposal-status'),
+    path("wallets/", MultisigWalletListCreateView.as_view(), name="wallet-list-create"),
+    path(
+        "wallets/<str:wallet_identifier>/",
+        MultisigWalletDetailView.as_view(),
+        name="wallet-detail",
+    ),
+    path(
+        "wallets/<str:wallet_identifier>/proposals/",
+        WalletProposalListView.as_view(),
+        name="wallet-list-proposals",
+    ),
+    path(
+        "coordinator/server-identities/",
+        ServerIdentityListCreateView.as_view(),
+        name="server-identity-list-create",
+    ),
+    path(
+        "coordinator/server-identities/<str:public_key>/",
+        ServerIdentityDetailView.as_view(),
+        name="server-identity-detail",
+    ),
+    path(
+        "signers/<str:identifier>/wallets/",
+        SignerWalletListView.as_view(),
+        name="signer-wallet-list",
+    ),
+    path(
+        "key-records/",
+        KeyRecordListView.as_view(),
+        name="key-record-list",
+    ),
+    path(
+        "wallets/<str:wallet_identifier>/walletconnect/sessions/",
+        WalletConnectSessionListCreateAPIView.as_view(),
+        name="walletconnect-session-list-create",
+    ),
+    path("proposals/", ProposalListCreateView.as_view(), name="proposal-list-create"),
+    path(
+        "proposals/<str:proposal_identifier>/",
+        ProposalDetailView.as_view(),
+        name="proposal-detail",
+    ),
+    path(
+        "proposals/<str:proposal_identifier>/coordinator/",
+        ProposalCoordinatorDetailView.as_view(),
+        name="proposal-coordinator-detail",
+    ),
+    path(
+        "proposals/<str:proposal_identifier>/status/",
+        ProposalStatusView.as_view(),
+        name="proposal-status",
+    ),
+    path(
+        "proposals/<str:proposal_identifier>/inputs/",
+        ProposalInputListView.as_view(),
+        name="proposal-input-list",
+    ),
+    path(
+        "proposals/<str:proposal_identifier>/psbts/",
+        PsbtListCreateView.as_view(),
+        name="proposal-psbt-list-create",
+    ),
+    path(
+        "proposals/<str:proposal_identifier>/signatures/",
+        ProposalSignatureListView.as_view(),
+        name="proposal-signature-list",
+    ),
+    path(
+        "proposals/<str:proposal_identifier>/signatures/<int:pk>/",
+        ProposalSignatureDetailView.as_view(),
+        name="proposal-signature-detail",
+    ),
+    path(
+        "proposals/<str:proposal_identifier>/signatures/<str:signature_identifier>/",
+        SignatureBySignerIdentifierList.as_view(),
+        name="signature-list-by-signature-identifier",
+    ),
 ]

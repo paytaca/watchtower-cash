@@ -1,10 +1,20 @@
-
-from django.db.models.signals import post_save, post_delete
+import logging
+from django.db import transaction
+from django.db.models.signals import post_save
 from django.dispatch import receiver
-from django.utils.timezone import now
-from .models import Signature, MultisigTransactionProposal
+from main.models import (
+    TransactionBroadcast,
+)
+from multisig.tasks import update_proposal_status_on_broadcast
 
-@receiver([post_save, post_delete], sender=Signature)
-def update_transaction_timestamp(sender, instance, **kwargs):
-        MultisigTransactionProposal.objects.filter(id=instance.transaction_proposal.id).update(updated_at=now())
+LOGGER = logging.getLogger(__name__)
 
+
+@receiver(post_save, sender=TransactionBroadcast)
+def transaction_broadcast_post_save(sender, instance=None, created=False, **kwargs):
+    if created and instance.tx_hex:
+        transaction.on_commit(
+            lambda: update_proposal_status_on_broadcast.delay(
+                instance.id, instance.txid, instance.tx_hex
+            )
+        )

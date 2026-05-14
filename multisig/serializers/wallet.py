@@ -3,108 +3,177 @@ from django.db import transaction
 from rest_framework import serializers
 from typing import Dict
 from main.models import Transaction
-from ..models.wallet import MultisigWallet, Signer
-from ..utils import derive_pubkey_from_xpub, get_multisig_wallet_locking_script
+from multisig.models.wallet import MultisigWallet, Signer, KeyRecord
 
 LOGGER = logging.getLogger(__name__)
 
+class KeyRecordReadOnlySerializer(serializers.ModelSerializer):
+    audienceAuthPublicKey = serializers.CharField(
+        source="audience_auth_public_key", read_only=True
+    )
+    publisherServerId = serializers.PrimaryKeyRelatedField(
+        source="publisher", read_only=True
+    )
+
+    class Meta:
+        model = KeyRecord
+        fields = [
+            "id",
+            "publisherServerId",
+            "key_record",
+            "audienceAuthPublicKey",
+            "wallet",
+        ]
+        read_only_fields = [
+            "id",
+            "publisherServerId",
+            "key_record",
+            "audienceAuthPublicKey",
+            "wallet",
+        ]
+
+
 class SignerSerializer(serializers.ModelSerializer):
+    masterFingerprint = serializers.CharField(source="master_fingerprint")
+    derivationPath = serializers.CharField(source="derivation_path")
+    walletDescriptorWrappedDek = serializers.CharField(
+        source="wallet_descriptor_wrapped_dek"
+    )
+    wallet = serializers.PrimaryKeyRelatedField(read_only=True)
+    coordinatorKeyRecord = serializers.CharField(write_only=True)
+    authPublicKey = serializers.CharField(source="auth_public_key")
+
     class Meta:
         model = Signer
-        fields = ['entity_key', 'xpub']
+        fields = [
+            "id",
+            "name",
+            "masterFingerprint",
+            "derivationPath",
+            "walletDescriptorWrappedDek",
+            "wallet",
+            "coordinatorKeyRecord",
+            "authPublicKey",
+        ]
+
 
 class MultisigWalletSerializer(serializers.ModelSerializer):
-    signers = SignerSerializer(many=True, read_only=True)
-    lockingData = serializers.JSONField(source='locking_data')
-    template = serializers.JSONField()
+    signers = SignerSerializer(many=True, required=False)
+    walletDescriptorId = serializers.CharField(source="wallet_descriptor_id")
+    walletHash = serializers.CharField(source="wallet_hash")
+    walletDescriptor = serializers.CharField(source="wallet_descriptor")
+    keyRecords = KeyRecordReadOnlySerializer(
+        source="key_records", many=True, required=False
+    )
+    coordinatorServerId = serializers.PrimaryKeyRelatedField(
+        source="coordinator", read_only=True
+    )
 
     class Meta:
         model = MultisigWallet
-        fields = ['id', 'template', 'lockingData', 'signers', 'created_at', 'locking_bytecode']
-        read_only_fields = ['signers', 'created_at']
-    
+        fields = [
+            "id",
+            "name",
+            "walletHash",
+            "walletDescriptorId",
+            "walletDescriptor",
+            "version",
+            "created_at",
+            "deleted_at",
+            "updated_at",
+            "coordinatorServerId",
+            "signers",
+            "keyRecords",
+        ]
+        read_only_fields = [
+            "id",
+            "created_at",
+            "updated_at",
+            "deleted_at",
+            "keyRecords",
+            "coordinatorServerId",
+        ]
+
     def create(self, validated_data):
-        locking_data = validated_data.get('locking_data', {})
-        template = validated_data.get('template', {})
+        coordinator = self.context["coordinator"]
+        signers_data = validated_data.pop("signers", [])
+        wallet_descriptor_id = validated_data.get("wallet_descriptor_id")
+
         with transaction.atomic():
-            locking_bytecode = get_multisig_wallet_locking_script(template, locking_data)
-            wallet, created = MultisigWallet.objects.get_or_create(
-                locking_bytecode=locking_bytecode,
-                defaults= {
-                    'template': template,
-                    'locking_data':locking_data,
-                    'locking_bytecode':locking_bytecode    
-                }
+            wallet = MultisigWallet.objects.filter(
+                coordinator=coordinator, wallet_descriptor_id=wallet_descriptor_id
+            ).first()
+
+            if wallet:
+                return wallet
+
+            wallet = MultisigWallet.objects.create(
+                coordinator=coordinator, **validated_data
             )
-            
-            if created:
-                hd_public_keys = locking_data.get('hdKeys', {}).get('hdPublicKeys', {})
-                request = self.context.get('request')
-                for key, value in hd_public_keys.items():
-                    signer = Signer.objects.create(
+
+            for signer_data in signers_data:
+                coordinatorKeyRecordHex = signer_data.pop("coordinatorKeyRecord", None)
+                if coordinatorKeyRecordHex:
+                    KeyRecord.objects.get_or_create(
+                        publisher=coordinator,
+                        key_record=coordinatorKeyRecordHex,
+                        defaults={
+                            "publisher": coordinator,
+                            "key_record": coordinatorKeyRecordHex,
+                            "audience_auth_public_key": signer_data["auth_public_key"],
+                        },
                         wallet=wallet,
-                        entity_key=key,
-                        xpub=value
                     )
-                    if request:
-                      uploader_pubkey = request.headers.get('X-Auth-PubKey')
-                      derived_public_key = derive_pubkey_from_xpub(signer.xpub, 0)
-                      if uploader_pubkey == derived_public_key:
-                         wallet.created_by = signer
-                         wallet.save(update_fields=['created_by'])
-            else:
-                if wallet.deleted_at:
-                    wallet.deleted_at = None
-                    wallet.save(updated_fields=['deleted_at'])
-                    
+                Signer.objects.create(wallet=wallet, **signer_data)
+
         return wallet
 
+
 class MultisigWalletUtxoSerializer(serializers.Serializer):
+    txid = serializers.CharField()
+    vout = serializers.SerializerMethodField()
+    satoshis = serializers.SerializerMethodField()
+    height = serializers.SerializerMethodField()
+    coinbase = serializers.SerializerMethodField()
+    token = serializers.SerializerMethodField()
 
-  txid = serializers.CharField()
-  vout = serializers.SerializerMethodField()
-  satoshis = serializers.SerializerMethodField()
-  height = serializers.SerializerMethodField()
-  coinbase = serializers.SerializerMethodField()
-  token = serializers.SerializerMethodField()
+    def get_vout(self, obj):
+        return obj.index
 
-  def get_vout(self, obj):
-    return obj.index
+    def get_satoshis(self, obj):
+        return obj.value
 
-  def get_satoshis(self, obj):
-    return obj.value
+    def get_height(self, obj):
+        if obj.blockheight:
+            return obj.blockheight.number
+        else:
+            return 0
 
-  def get_height(self, obj):
-    if obj.blockheight:
-      return obj.blockheight.number
-    else:
-      return 0
+    def get_coinbase(self, obj) -> bool:
+        return False  # We just assume watchtower is not indexing coinbase txs, verify.
 
-  def get_coinbase(self, obj) -> bool:
-    return False # We just assume watchtower is not indexing coinbase txs, verify.
+    def get_token(self, obj) -> Dict[str, str]:
 
-  def get_token(self, obj) -> Dict[str,str]:
-    
-    token = {}
+        token = {}
 
-    if obj.amount:
-      token['amount'] = str(obj.amount)
+        if obj.amount:
+            token["amount"] = str(obj.amount)
 
-    if obj.cashtoken_ft and obj.cashtoken_ft.category:
-      token['category'] = obj.cashtoken_ft.category
+        if obj.cashtoken_ft and obj.cashtoken_ft.category:
+            token["category"] = obj.cashtoken_ft.category
 
-    if obj.cashtoken_nft:
-      if not token.get('category'):
-        token['category'] = obj.cashtoken_nft.category
-      token['nft'] = {
-          'commitment': obj.cashtoken_nft.commitment,
-          'capability': obj.cashtoken_nft.capability
-      }
-    if len(token.keys()) > 0:
-      return token 
-    
-    return None
+        if obj.cashtoken_nft:
+            if not token.get("category"):
+                token["category"] = obj.cashtoken_nft.category
+            token["nft"] = {
+                "commitment": obj.cashtoken_nft.commitment,
+                "capability": obj.cashtoken_nft.capability,
+            }
+        if len(token.keys()) > 0:
+            return token
 
-  class Meta:
-    model = Transaction
-    fields = ['txid','vout', 'satoshis', 'height', 'coinbase', 'token']
+        return None
+
+    class Meta:
+        model = Transaction
+        fields = ["txid", "vout", "satoshis", "height", "coinbase", "token"]

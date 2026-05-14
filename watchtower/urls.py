@@ -33,6 +33,7 @@ from paytacapos.urls import urlpatterns as paytacapos_urlpatterns
 from smartbch.urls import urlpatterns as sbch_urlpatterns
 from anyhedge.urls import urlpatterns as anyhedge_urlpatterns
 from notifications.urls import urlpatterns as notifications_urlpatterns
+from nostr.urls import urlpatterns as nostr_urlpatterns
 from jpp.urls import urlpatterns as jpp_urlpatterns
 from django.conf.urls.static import static
 from django.conf import settings
@@ -41,6 +42,7 @@ from rampp2p.urls import urlpatterns as ramp_p2p_urlpatterns
 from paytacagifts.urls import urlpatterns as paytacagifts_urlpatterns
 from cts.urls import urlpatterns as cts_urlpatterns
 from authentication.urls import urlpatterns as auth_urlpatterns
+from bitcoincash_oauth_django.urls import urlpatterns as bch_oauth_urlpatterns
 from stablehedge.urls import urlpatterns as stablehedge_urlpatterns
 from multisig.urls import urlpatterns as multisig_urlpatterns
 from memos.urls import urlpatterns as memos_urlpatterns
@@ -204,11 +206,13 @@ urlpatterns = [
     path("api/paytacapos/", include(paytacapos_urlpatterns)),
     path("api/anyhedge/", include(anyhedge_urlpatterns)),
     path("api/push-notifications/", include(notifications_urlpatterns)),
+    path("api/nostr/", include(nostr_urlpatterns)),
     path("api/jpp/", include(jpp_urlpatterns)),
     path("api/ramp/", include(ramp_urlpatterns)),
     path("api/ramp-p2p/", include(ramp_p2p_urlpatterns)),
     path("api/cts/", include(cts_urlpatterns)),
     path("api/auth/", include(auth_urlpatterns)),
+    path("api/bch-auth/", include(bch_oauth_urlpatterns)),
     path("api/stablehedge/", include(stablehedge_urlpatterns)),
     path(r"test/", include(test_urls)),
     path(

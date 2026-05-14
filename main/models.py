@@ -220,11 +220,18 @@ class Address(PostgresModel):
         blank=True
     )
     address_path = models.CharField(max_length=10, db_index=True)
+    advance_subscription = models.BooleanField(default=False, db_index=True)
     date_created = models.DateTimeField(default=timezone.now)
 
     class Meta:
         verbose_name = 'Address'
         verbose_name_plural = 'Addresses'
+        indexes = [
+            models.Index(
+                fields=['wallet', 'advance_subscription', 'address_path'],
+                name='addr_wallet_advsub_path_idx'
+            ),
+        ]
 
     def __str__(self):
         return self.address

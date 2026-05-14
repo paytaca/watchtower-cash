@@ -3,6 +3,7 @@ from functools import wraps
 from django.shortcuts import get_object_or_404
 from django.db.models import Q
 
+from multisig.models.auth import ServerIdentity
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -11,150 +12,152 @@ from rest_framework.exceptions import ValidationError
 from main.models import Transaction
 from smartbch.pagination import CustomLimitOffsetPagination
 import multisig.js_client as js_client
-from multisig.auth.auth import PubKeySignatureMessageAuthentication, MultisigAuthentication
-from ..models.wallet import MultisigWallet
-from ..serializers.wallet import MultisigWalletSerializer, MultisigWalletUtxoSerializer
-from ..auth.permission import IsCosigner, IsCosignerOfNewMultisigWallet
+from multisig.auth.auth import PubKeySignatureMessageAuthentication
+from multisig.models.wallet import MultisigWallet, Signer
+from multisig.serializers.wallet import (
+    MultisigWalletSerializer,
+    SignerSerializer,
+    MultisigWalletUtxoSerializer,
+    KeyRecordReadOnlySerializer,
+)
+from multisig.models.wallet import KeyRecord
+from multisig.auth.permission import IsCosigner
+from rest_framework.generics import get_object_or_404 as drf_get_object_or_404
 
 LOGGER = logging.getLogger(__name__)
 
+from django.db import transaction
+
+
 class MultisigWalletListCreateView(APIView):
-    
-    authentication_classes = [PubKeySignatureMessageAuthentication, MultisigAuthentication]
-    
-    def get_permissions(self):
-        if self.request.method == 'GET':
-            return [IsCosigner()]
-        elif self.request.method == 'POST':
-            return [IsCosignerOfNewMultisigWallet()]
-        else:
-            return super().get_permissions()
+    """
+    Lists all multisig wallets or creates a new multisig wallet.
+    """
+
+    authentication_classes = [PubKeySignatureMessageAuthentication]
 
     def get(self, request):
-        
+        """
+        List all multisig wallets that are not deleted.
+        Optional: Add filter for include_deleted if needed.
+        """
         queryset = MultisigWallet.objects.filter(deleted_at__isnull=True)
-
-        include_deleted = request.query_params.get('include_deleted')
-
-        if include_deleted == '1' or include_deleted == 'true':
+        include_deleted = request.query_params.get("include_deleted")
+        if include_deleted in ("1", "true", "True"):
             queryset = MultisigWallet.objects.all()
-        
-        xpub = request.query_params.get('xpub')
-
-        if xpub:
-            queryset = queryset.filter(signers__xpub=xpub).distinct()
-
         serializer = MultisigWalletSerializer(queryset, many=True)
         return Response(serializer.data)
 
     def post(self, request):
-        
-        serializer = MultisigWalletSerializer(data=request.data, context={"request": request})
-        
-        if serializer.is_valid():
-            wallet = serializer.save()
-            return Response(MultisigWalletSerializer(wallet).data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
+        """
+        Create a new multisig wallet and associated signers atomically.
+        Accepts `signers` as a field in the post data, creates Signer entries linked to the wallet.
+        """
+        data = request.data.copy()
+        # signers_data = data.pop('signers', None)
+        LOGGER.info(f"request user: {request.user}")
+        coordinator = ServerIdentity.objects.filter(
+            public_key=request.headers.get("X-Auth-PubKey")
+        ).first()
+        if not coordinator:
+            return Response(
+                {"error": "Coordinator needs server identity"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        LOGGER.info(coordinator)
+        serializer = MultisigWalletSerializer(
+            data=data, context={"coordinator": coordinator}
+        )
+
+        serializer.is_valid(raise_exception=True)
+        LOGGER.info(serializer.errors)
+        wallet = serializer.save()
+
+        status_code = (
+            status.HTTP_201_CREATED
+            if getattr(serializer, "_created", True)
+            else status.HTTP_200_OK
+        )
+
+        return Response(MultisigWalletSerializer(wallet).data, status=status_code)
+
+
 class MultisigWalletDetailView(APIView):
-   
-    authentication_classes = [PubKeySignatureMessageAuthentication, MultisigAuthentication]
-    permission_classes = [IsCosigner]
+    """
+    Retrieve a single MultisigWallet by its identifier (wallet_hash or wallet_descriptor_id).
+    """
 
     def get(self, request, wallet_identifier):
-        try:
-            if wallet_identifier.isdigit():
-                wallet = MultisigWallet.objects.get(id=wallet_identifier)
-            else:
-                wallet = MultisigWallet.objects.get(locking_bytecode=wallet_identifier)
-        except MultisigWallet.DoesNotExist:
-            raise NotFound(detail="Wallet not found.")
+        """
+        Return details of a specific MultisigWallet matching the identifier.
+        """
+        # Optimize wallet lookup to allow searching by wallet_hash, wallet_descriptor_id, or id (as int).
+
+        wallet = None
+
+        filter_q = Q(wallet_hash=wallet_identifier) | Q(
+            wallet_descriptor_id=wallet_identifier
+        )
+
+        if wallet_identifier.isdigit():
+            filter_q = Q(id=wallet_identifier)
+
+        wallet = MultisigWallet.objects.filter(
+            filter_q, deleted_at__isnull=True
+        ).first()
+
+        if wallet is None:
+            return Response(
+                {"error": "Wallet not found."}, status=status.HTTP_404_NOT_FOUND
+            )
+
         serializer = MultisigWalletSerializer(wallet)
-        return Response(serializer.data)
-    
-    def delete(self, request, wallet_identifier):
-        permanently_delete = request.query_params.get('permanently_delete', False)
-        try:
-            if wallet_identifier.isdigit():
-                identifier_name = 'id'
-                wallet = MultisigWallet.objects.get(id=wallet_identifier)
-            else:
-                identifier_name = 'locking_bytecode'
-                wallet = MultisigWallet.objects.get(locking_bytecode=wallet_identifier)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
-            if permanently_delete == 'true' or permanently_delete == '1':
-                wallet.delete()
-            else:
-                wallet.soft_delete()
-            return Response({"message": f"Wallet with {identifier_name}={wallet_identifier} deleted."}, status=status.HTTP_200_OK)
 
-        except MultisigWallet.DoesNotExist:
-            raise NotFound(detail="Wallet with {identifier_name}={identifier} Not Found.")
-        
-class RenameMultisigWalletView(APIView):
+class SignerWalletListView(APIView):
+    def get(self, request, identifier=None):
+        """
+        Returns all MultisigWallets associated with a signer,
+        given a signer identifier (public_key or master_fingerprint) from the URL path (signers/<identifier>/wallets).
+        """
+        if not identifier:
+            return Response(
+                {"error": "Missing identifier parameter in URL"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        wallets = MultisigWallet.objects.filter(
+            Q(signers__auth_public_key=identifier)
+            | Q(signers__master_fingerprint=identifier),
+            deleted_at__isnull=True,
+        ).distinct()
+        serializer = MultisigWalletSerializer(wallets, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
-    authentication_classes = [PubKeySignatureMessageAuthentication, MultisigAuthentication]
-    permission_classes = [IsCosigner]
 
-    def patch(self, request, pk):
-        try:
-            wallet = MultisigWallet.objects.get(pk=pk)
-        except MultisigWallet.DoesNotExist:
-            return Response({"detail": "Wallet not found."}, status=status.HTTP_404_NOT_FOUND)
+class KeyRecordListView(APIView):
+    def get(self, request):
+        publisher_server_id = request.query_params.get("publisherServerId")
+        audience_auth_public_key = request.query_params.get("audience_auth_public_key")
 
-        new_name = request.data.get("name")
-        if not new_name:
-            return Response({"detail": "Name field is required."}, status=status.HTTP_400_BAD_REQUEST)
+        if not publisher_server_id and not audience_auth_public_key:
+            return Response(
+                {
+                    "error": "Either publisherServerId or audience_auth_public_key is required"
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
-        # Django 3.0.14 requires full reassignment to track JSONField changes
-        template = wallet.template.copy()
-        template["name"] = new_name
-        wallet.template = template
-        wallet.save()
+        queryset = KeyRecord.objects.all()
 
-        return Response({"id": wallet.id, "name": new_name}, status=status.HTTP_200_OK)
+        if publisher_server_id:
+            queryset = queryset.filter(publisher_id=int(publisher_server_id))
 
-class MultisigWalletUtxosView(APIView):
-    serializer_class = MultisigWalletUtxoSerializer
-    pagination_class = CustomLimitOffsetPagination
-    def get(self, request, address):
-        queryset = Transaction.objects.filter(spent=False, address__address=address)
-        
-        only_tokens = request.query_params.get('only_tokens')
-        if only_tokens == 'true':     # return only token utxos
-            queryset = queryset.filter(Q(amount__gt=0) | Q(cashtoken_ft__category__isnull=False) | Q(cashtoken_nft__category__isnull=False))
-        
-        token_type = request.query_params.get('token_type')
-        if token_type == 'ft':     # ft (may have capability also)
-            queryset = queryset.filter(Q(amount__gt=0) & Q(cashtoken_ft__category__isnull=False))
+        if audience_auth_public_key:
+            queryset = queryset.filter(
+                audience_auth_public_key=audience_auth_public_key
+            )
 
-        if token_type == 'nft':    # nft (may have ft also)
-            queryset = queryset.filter(Q(cashtoken_nft__category__isnull=False) & Q(cashtoken_nft__capability__isnull=False))
-
-        if token_type == 'hybrid': # strictly hybrid
-            queryset = queryset.filter(Q(amount__gt=0) & Q(cashtoken_ft__category__isnull=False) & Q(cashtoken_nft__category__isnull=False) & Q(cashtoken_nft__capability__isnull=False))
-
-        if token_type == 'nft' or token_type == 'hybrid':
-            capability = self.request.query_params.get('capability')
-            commitment = self.request.query_params.get('commitment')
-            commitment_ne = self.request.query_params.get('commitment_ne')
-            if capability:
-                queryset = queryset.filter(cashtoken_nft__capability=capability)
-            if commitment:
-                queryset = queryset.filter(cashtoken_nft__commitment=commitment)
-            if commitment_ne:
-                queryset = queryset.filter(~Q(cashtoken_nft__commitment=commitment_ne))
-        category = request.query_params.get('category')
-        if category:
-            queryset = queryset.filter(~Q(cashtoken_nft__category=category))
-        
-        paginate = request.query_params.get('paginate', False)
-        if paginate:
-            paginator = self.pagination_class()
-            page = paginator.paginate_queryset(queryset, request)
-            if page is not None:
-                serializer = self.serializer_class(page, many=True)
-                return paginator.get_paginated_response(serializer.data)
-        serializer = self.serializer_class(queryset, many=True)
-        return Response(serializer.data)
-
+        serializer = KeyRecordReadOnlySerializer(queryset, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
