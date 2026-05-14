@@ -19,9 +19,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       id-token: write
-      contents: write
+      contents: read
       pull-requests: write
-      issues: write
+      issues: read
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6

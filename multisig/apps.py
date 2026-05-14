@@ -6,3 +6,4 @@ class MultisigConfig(AppConfig):
 
     def ready(self):
         import multisig.signals
+

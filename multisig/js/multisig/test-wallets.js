@@ -45,4 +45,3 @@ export const hdPrivateKey2H =
  */
 export const hdPublicKey2H =
   'xpub68MXAZN5xcN1s242GX8nYDHPCEBosnMyeq9ka6SkF3AAjY1jWZ3DEgTyVKFwPNXcKsY1snLZV7rNcVdYUpL3eFWTrr8xnHhRW4XGmcgHdr7';
-

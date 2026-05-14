@@ -150,6 +150,7 @@ def send_push_notification_to_wallet_hashes(wallet_hash_list, message, **kwargs)
     apns_send_response = None
     try:
         gcm_wallets = gcm_devices.values_list("device_wallets__wallet_hash", "device_wallets__multi_wallet_index").distinct()
+        print(f"GCM wallets: {gcm_wallets}")
         for wallet_hash, multi_wallet_index in gcm_wallets:
             if not isinstance(gcm_message.data, dict):
                 gcm_message.data = {}
@@ -161,6 +162,7 @@ def send_push_notification_to_wallet_hashes(wallet_hash_list, message, **kwargs)
                 gcm_devices, wallet_hash_list, multi_wallet_index, 
             )
 
+            print(f"GCM({multi_wallet_index}) | {filtered_gcm_devices}")
             if not filtered_gcm_devices: continue
             _gcm_send_response = filtered_gcm_devices.send_message(gcm_message, **gcm_kwargs)
             _gcm_send_response = parse_gcm_response(_gcm_send_response)
@@ -174,11 +176,11 @@ def send_push_notification_to_wallet_hashes(wallet_hash_list, message, **kwargs)
                 gcm_send_response.append(_gcm_send_response)
 
     except Exception as exception:
-        logger.exception(f"GCM send failed: {exception}")
         gcm_send_response = exception
 
     try:
         apns_wallets = apns_devices.values_list("device_wallets__wallet_hash", "device_wallets__multi_wallet_index").distinct()
+        print(f"APNS wallets: {apns_wallets}")
         for wallet_hash, multi_wallet_index in apns_wallets:
             if "extra" not in apns_kwargs: apns_kwargs["extra"] = {}
             apns_kwargs["extra"]["wallet_hash"] = wallet_hash
@@ -188,6 +190,7 @@ def send_push_notification_to_wallet_hashes(wallet_hash_list, message, **kwargs)
                 apns_devices, wallet_hash_list, multi_wallet_index, 
             )
 
+            print(f"APNS({multi_wallet_index}) | {filtered_apns_devices}")
             if not filtered_apns_devices: continue
             _apns_send_response = filtered_apns_devices.send_message(apns_message, **apns_kwargs)
 
@@ -195,7 +198,6 @@ def send_push_notification_to_wallet_hashes(wallet_hash_list, message, **kwargs)
             apns_send_response += _apns_send_response
 
     except Exception as exception:
-        logger.exception(f"APNS send failed: {exception}")
         apns_send_response = exception
 
     return (

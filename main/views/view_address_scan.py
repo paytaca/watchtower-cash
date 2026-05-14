@@ -75,7 +75,6 @@ class WalletAddressScanViewSet(viewsets.GenericViewSet):
                         project_id=project_id,
                         wallet_hash=wallet_hash,
                         address_index=address_set["address_index"],
-                        remove_duplicate_path=True,
                     )
                     response.update(subscription_response)
 

@@ -1,9 +1,9 @@
 from .wallet import MultisigWalletSerializer, SignerSerializer
-from .transaction import ProposalSerializer, InputSerializer
+from .transaction_proposal import MultisigTransactionProposalSerializer, SignatureSerializer
 
 __all__ = [
     "MultisigWalletSerializer",
     "SignerSerializer",
-    "ProposalSerializer",
-    "InputSerializer"
+    "MultisigTransactionProposalSerializer",
+    "SignatureSerializer"
 ]
