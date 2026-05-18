@@ -73,11 +73,12 @@ def parse_bcmr_to_info(data, is_nft=False, category=None):
         description = type_metadata.get('description') or data.get('description', '')
         type_metadata_uris = type_metadata.get('uris', {})
         token_uris = data.get('uris', {})
-        image_url = type_metadata_uris.get('image') or token_uris.get('icon')
+        image_url = type_metadata_uris.get('image') or type_metadata.get('icon') or token_uris.get('icon')
         try:
             decimals = int(data.get('token', {}).get('decimals'))
         except (TypeError, ValueError):
             decimals = None
+
     else:
         name = data.get('name') or fallback_name
         symbol = data.get('token', {}).get('symbol', '')
@@ -91,10 +92,15 @@ def parse_bcmr_to_info(data, is_nft=False, category=None):
         except (TypeError, ValueError):
             decimals = 0
 
-    return {
+    result = {
         'name': _truncate(name, 200),
         'description': _truncate(description, 1000),
         'symbol': _truncate(symbol, 100),
         'decimals': decimals,
         'image_url': _truncate(image_url, 200),
     }
+
+    if data.get('types'):
+        result['nft_details'] = data.get('types')
+
+    return result
