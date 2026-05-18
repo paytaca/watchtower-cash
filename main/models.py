@@ -439,7 +439,7 @@ class CashNonFungibleToken(models.Model):
             'is_cashtoken': True
         }
 
-    def fetch_metadata(self, force_refresh=False, strict=False):
+    def fetch_metadata(self, force_refresh=False):
         # If metadata already exists and we're not forcing refresh, skip fetching to avoid blocking
         if self.info and not force_refresh:
             return
@@ -464,8 +464,6 @@ class CashNonFungibleToken(models.Model):
             return
 
         type_metadata = data.get('type_metadata', {})
-        if not type_metadata and strict:
-            return
 
         parsed = parse_bcmr_to_info(data, is_nft=True, category=self.category)
         if not parsed:

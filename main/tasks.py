@@ -1681,7 +1681,7 @@ def parse_contract_history(txid, address, tx_fee=None, senders=[], recipients=[]
                                 current_txid=txid,
                                 current_index=ct_index
                             )
-                            cashtoken_nft.fetch_metadata(force_refresh=True)
+                            cashtoken_nft.fetch_metadata()
 
         txn = txns.last()
         spent_txn = spent_txns.last()
@@ -1977,7 +1977,7 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
                                         current_txid=txid,
                                         current_index=ct_index
                                     )
-                                    cashtoken_nft.fetch_metadata(force_refresh=True)
+                                    cashtoken_nft.fetch_metadata()
 
             elif wallet.wallet_type == 'slp':
                 if key != BCH_OR_SLP:
