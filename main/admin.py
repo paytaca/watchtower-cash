@@ -22,6 +22,7 @@ from django.utils.html import format_html
 from django.conf import settings
 import datetime
 import json
+import logging
 
 
 admin.site.site_header = 'WatchTower.Cash Admin'
@@ -916,7 +917,6 @@ class CashFungibleTokenAdmin(admin.ModelAdmin):
         """Refetch token metadata from BCMR indexer for selected tokens"""
         updated_count = 0
         error_count = 0
-        skipped_count = 0
 
         for token in queryset:
             try:
@@ -925,7 +925,6 @@ class CashFungibleTokenAdmin(admin.ModelAdmin):
                 updated_count += 1
             except Exception as e:
                 error_count += 1
-                import logging
                 logger = logging.getLogger(__name__)
                 logger.warning(f'Error refetching metadata for token {token.category}: {str(e)}')
 
@@ -993,7 +992,6 @@ class CashNonFungibleTokenAdmin(admin.ModelAdmin):
         """Refetch token metadata from BCMR indexer for selected tokens"""
         updated_count = 0
         error_count = 0
-        skipped_count = 0
 
         for token in queryset:
             try:
@@ -1002,7 +1000,6 @@ class CashNonFungibleTokenAdmin(admin.ModelAdmin):
                 updated_count += 1
             except Exception as e:
                 error_count += 1
-                import logging
                 logger = logging.getLogger(__name__)
                 logger.warning(f'Error refetching metadata for token {token.category}: {str(e)}')
 
