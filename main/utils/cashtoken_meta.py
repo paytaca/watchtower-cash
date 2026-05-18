@@ -76,7 +76,7 @@ def parse_bcmr_to_info(data, is_nft=False, category=None, capability=None):
         description = type_metadata.get('description') or data.get('description', '')
         type_metadata_uris = type_metadata.get('uris', {})
         token_uris = data.get('uris', {})
-        image_url = type_metadata_uris.get('image') or type_metadata.get('icon') or token_uris.get('icon')
+        image_url = type_metadata_uris.get('image') or type_metadata_uris.get('icon') or token_uris.get('icon')
         try:
             decimals = int(data.get('token', {}).get('decimals'))
         except (TypeError, ValueError):
