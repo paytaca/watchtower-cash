@@ -439,7 +439,7 @@ class CashNonFungibleToken(models.Model):
             'is_cashtoken': True
         }
 
-    def fetch_metadata(self, force_refresh=False, strict=True):
+    def fetch_metadata(self, force_refresh=False, strict=False):
         # If metadata already exists and we're not forcing refresh, skip fetching to avoid blocking
         if self.info and not force_refresh:
             return
