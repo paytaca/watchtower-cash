@@ -473,6 +473,85 @@ class CashNonFungibleToken(models.Model):
             'is_cashtoken': True
         }
 
+    def fetch_metadata(self, force_refresh=False, strict=True):
+        # If metadata already exists and we're not forcing refresh, skip fetching to avoid blocking
+        if self.info and not force_refresh:
+            return
+        
+        PAYTACA_BCMR_URL = f'{settings.PAYTACA_BCMR_URL}/tokens/{self.category}/{self.commitment}/'
+        try:
+            # Add timeout to prevent hanging (10 seconds for existing tokens)
+            response = requests.get(PAYTACA_BCMR_URL, timeout=10)
+            if response.status_code != 200:
+                return
+
+            data = response.json()
+            if 'error' in data.keys():
+                return data
+
+            type_metadata = data.get('type_metadata', {})
+
+            if not type_metadata and strict:
+                return dict(error=f"Missing `type_metadata` in response data", data=data)
+
+            # Truncate name and symbol if they're too long
+            name = type_metadata.get('name') or data.get('name', f'CT-{self.category[0:4]}')
+            if len(name) > 200:  # Database limit for name
+                name = name[:200]
+
+            symbol = data.get('token').get('symbol', '')
+            if symbol and len(symbol) > 100:  # Model limit for symbol
+                symbol = symbol[:100]
+
+            description = type_metadata.get('description') or data.get('description', '')
+            if description and len(description) > 1000:  # Reasonable limit for description
+                description = description[:1000]
+
+            type_metadata_uris = type_metadata.get('uris', {})
+            token_uris = data.get('uris', {})
+            image_url = type_metadata_uris.get('image', '') or token_uris.get('icon')
+            if image_url and len(image_url) > 200:  # Safe limit for URL
+                image_url = image_url[:200]
+
+            try:
+                decimals = int(data.get('token', {} ).get('decimals', None))
+            except (TypeError, ValueError):
+                decimals = None
+
+            try:
+                info, _ = CashTokenInfo.objects.get_or_create(
+                    name=name,
+                    description=description,
+                    symbol=symbol,
+                    decimals=decimals,
+                    image_url=image_url
+                )
+                self.info = info
+                self.save()
+            except CashTokenInfo.MultipleObjectsReturned:
+                pass
+
+        except (requests.Timeout, requests.RequestException) as e:
+            # Log the error but don't fail - metadata will be fetched later if needed
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f'Timeout or error fetching metadata for cashtoken {self.category}: {str(e)}')
+            # If we have existing info, keep it; otherwise create default
+            if not self.info:
+                default_details = settings.DEFAULT_TOKEN_DETAILS.get('fungible', {})
+                info, _ = CashTokenInfo.objects.get_or_create(
+                    name=default_details.get('name', f'CT-{self.category[0:4]}')[:200],
+                    symbol=default_details.get('symbol', '')[:100],
+                    defaults={
+                        'decimals': None,
+                        'description': '',
+                        'image_url': None
+                    }
+                )
+                self.info = info
+                self.save()
+
+
 class Transaction(PostgresModel):
     txid = models.CharField(max_length=70, db_index=True)
     address = models.ForeignKey(

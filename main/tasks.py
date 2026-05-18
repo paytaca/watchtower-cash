@@ -361,6 +361,7 @@ def get_cashtoken_meta_data(
         cashtoken.capability = capability
         cashtoken.info = cashtoken_info
         cashtoken.save()
+        cashtoken.fetch_metadata(force_refresh=True, strict=True)
         resolve_ct_nft_genesis(cashtoken, txid=txid)
 
     if not is_nft or nft_has_fungible:
@@ -1761,6 +1762,7 @@ def parse_contract_history(txid, address, tx_fee=None, senders=[], recipients=[]
                                 current_txid=txid,
                                 current_index=ct_index
                             )
+                            cashtoken_nft.fetch_metadata(force_refresh=True)
 
         txn = txns.last()
         spent_txn = spent_txns.last()
@@ -2056,6 +2058,7 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
                                         current_txid=txid,
                                         current_index=ct_index
                                     )
+                                    cashtoken_nft.fetch_metadata(force_refresh=True)
 
             elif wallet.wallet_type == 'slp':
                 if key != BCH_OR_SLP:
