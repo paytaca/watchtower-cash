@@ -24,6 +24,7 @@ import datetime
 import json
 import logging
 
+logger = logging.getLogger(__name__)
 
 admin.site.site_header = 'WatchTower.Cash Admin'
 admin.site.site_title = 'WatchTower.Cash Admin'
@@ -925,7 +926,6 @@ class CashFungibleTokenAdmin(admin.ModelAdmin):
                 updated_count += 1
             except Exception as e:
                 error_count += 1
-                logger = logging.getLogger(__name__)
                 logger.warning(f'Error refetching metadata for token {token.category}: {str(e)}')
 
         if updated_count > 0:
@@ -1000,7 +1000,6 @@ class CashNonFungibleTokenAdmin(admin.ModelAdmin):
                 updated_count += 1
             except Exception as e:
                 error_count += 1
-                logger = logging.getLogger(__name__)
                 logger.warning(f'Error refetching metadata for token {token.category}: {str(e)}')
 
         if updated_count > 0:

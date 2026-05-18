@@ -107,5 +107,7 @@ def parse_bcmr_to_info(data, is_nft=False, category=None, capability=None):
     # unable to find tokens that cover this case
     if isinstance(capability, str) and capability.lower() == "minting" and data.get('types'):
         result['nft_details'] = data.get('types')
+    elif type_metadata:
+        result['nft_details'] = type_metadata
 
     return result
