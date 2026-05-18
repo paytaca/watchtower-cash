@@ -54,11 +54,13 @@ def parse_bcmr_to_info(data, is_nft=False, category=None, capability=None):
         Whether to extract NFT-specific fields (type_metadata priority) or FT fields.
     category : str, optional
         Used to build a fallback name like "CT-xxxx".
+    capability: str, optional
+        Used as condition for `nft_details` population
 
     Returns
     -------
     dict or None
-        A dict with keys: name, description, symbol, decimals, image_url.
+        A dict with keys: name, description, symbol, decimals, image_url, and an optional nft_details.
         Returns None if the input data is missing or contains an error.
     """
     if not data or 'error' in data:
