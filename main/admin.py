@@ -870,6 +870,12 @@ class CashTokenInfoAdmin(admin.ModelAdmin):
         'decimals',
     ]
 
+    search_fields = [
+        'name',
+        'symbol',
+        'description',
+    ]
+
 
 class CashFungibleTokenAdmin(admin.ModelAdmin):
     list_display = [
@@ -879,7 +885,17 @@ class CashFungibleTokenAdmin(admin.ModelAdmin):
         'decimals',
     ]
 
+    search_fields = [
+        'category',
+        'info__name',
+        'info__symbol',
+    ]
+
     actions = ['refetch_metadata']
+
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related("info")
 
     def name(self, obj):
         if obj.info:
@@ -944,9 +960,14 @@ class CashNonFungibleTokenAdmin(admin.ModelAdmin):
     search_fields = [
         'category',
         'commitment',
+        'info__name',
+        'info__symbol',
     ]
 
     actions = ['refetch_metadata']
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related("info")
 
     def name(self, obj):
         if obj.info:
