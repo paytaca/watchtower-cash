@@ -60,7 +60,8 @@ def parse_bcmr_to_info(data, is_nft=False, category=None, capability=None):
     Returns
     -------
     dict or None
-        A dict with keys: name, description, symbol, decimals, image_url, and an optional nft_details.
+        A dict with keys: name, description, symbol, decimals, image_url.
+        nft_details is also included for minting nft types
         Returns None if the input data is missing or contains an error.
     """
     if not data or 'error' in data:
@@ -104,7 +105,7 @@ def parse_bcmr_to_info(data, is_nft=False, category=None, capability=None):
 
     # Kept existing logic for populating nft_details from previous implementation of `get_cashtoken_meta_data` however
     # unable to find tokens that cover this case
-    if isinstance(capability, str) and capability.lower() === "minting" and data.get('types'):
+    if isinstance(capability, str) and capability.lower() == "minting" and data.get('types'):
         result['nft_details'] = data.get('types')
 
     return result

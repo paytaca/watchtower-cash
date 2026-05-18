@@ -278,7 +278,7 @@ def get_cashtoken_meta_data(
         cashtoken.capability = capability
         cashtoken.save()
         resolve_ct_nft_genesis(cashtoken, txid=txid)
-        cashtoken.fetch_metadata(force_refresh=from_bcmr_webhook, strict=from_bcmr_webhook)
+        cashtoken.fetch_metadata(force_refresh=from_bcmr_webhook)
 
         if from_bcmr_webhook:
             # Propagate the fetched (or default) info to all matching NFTs
