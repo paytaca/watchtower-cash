@@ -42,7 +42,7 @@ def _truncate(value, max_length):
     return value
 
 
-def parse_bcmr_to_info(data, is_nft=False, category=None):
+def parse_bcmr_to_info(data, is_nft=False, category=None, capability=None):
     """
     Extract and normalize token metadata from a BCMR JSON response for storage in CashTokenInfo.
 
@@ -100,7 +100,9 @@ def parse_bcmr_to_info(data, is_nft=False, category=None):
         'image_url': _truncate(image_url, 200),
     }
 
-    if data.get('types'):
+    # Kept existing logic for populating nft_details from previous implementation of `get_cashtoken_meta_data` however
+    # unable to find tokens that cover this case
+    if isinstance(capability, str) and capability.lower() === "minting" and data.get('types'):
         result['nft_details'] = data.get('types')
 
     return result

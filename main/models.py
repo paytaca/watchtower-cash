@@ -465,7 +465,7 @@ class CashNonFungibleToken(models.Model):
 
         type_metadata = data.get('type_metadata', {})
 
-        parsed = parse_bcmr_to_info(data, is_nft=True, category=self.category)
+        parsed = parse_bcmr_to_info(data, is_nft=True, category=self.category, capability=self.capability)
         if not parsed:
             return
 
