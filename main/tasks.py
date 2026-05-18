@@ -266,92 +266,9 @@ def get_cashtoken_meta_data(
 ):
     LOGGER.info(f'Fetching cashtoken metadata for {category} from BCMR')
 
-    METADATA = None
-    detail_key = 'nft' if is_nft else 'fungible'
-    default_details = settings.DEFAULT_TOKEN_DETAILS[detail_key]
-
-    # TODO: Don't fetch from BCMR indexer for now, to be reconsidered later
-    # PAYTACA_BCMR_URL = f'{settings.PAYTACA_BCMR_URL}/tokens/{category}/'
-    # response = requests.get(PAYTACA_BCMR_URL)
-
-    # if response.status_code == 200:
-    #     METADATA = response.json()
-    #     if "error" in METADATA:
-    #         METADATA = None
-
-    if METADATA:
-        # Truncate all string fields to safe lengths
-        name = (METADATA['name'] or default_details['name'])[:200]  # Safe limit for name
-        description = METADATA['description'][:1000] if METADATA['description'] else ''  # Reasonable limit for description
-        symbol = (METADATA['symbol'] or default_details['symbol'])[:100]  # Model limit for symbol
-        decimals = METADATA['decimals']
-        image_url = METADATA['uris']['icon'][:200] if METADATA['uris'].get('icon') else None  # Safe limit for URL
-        
-        # nft_details field for FT are {}
-        # nft_details field for NFTs are:
-        #   if minting: nft_details = children types or {}
-        #   else: nft_details = child type details (to include extensions and other data) or {}
-        nfts = None
-
-        if is_nft:
-            _capability = capability.lower()
-            types = METADATA['types']
-
-            if _capability == 'minting':
-                nfts = types
-            else:
-                if types:
-                    if commitment in types.keys():
-                        nfts = types[commitment]
-                        nft_keys = nfts.keys()
-
-                        if 'name' in nft_keys:
-                            name = nfts['name'][:200]  # Safe limit for name
-                        if 'description' in nft_keys:
-                            description = nfts['description'][:1000] if nfts['description'] else ''  # Reasonable limit for description
-                        if 'uris' in nft_keys:
-                            uris = nfts['uris']
-                            if 'icon' in uris.keys():
-                                image_url = uris['icon'][:200] if uris['icon'] else None  # Safe limit for URL
-        data = {
-            'name': name,
-            'description': description,
-            'symbol': symbol,
-            'decimals': decimals,
-            'image_url': image_url
-        }
-
-        if nfts:
-            data['nft_details'] = nfts
-        
-        # did not use get_or_create bec of async multiple objects returned error
-        cashtoken_infos = CashTokenInfo.objects.filter(**data)
-        if cashtoken_infos.exists():
-            cashtoken_info = cashtoken_infos.first()
-        else:
-            cashtoken_info = CashTokenInfo(**data)
-            cashtoken_info.save()
-    else:
-        # save as default metadata/info if there is no record of metadata from BCMR
-        name = default_details['name'][:200]  # Safe limit for name
-        symbol = default_details['symbol'][:100]  # Model limit for symbol
-            
-        # did not use get_or_create bec of async multiple objects returned error
-        cashtoken_infos = CashTokenInfo.objects.filter(name=name, symbol=symbol)
-        if cashtoken_infos.exists():
-            cashtoken_info = cashtoken_infos.first()
-        else:
-            cashtoken_info = CashTokenInfo(name=name, symbol=symbol)
-            cashtoken_info.save()
+    cashtoken = None
 
     if is_nft:
-        if from_bcmr_webhook:
-            nfts = CashNonFungibleToken.objects.filter(
-                category=category,
-                commitment=commitment
-            )
-            nfts.update(info=cashtoken_info)
-
         cashtoken, _ = CashNonFungibleToken.objects.get_or_create(
             current_index=index,
             current_txid=txid
@@ -359,10 +276,13 @@ def get_cashtoken_meta_data(
         cashtoken.category = category
         cashtoken.commitment = commitment
         cashtoken.capability = capability
-        cashtoken.info = cashtoken_info
         cashtoken.save()
-        cashtoken.fetch_metadata(force_refresh=True, strict=True)
         resolve_ct_nft_genesis(cashtoken, txid=txid)
+        cashtoken.fetch_metadata(force_refresh=True, strict=True)
+
+        if from_bcmr_webhook:
+            # Propagate the fetched (or default) info to all matching NFTs
+            CashNonFungibleToken.objects.filter(category=category, commitment=commitment).update(info=cashtoken.info)
 
     if not is_nft or nft_has_fungible:
         _cashtoken, _ = CashFungibleToken.objects.get_or_create(category=category)
@@ -371,12 +291,11 @@ def get_cashtoken_meta_data(
             try:
                 _cashtoken.fetch_metadata()
             except Exception as e:
-                import logging
-                logger = logging.getLogger(__name__)
-                logger.warning(f'Error fetching cashtoken metadata for {category}: {str(e)}')
+                LOGGER.warning(f'Error fetching cashtoken metadata for {category}: {str(e)}')
                 # Continue even if metadata fetch failed
 
-        if not is_nft: cashtoken = _cashtoken
+        if not is_nft:
+            cashtoken = _cashtoken
 
     return cashtoken
 

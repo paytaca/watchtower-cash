@@ -13,6 +13,7 @@ from datetime import date
 
 from main.utils.address_validator import *
 from main.utils.address_converter import *
+from main.utils.cashtoken_meta import fetch_bcmr_raw, parse_bcmr_to_info
 import requests
 import re
 import uuid
@@ -309,59 +310,12 @@ class CashFungibleToken(models.Model):
         # If metadata already exists and we're not forcing refresh, skip fetching to avoid blocking
         if self.info and not force_refresh:
             return
-        
-        PAYTACA_BCMR_URL = f'{settings.PAYTACA_BCMR_URL}/tokens/{self.category}/'
-        try:
-            # Add timeout to prevent hanging (5 seconds for existing tokens)
-            response = requests.get(PAYTACA_BCMR_URL, timeout=5)
-            if response.status_code == 200:
-                data = response.json()
-                if 'error' not in data.keys():
-                    uris = data.get('token').get('uris')
-                    if not uris:
-                        uris = data.get('uris') or {'icon': None}
 
-                    try:
-                        decimals = int(data.get('token').get('decimals'))
-                    except (TypeError, ValueError):
-                        decimals = 0
-
-                    # Truncate name and symbol if they're too long
-                    name = data.get('name', f'CT-{self.category[0:4]}')
-                    if len(name) > 200:  # Database limit for name
-                        name = name[:200]
-
-                    symbol = data.get('token').get('symbol', '')
-                    if symbol and len(symbol) > 100:  # Model limit for symbol
-                        symbol = symbol[:100]
-
-                    description = data.get('description', '')
-                    if description and len(description) > 1000:  # Reasonable limit for description
-                        description = description[:1000]
-
-                    image_url = uris.get('icon')
-                    if image_url and len(image_url) > 200:  # Safe limit for URL
-                        image_url = image_url[:200]
-
-                    try:
-                        info, _ = CashTokenInfo.objects.get_or_create(
-                            name=name,
-                            description=description,
-                            symbol=symbol,
-                            decimals=decimals,
-                            image_url=image_url
-                        )
-                        self.info = info
-                        self.save()
-                    except CashTokenInfo.MultipleObjectsReturned:
-                        pass
-        except (requests.Timeout, requests.RequestException) as e:
-            # Log the error but don't fail - metadata will be fetched later if needed
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.warning(f'Timeout or error fetching metadata for cashtoken {self.category}: {str(e)}')
-            # If we have existing info, keep it; otherwise create default
-            if not self.info:
+        data = fetch_bcmr_raw(self.category, timeout=5)
+        if 'error' in data:
+            # Only create default metadata on transport errors (timeout, connection issue).
+            # HTTP errors (404, 500) or API errors are left without default info so a retry can succeed.
+            if data.get('transport_error') and not self.info:
                 default_details = settings.DEFAULT_TOKEN_DETAILS.get('fungible', {})
                 info, _ = CashTokenInfo.objects.get_or_create(
                     name=default_details.get('name', f'CT-{self.category[0:4]}')[:200],
@@ -374,6 +328,18 @@ class CashFungibleToken(models.Model):
                 )
                 self.info = info
                 self.save()
+            return
+
+        parsed = parse_bcmr_to_info(data, is_nft=False, category=self.category)
+        if not parsed:
+            return
+
+        try:
+            info, _ = CashTokenInfo.objects.get_or_create(**parsed)
+            self.info = info
+            self.save()
+        except CashTokenInfo.MultipleObjectsReturned:
+            pass
 
 
 class CashNonFungibleTokenQuerySet(PostgresQuerySet):
@@ -477,68 +443,13 @@ class CashNonFungibleToken(models.Model):
         # If metadata already exists and we're not forcing refresh, skip fetching to avoid blocking
         if self.info and not force_refresh:
             return
-        
-        PAYTACA_BCMR_URL = f'{settings.PAYTACA_BCMR_URL}/tokens/{self.category}/{self.commitment}/'
-        try:
-            # Add timeout to prevent hanging (10 seconds for existing tokens)
-            response = requests.get(PAYTACA_BCMR_URL, timeout=10)
-            if response.status_code != 200:
-                return
 
-            data = response.json()
-            if 'error' in data.keys():
-                return data
-
-            type_metadata = data.get('type_metadata', {})
-
-            if not type_metadata and strict:
-                return dict(error=f"Missing `type_metadata` in response data", data=data)
-
-            # Truncate name and symbol if they're too long
-            name = type_metadata.get('name') or data.get('name', f'CT-{self.category[0:4]}')
-            if len(name) > 200:  # Database limit for name
-                name = name[:200]
-
-            symbol = data.get('token').get('symbol', '')
-            if symbol and len(symbol) > 100:  # Model limit for symbol
-                symbol = symbol[:100]
-
-            description = type_metadata.get('description') or data.get('description', '')
-            if description and len(description) > 1000:  # Reasonable limit for description
-                description = description[:1000]
-
-            type_metadata_uris = type_metadata.get('uris', {})
-            token_uris = data.get('uris', {})
-            image_url = type_metadata_uris.get('image', '') or token_uris.get('icon')
-            if image_url and len(image_url) > 200:  # Safe limit for URL
-                image_url = image_url[:200]
-
-            try:
-                decimals = int(data.get('token', {} ).get('decimals', None))
-            except (TypeError, ValueError):
-                decimals = None
-
-            try:
-                info, _ = CashTokenInfo.objects.get_or_create(
-                    name=name,
-                    description=description,
-                    symbol=symbol,
-                    decimals=decimals,
-                    image_url=image_url
-                )
-                self.info = info
-                self.save()
-            except CashTokenInfo.MultipleObjectsReturned:
-                pass
-
-        except (requests.Timeout, requests.RequestException) as e:
-            # Log the error but don't fail - metadata will be fetched later if needed
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.warning(f'Timeout or error fetching metadata for cashtoken {self.category}: {str(e)}')
-            # If we have existing info, keep it; otherwise create default
-            if not self.info:
-                default_details = settings.DEFAULT_TOKEN_DETAILS.get('fungible', {})
+        data = fetch_bcmr_raw(self.category, commitment=self.commitment, timeout=10)
+        if 'error' in data:
+            # Only create default metadata on transport errors (timeout, connection issue).
+            # HTTP errors (404, 500) or API errors are left without default info so a retry can succeed.
+            if data.get('transport_error') and not self.info:
+                default_details = settings.DEFAULT_TOKEN_DETAILS.get('nft', {})
                 info, _ = CashTokenInfo.objects.get_or_create(
                     name=default_details.get('name', f'CT-{self.category[0:4]}')[:200],
                     symbol=default_details.get('symbol', '')[:100],
@@ -550,6 +461,22 @@ class CashNonFungibleToken(models.Model):
                 )
                 self.info = info
                 self.save()
+            return
+
+        type_metadata = data.get('type_metadata', {})
+        if not type_metadata and strict:
+            return
+
+        parsed = parse_bcmr_to_info(data, is_nft=True, category=self.category)
+        if not parsed:
+            return
+
+        try:
+            info, _ = CashTokenInfo.objects.get_or_create(**parsed)
+            self.info = info
+            self.save()
+        except CashTokenInfo.MultipleObjectsReturned:
+            pass
 
 
 class Transaction(PostgresModel):

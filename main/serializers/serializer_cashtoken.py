@@ -1,7 +1,7 @@
 from rest_framework import serializers
-import requests
 
 from django.conf import settings
+from main.utils.cashtoken_meta import fetch_bcmr_raw
 from django.db.models import Q, Sum
 from django.db.models.functions import Coalesce
 
@@ -245,41 +245,28 @@ class CashNonFungibleTokenGroupsSerializer(serializers.ModelSerializer):
         Updates with_bcmr_metadata field when metadata is successfully fetched.
         """
         category = obj.category
-        bcmr_url = f'{settings.PAYTACA_BCMR_URL}/tokens/{category}/'
-        
-        try:
-            # Fetch fresh from BCMR with timeout
-            response = requests.get(bcmr_url, timeout=5)
-            if response.status_code == 200:
-                data = response.json()
-                
-                # Check for errors in response
-                if 'error' in data:
-                    return {}
-                
-                # Metadata successfully fetched - update with_bcmr_metadata for all NFTs in this category
-                # Check if this category already has with_bcmr_metadata set to avoid redundant updates
-                has_metadata = CashNonFungibleToken.objects.filter(
-                    category=category,
-                    with_bcmr_metadata=True
-                ).exists()
-                
-                if not has_metadata:
-                    # Update all NFTs in this category to mark they have BCMR metadata
-                    CashNonFungibleToken.objects.filter(
-                        category=category
-                    ).update(with_bcmr_metadata=True)
-                    # Update the current object instance so subsequent calls use the updated value
-                    obj.with_bcmr_metadata = True
-                
-                # Return the entire BCMR response as metadata
-                return data
-            else:
-                # Non-200 status code
-                return {}
-        except Exception:
-            # Any error (timeout, network, parsing, etc.) returns empty dict
+        data = fetch_bcmr_raw(category, timeout=5)
+
+        if 'error' in data:
             return {}
+
+        # Metadata successfully fetched - update with_bcmr_metadata for all NFTs in this category
+        # Check if this category already has with_bcmr_metadata set to avoid redundant updates
+        has_metadata = CashNonFungibleToken.objects.filter(
+            category=category,
+            with_bcmr_metadata=True
+        ).exists()
+
+        if not has_metadata:
+            # Update all NFTs in this category to mark they have BCMR metadata
+            CashNonFungibleToken.objects.filter(
+                category=category
+            ).update(with_bcmr_metadata=True)
+            # Update the current object instance so subsequent calls use the updated value
+            obj.with_bcmr_metadata = True
+
+        # Return the entire BCMR response as metadata
+        return data
 
 
 class CashNonFungibleCategorySerializer(serializers.Serializer):
@@ -327,36 +314,12 @@ class CashNonFungibleTokenItemsSerializer(serializers.ModelSerializer):
         """
         category = obj.category
         commitment = obj.commitment or ''
-        
-        # Build BCMR URL: /api/tokens/<category>/<commitment>/
-        # If commitment is empty, use just /api/tokens/<category>/
-        if commitment:
-            bcmr_url = f'{settings.PAYTACA_BCMR_URL}/tokens/{category}/{commitment}/'
-        else:
-            bcmr_url = f'{settings.PAYTACA_BCMR_URL}/tokens/{category}/'
-        
-        try:
-            # Fetch fresh from BCMR with timeout
-            response = requests.get(bcmr_url, timeout=5)
-            if response.status_code == 200:
-                data = response.json()
-                
-                # Check for errors in response
-                if 'error' in data:
-                    return {}
-                
-                # Extract only type_metadata from the response
-                type_metadata = data.get('type_metadata')
-                if type_metadata:
-                    return type_metadata
-                else:
-                    return {}
-            else:
-                # Non-200 status code
-                return {}
-        except Exception:
-            # Any error (timeout, network, parsing, etc.) returns empty dict
+
+        data = fetch_bcmr_raw(category, commitment=commitment or None, timeout=5)
+        if 'error' in data:
             return {}
+
+        return data.get('type_metadata', {})
 
 
 class CashNonFungibleTokenSerializer(serializers.ModelSerializer):
