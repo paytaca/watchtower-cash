@@ -132,6 +132,18 @@ docker-compose -f compose/mainnet.yml up -d
 docker-compose -f compose/chipnet.yml up -d
 ```
 
+### Testing
+
+Run tests using docker-compose:
+
+```bash
+# Plain tests
+docker-compose run --rm test
+
+# Tests with coverage logged to console
+docker-compose run --rm test python -m pytest --cov=. --cov-report=term-missing
+```
+
 ## 🔧 Configuration
 
 ### Environment Variables

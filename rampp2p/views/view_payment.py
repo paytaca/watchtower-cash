@@ -1,4 +1,3 @@
-
 from rest_framework import status, viewsets
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -20,80 +19,95 @@ import rampp2p.utils.file_upload as file_upload_utils
 from PIL import Image
 
 import logging
+
 logger = logging.getLogger(__name__)
+
 
 class PaymentTypeView(APIView):
     authentication_classes = [IgnoreInvalidTokenAuthentication]
 
     def get(self, request):
         queryset = models.PaymentType.objects.filter(payment_currency__isnull=False)
-        currency = request.query_params.get('currency')
+        currency = request.query_params.get("currency")
         if currency:
             fiat_currency = models.FiatCurrency.objects.filter(symbol=currency)
             if not fiat_currency.exists():
-                return Response({'error': f'no such fiat currency with symbol {currency}'}, status.HTTP_400_BAD_REQUEST)
+                return Response(
+                    {"error": f"no such fiat currency with symbol {currency}"},
+                    status.HTTP_400_BAD_REQUEST,
+                )
             fiat_currency = fiat_currency.first()
             queryset = fiat_currency.payment_types
         queryset = queryset.distinct()
         serializer = serializers.PaymentTypeSerializer(queryset, many=True)
         return Response(serializer.data, status.HTTP_200_OK)
 
-class PaymentMethodViewSet(viewsets.GenericViewSet):  
+
+class PaymentMethodViewSet(viewsets.GenericViewSet):
     authentication_classes = [TokenAuthentication]
     permission_classes = [RampP2PIsAuthenticated]
     queryset = models.PaymentMethod.objects.all()
 
     def list(self, request):
-        queryset = self.get_queryset().filter(owner__wallet_hash=request.user.wallet_hash)
-        currency = request.query_params.get('currency')
+        queryset = self.get_queryset().filter(
+            owner__wallet_hash=request.user.wallet_hash
+        )
+        currency = request.query_params.get("currency")
         if currency:
             fiat_currency = models.FiatCurrency.objects.filter(symbol=currency)
             if not fiat_currency.exists():
-                return Response({'error': f'no such fiat currency with symbol {currency}'}, status.HTTP_400_BAD_REQUEST)
+                return Response(
+                    {"error": f"no such fiat currency with symbol {currency}"},
+                    status.HTTP_400_BAD_REQUEST,
+                )
             fiat_currency = fiat_currency.first()
-            currency_paymenttype_ids = fiat_currency.payment_types.values_list('id', flat=True)
+            currency_paymenttype_ids = fiat_currency.payment_types.values_list(
+                "id", flat=True
+            )
             queryset = queryset.filter(payment_type__id__in=currency_paymenttype_ids)
         serializer = serializers.PaymentMethodSerializer(queryset, many=True)
         return Response(serializer.data, status.HTTP_200_OK)
 
     def create(self, request):
         owner = request.user
-        
+
         try:
             data = request.data.copy()
-            fields = data.get('fields')
+            fields = data.get("fields")
             if fields is None or len(fields) == 0:
-                raise ValidationError('Empty payment method fields')
-            
-            payment_type = models.PaymentType.objects.get(id=data.get('payment_type'))
+                raise ValidationError("Empty payment method fields")
+
+            payment_type = models.PaymentType.objects.get(id=data.get("payment_type"))
 
             # Return error if a payment_method with same payment type already exists for this user
-            if models.PaymentMethod.objects.filter(Q(owner__wallet_hash=owner.wallet_hash) & Q(payment_type__id=payment_type.id)).exists():
-                raise ValidationError('Duplicate payment method with payment type')
+            if models.PaymentMethod.objects.filter(
+                Q(owner__wallet_hash=owner.wallet_hash)
+                & Q(payment_type__id=payment_type.id)
+            ).exists():
+                raise ValidationError("Duplicate payment method with payment type")
 
-            data = {
-                'payment_type': payment_type,
-                'owner': owner
-            }        
+            data = {"payment_type": payment_type, "owner": owner}
 
             with transaction.atomic():
                 # create payment method
                 payment_method = models.PaymentMethod.objects.create(**data)
                 # create payment method fields
                 for field in fields:
-                    field_ref = models.PaymentTypeField.objects.get(id=field['field_reference'])
+                    field_ref = models.PaymentTypeField.objects.get(
+                        id=field["field_reference"]
+                    )
                     data = {
-                        'payment_method': payment_method,
-                        'field_reference': field_ref,
-                        'value': field['value']
+                        "payment_method": payment_method,
+                        "field_reference": field_ref,
+                        "value": field["value"],
                     }
                     models.PaymentMethodField.objects.create(**data)
-                
+
             serializer = serializers.PaymentMethodSerializer(payment_method)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         except Exception as err:
-            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
-    
+            return Response({"error": err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+
     def retrieve(self, request, pk):
         try:
             payment_method = self.get_queryset().get(pk=pk)
@@ -101,68 +115,93 @@ class PaymentMethodViewSet(viewsets.GenericViewSet):
             serializer = serializers.PaymentMethodSerializer(payment_method)
             return Response(serializer.data, status=status.HTTP_200_OK)
         except ValidationError as err:
-            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
 
     def partial_update(self, request, pk):
         try:
             payment_method = self.get_queryset().get(pk=pk)
             self._check_permissions(request.user.wallet_hash, payment_method)
-        
-            data = request.data.copy()
-            fields = data.get('fields')
-            if fields is None or len(fields) == 0:
-                raise ValidationError('Empty payment method fields')
 
-            for field in data.get('fields'):
-                field_id = field.get('id')
+            data = request.data.copy()
+            fields = data.get("fields")
+            if fields is None or len(fields) == 0:
+                raise ValidationError("Empty payment method fields")
+
+            for field in data.get("fields"):
+                field_id = field.get("id")
                 if field_id:
-                    payment_method_field = models.PaymentMethodField.objects.get(id=field_id)
-                    payment_method_field.value = field.get('value')
+                    payment_method_field = models.PaymentMethodField.objects.get(
+                        id=field_id
+                    )
+                    payment_method_field.value = field.get("value")
                     payment_method_field.save()
-                elif field.get('value') and field.get('field_reference'):
-                    field_ref = models.PaymentTypeField.objects.get(id=field.get('field_reference'))
+                elif field.get("value") and field.get("field_reference"):
+                    field_ref = models.PaymentTypeField.objects.get(
+                        id=field.get("field_reference")
+                    )
                     data = {
-                        'payment_method': payment_method,
-                        'field_reference': field_ref,
-                        'value': field.get('value')
+                        "payment_method": payment_method,
+                        "field_reference": field_ref,
+                        "value": field.get("value"),
                     }
                     models.PaymentMethodField.objects.create(**data)
 
             serializer = serializers.PaymentMethodSerializer(payment_method)
             return Response(serializer.data, status=status.HTTP_200_OK)
         except Exception as err:
-            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
-        
+            return Response({"error": err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+
     def destroy(self, request, pk):
         try:
             payment_method = self.get_queryset().get(pk=pk)
             self._check_permissions(request.user.wallet_hash, payment_method)
-            
+
             # disable deletion if used by any Ad as payment method
-            ads_using_this = models.Ad.objects.filter(deleted_at__isnull=True, payment_methods__id=payment_method.id)
+            ads_using_this = models.Ad.objects.filter(
+                deleted_at__isnull=True, payment_methods__id=payment_method.id
+            )
             if ads_using_this.exists():
                 raise ValidationError("Unable to delete Ad payment method")
-    
+
             # disable deletion if payment method is used by ongoing orders
-            latest_status_subquery = models.Status.objects.filter(order=OuterRef('pk')).order_by('-created_at').values('status')[:1]
-            annotated_orders = models.Order.objects.annotate(latest_status = Subquery(latest_status_subquery))
-            completed_status = [models.StatusType.CANCELED, models.StatusType.RELEASED, models.StatusType.REFUNDED]
-            incomplete_orders = annotated_orders.exclude(latest_status__in=completed_status)
-            orders_using_this = incomplete_orders.filter(payment_methods__id=payment_method.id)
-            logger.warning(f'{orders_using_this.count()} orders using this payment method')
+            latest_status_subquery = (
+                models.Status.objects.filter(order=OuterRef("pk"))
+                .order_by("-created_at")
+                .values("status")[:1]
+            )
+            annotated_orders = models.Order.objects.annotate(
+                latest_status=Subquery(latest_status_subquery)
+            )
+            completed_status = [
+                models.StatusType.CANCELED,
+                models.StatusType.RELEASED,
+                models.StatusType.REFUNDED,
+            ]
+            incomplete_orders = annotated_orders.exclude(
+                latest_status__in=completed_status
+            )
+            orders_using_this = incomplete_orders.filter(
+                payment_methods__id=payment_method.id
+            )
+            logger.warning(
+                f"{orders_using_this.count()} orders using this payment method"
+            )
             if orders_using_this.exists():
-                raise ValidationError(f"Unable to delete payment method used by {orders_using_this.count()} ongoing order(s)")
-            
+                raise ValidationError(
+                    f"Unable to delete payment method used by {orders_using_this.count()} ongoing order(s)"
+                )
+
             payment_method.delete()
             return Response(status=status.HTTP_200_OK)
         except Exception as err:
-            return Response({'error': err.args[0]},status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
 
     def _check_permissions(self, wallet_hash, payment_method):
-        '''Throws an error if wallet_hash is not the owner of payment_method.'''        
+        """Throws an error if wallet_hash is not the owner of payment_method."""
         if wallet_hash != payment_method.owner.wallet_hash:
-            raise ValidationError('User not allowed to access this payment method.')
-        
+            raise ValidationError("User not allowed to access this payment method.")
+
+
 class OrderPaymentViewSet(viewsets.GenericViewSet):
     authentication_classes = [TokenAuthentication]
     permission_classes = [RampP2PIsAuthenticated]
@@ -172,47 +211,114 @@ class OrderPaymentViewSet(viewsets.GenericViewSet):
 
     def list(self, request):
         queryset = self.get_queryset()
-        order_id = request.query_params.get('order_id')
+        order_id = request.query_params.get("order_id")
         if order_id:
             queryset = queryset.filter(order__id=order_id)
         serializer = serializers.OrderPaymentSerializer(queryset, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
-    
+
     def retrieve(self, request, pk):
-        try: 
+        try:
             queryset = self.get_queryset().get(pk=pk)
             serializer = serializers.OrderPaymentSerializer(queryset)
             return Response(serializer.data, status=status.HTTP_200_OK)
         except models.OrderPayment.DoesNotExist as err:
-            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
 
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=["post"])
     def upload_attachment(self, request, pk):
         try:
-            image_file = request.FILES.get('image')
-            if image_file is None: raise ValidationError('image is required')
-            order_payment_obj = models.OrderPayment.objects.prefetch_related('order').get(id=pk)
+            image_file = request.FILES.get("image")
+            if image_file is None:
+                raise ValidationError("image is required")
+            order_payment_obj = models.OrderPayment.objects.prefetch_related(
+                "order"
+            ).get(id=pk)
 
-            # Order status must be ESCROWED or PAID PENDING for payment attachment upload.
             self._validate_awaiting_payment(order_payment_obj.order)
 
             filesize = image_file.size
-            if filesize > 5 * 1024 * 1024: # 5mb limit
-                raise ValidationError(
-                    { 'image': _('File size cannot exceed 5 MB.')}
-                )
+            if filesize > 5 * 1024 * 1024:
+                raise ValidationError({"image": _("File size cannot exceed 5 MB.")})
 
             img_object = Image.open(image_file)
-            image_upload_obj = file_upload_utils.save_image(img_object, max_width=450, request=request)
+            image_upload_obj = file_upload_utils.save_image(
+                img_object, max_width=450, request=request
+            )
 
-            attachment, _ = models.OrderPaymentAttachment.objects.update_or_create(payment=order_payment_obj, image=image_upload_obj)
+            attachment, _ = models.OrderPaymentAttachment.objects.update_or_create(
+                payment=order_payment_obj, image=image_upload_obj
+            )
             serializer = serializers.OrderPaymentAttachmentSerializer(attachment)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
-        
+
         except (models.OrderPayment.DoesNotExist, ValidationError) as err:
-            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
-        
-    @action(detail=True, methods=['delete'])
+            return Response({"error": err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=False, methods=["post"], url_path="upload-by-method")
+    def upload_attachment_by_method(self, request):
+        """
+        Upload a payment proof attachment by order_id and payment_method_id.
+        Creates the OrderPayment record if it doesn't exist yet.
+        """
+        try:
+            order_id = request.data.get("order_id")
+            payment_method_id = request.data.get("payment_method_id")
+            image_file = request.FILES.get("image")
+
+            if order_id is None or payment_method_id is None:
+                raise ValidationError("order_id and payment_method_id are required")
+            if image_file is None:
+                raise ValidationError("image is required")
+
+            with transaction.atomic():
+                order = models.Order.objects.get(pk=order_id)
+                payment_method = models.PaymentMethod.objects.get(pk=payment_method_id)
+
+                self._validate_awaiting_payment(order)
+
+                buyer = None
+                if order.ad_snapshot.trade_type == models.TradeType.SELL:
+                    buyer = order.owner
+                else:
+                    buyer = order.ad_snapshot.ad.owner
+                if request.user.wallet_hash != buyer.wallet_hash:
+                    raise ValidationError("Only the buyer can upload payment proof")
+
+                if payment_method.owner.wallet_hash != buyer.wallet_hash:
+                    raise ValidationError("Payment method does not belong to buyer")
+
+                order_payment, _ = models.OrderPayment.objects.get_or_create(
+                    order=order,
+                    payment_method=payment_method,
+                    defaults={"payment_type": payment_method.payment_type},
+                )
+
+                order.payment_methods.add(payment_method)
+
+            filesize = image_file.size
+            if filesize > 5 * 1024 * 1024:
+                raise ValidationError({"image": _("File size cannot exceed 5 MB.")})
+
+            img_object = Image.open(image_file)
+            image_upload_obj = file_upload_utils.save_image(
+                img_object, max_width=450, request=request
+            )
+
+            attachment, _ = models.OrderPaymentAttachment.objects.update_or_create(
+                payment=order_payment, image=image_upload_obj
+            )
+            serializer = serializers.OrderPaymentAttachmentSerializer(attachment)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+        except (
+            models.Order.DoesNotExist,
+            models.PaymentMethod.DoesNotExist,
+            ValidationError,
+        ) as err:
+            return Response({"error": err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=True, methods=["delete"])
     def delete_attachment(self, request, pk):
         try:
             attachment = models.OrderPaymentAttachment.objects.get(id=pk)
@@ -220,14 +326,19 @@ class OrderPaymentViewSet(viewsets.GenericViewSet):
             file_upload_utils.delete_file(attachment.image.url_path)
             attachment.delete()
             return Response(status=status.HTTP_200_OK)
-        
+
         except (models.OrderPaymentAttachment.DoesNotExist, Exception) as err:
-            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
 
     def _validate_awaiting_payment(self, order):
-        '''Validates that `order` is awaiting fiat payment. Raises ValidationError 
-        when order's last status is not ESCRW nor PD_PN'''
-        
+        """Validates that `order` is awaiting fiat payment. Raises ValidationError
+        when order's last status is not ESCROWED nor PAID_PENDING"""
+
         last_status = order.status
-        if last_status.status != models.StatusType.ESCROWED and last_status.status != models.StatusType.PAID_PENDING:
-            raise ValidationError({ 'order': _(f'Invalid action for {last_status.status} order')})
+        if (
+            last_status.status != models.StatusType.ESCROWED
+            and last_status.status != models.StatusType.PAID_PENDING
+        ):
+            raise ValidationError(
+                {"order": _(f"Invalid action for {last_status.status} order")}
+            )

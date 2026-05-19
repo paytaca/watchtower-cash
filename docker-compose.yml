@@ -50,10 +50,20 @@ services:
     command: ["postgres", "-c", "max_connections=200", "-c", "shared_buffers=256MB"]
     expose:
       - "5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
   redis:
     image: "redis:alpine"
     env_file:
       - .env_dev
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
   backend:
     build: .
     command: [ "supervisord", "-c", "/code/supervisor/webserver.conf", "--nodaemon" ]
@@ -71,6 +81,21 @@ services:
       - /code/cts/js/node_modules
       - /code/stablehedge/js/node_modules
       - /code/main/js/node_modules
+      - /code/multisig/js/node_modules
+  test:
+    build: .
+    command: sh -c "wait-for-it.sh postgres:5432 -t 60 -- psql -h postgres -U postgres -c 'CREATE DATABASE watchtower_test;' || true && python manage.py migrate && python -m pytest multisig/tests/ -v --tb=short"
+    env_file:
+      - .env_dev
+    environment:
+      - POSTGRES_DB=watchtower_test
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    volumes:
+      - ./:/code
       - /code/multisig/js/node_modules
 volumes:
   watchtower_db_data:

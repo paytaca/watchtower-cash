@@ -604,6 +604,13 @@ def save_record(
         # Save updates and trigger post-save signals
         transaction_obj.save()
         
+        # Clear advance_subscription flag if address was advance subscribed
+        # This marks the address as actively used
+        if address_obj.advance_subscription:
+            address_obj.advance_subscription = False
+            address_obj.save(update_fields=['advance_subscription'])
+            LOGGER.info(f"Cleared advance_subscription flag for {address_obj.address} (txid: {transactionid})")
+        
         # save the transaction_obj's inputs if provided
         if inputs is not None and save_inputs:
             for tx_input in inputs:
@@ -1113,6 +1120,15 @@ def get_bch_utxos(self, address):
                 Transaction.objects.bulk_update(transactions_to_update, ['spent'], batch_size=100)
                 LOGGER.info(f"Successfully marked {len(transactions_to_update)} transactions as spent for address {address}")
         
+        # Clear advance_subscription flag if address has UTXOs
+        # This marks the address as actively used
+        if outputs:  # If there are any UTXOs on this address
+            address_obj = Address.objects.filter(address=address).first()
+            if address_obj and address_obj.advance_subscription:
+                address_obj.advance_subscription = False
+                address_obj.save(update_fields=['advance_subscription'])
+                LOGGER.info(f"Cleared advance_subscription flag for {address} (found {len(outputs)} UTXOs)")
+        
         LOGGER.info(f"Completed get_bch_utxos for address {address}")
 
     except Exception as exc:
@@ -1246,6 +1262,15 @@ def get_slp_utxos(self, address):
                         LOGGER.error(f"MISMATCH: update() reported {updated_count} but verification shows {verification_count} for SLP address {address}")
                 else:
                     LOGGER.warning(f"No SLP transactions found to update (may have been updated concurrently) for address {address}")
+        
+        # Clear advance_subscription flag if address has UTXOs
+        # This marks the address as actively used
+        if outputs:  # If there are any SLP UTXOs on this address
+            address_obj = Address.objects.filter(address=address).first()
+            if address_obj and address_obj.advance_subscription:
+                address_obj.advance_subscription = False
+                address_obj.save(update_fields=['advance_subscription'])
+                LOGGER.info(f"Cleared advance_subscription flag for {address} (found {len(outputs)} SLP UTXOs)")
 
     except Exception as exc:
         try:
@@ -3119,6 +3144,8 @@ def get_latest_bch_price(currency):
         relative_currency="BCH",
         timestamp__gt = timezone.now()-timezone.timedelta(seconds=max_age),
         timestamp__lte = timezone.now()+timezone.timedelta(seconds=max_age),
+        currency_ft_token__isnull=True,
+        relative_currency_ft_token__isnull=True,
     ).order_by("-timestamp").first()
 
     latest = get_latest()

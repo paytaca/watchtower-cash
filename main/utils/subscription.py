@@ -13,10 +13,12 @@ from main.models import (
     Subscription,
     Address,
     Project,
-    Wallet
+    Wallet,
+    Transaction
 )
 from main import mqtt
 from main.tasks import get_slp_utxos, get_bch_utxos, publish_subscribed_addresses_to_mqtt_task
+from main.utils.cache import clear_last_address_index_cache
 
 import logging
 import web3
@@ -61,10 +63,15 @@ def remove_duplicate_wallet_address_path(address_obj):
     (subs_deleted, _) = subscriptions.delete()
     (recipients_deleted, _) = recipients.delete()
     addresses_updated = duplicates_qs.update(wallet=None, address_path='')
+    transactions_updated = Transaction.objects.filter(
+        address__in=duplicates_qs,
+        wallet=address_obj.wallet
+    ).update(wallet=None)
     return {
         "subscriptions": subs_deleted,
         "recipients": recipients_deleted,
         "addresses": addresses_updated,
+        "transactions": transactions_updated,
     }
 
 
@@ -82,6 +89,7 @@ def new_subscription(**kwargs):
     telegram_id = kwargs.get('telegram_id', None)
     chat_identity = kwargs.get('chat_identity', None)
     remove_duplicate_path = kwargs.get('remove_duplicate_path', False)
+    advance_subscription = kwargs.get('advance_subscription', False)
 
     new_addresses = set()
     if address or addresses:
@@ -131,12 +139,36 @@ def new_subscription(**kwargs):
                         token_address = bch_address_converter(address)
 
                     try:
-                        address_obj, _ = Address.objects.get_or_create(
+                        address_obj, created = Address.objects.get_or_create(
                             address=address,
                             token_address=token_address
                         )
                         # Store address string for async MQTT publishing
                         new_addresses.add(address_obj.address)
+
+                        # Handle advance_subscription flag
+                        # CRITICAL: Never change False -> True
+                        # Only allow True -> False or setting on new addresses
+                        advance_flag_changed = False
+                        if created:
+                            # New address - set the flag based on parameter
+                            address_obj.advance_subscription = advance_subscription
+                            advance_flag_changed = True
+                        else:
+                            # Existing address - only update if currently True
+                            # This prevents overriding regular subscriptions (False) with advance (True)
+                            if address_obj.advance_subscription == True and advance_subscription == False:
+                                address_obj.advance_subscription = False
+                                advance_flag_changed = True
+                            # If already False, keep it False regardless of parameter
+                            # NOTE: False -> True transitions are prevented by design (line 150)
+                            # This is intentional - once an address is used (False), it should
+                            # never be marked as advance-subscribed (True) again
+                        
+                        # CRITICAL FIX: Always save advance_subscription flag when changed
+                        # This ensures the flag persists even without a project or wallet
+                        if advance_flag_changed:
+                            address_obj.save(update_fields=['advance_subscription'])
 
                         if project:
                             address_obj.project = project
@@ -171,6 +203,32 @@ def new_subscription(**kwargs):
                                     wallet.save()
                                 address_obj.wallet = wallet
                                 address_obj.save()
+                                
+                                # Clear last address index cache when a non-advance-subscribed address is added
+                                # or when an address changes from advance_subscription=True to False
+                                # This is important because the last consecutive index may have changed
+                                # We don't invalidate when adding advance_subscription=True addresses because
+                                # they don't affect the LastAddressIndexView (which filters by advance_subscription=False)
+                                #
+                                # Cache invalidation logic:
+                                # - New regular address (created=True, advance_subscription=False): INVALIDATE
+                                #   → Affects last consecutive index calculation
+                                # - Address changes True → False (advance_flag_changed=True): INVALIDATE
+                                #   → Advance address is now being used, affects calculation
+                                # - New advance address (created=True, advance_subscription=True): NO INVALIDATION
+                                #   → Doesn't affect query (filtered out by advance_subscription=False)
+                                # - Address changes False → True: IMPOSSIBLE (prevented by design, line 150)
+                                #   → Once used, addresses stay used
+                                should_clear_cache = False
+                                if created and address_obj.advance_subscription == False:
+                                    # New regular (non-advance) address added
+                                    should_clear_cache = True
+                                elif advance_flag_changed and address_obj.advance_subscription == False:
+                                    # Existing address changed from True -> False
+                                    should_clear_cache = True
+                                
+                                if should_clear_cache:
+                                    clear_last_address_index_cache(wallet_hash)
 
                         if remove_duplicate_path:
                             result = remove_duplicate_wallet_address_path(address_obj)                            

@@ -15,6 +15,7 @@ from django.db.models import (
 )
 import pickle
 import base64
+import json
 from django.conf import settings
 from django.db.models.functions import Substr, Cast, Floor
 from django.db.models import ExpressionWrapper, FloatField, Subquery, OuterRef
@@ -1266,12 +1267,20 @@ class LastAddressIndexView(APIView):
     )
     def get(self, request, *args, **kwargs):
         """
-        Get the last receiving address index of a wallet
+        Get the last receiving address index of a wallet.
+        
+        The last address index is defined as the highest consecutive index 
+        starting from 0 where either the receiving (0/X) OR change (1/X) 
+        address is NOT advance subscribed (advance_subscription=False).
+        
+        This ensures that only addresses actively used by Paytaca (not just
+        pre-subscribed for WizardConnect) are counted towards the last index.
         """
         wallet_hash = kwargs.get("wallethash", None)
         with_tx = request.query_params.get("with_tx", False)
         exclude_pos = request.query_params.get("exclude_pos", False)
         posid = request.query_params.get("posid", None)
+        
         if posid is not None:
             try:
                 posid = int(posid)
@@ -1281,60 +1290,140 @@ class LastAddressIndexView(APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-        queryset = Address.objects.annotate(
-            address_index=Cast(
-                Substr(F("address_path"), Value("0/(\d+)")), BigIntegerField()
-            ),
-        ).filter(
+        # Check cache first
+        cache = settings.REDISKV
+        cache_key = f"wallet:last_address_index:{wallet_hash}:{with_tx}:{exclude_pos}:{posid}"
+        cached_result = cache.get(cache_key)
+        if cached_result:
+            return Response(json.loads(cached_result))
+
+        # Get all addresses for the wallet that are NOT advance subscribed
+        base_queryset = Address.objects.filter(
             wallet__wallet_hash=wallet_hash,
-            address_index__isnull=False,
+            advance_subscription=False,  # Only regular (used) addresses
         )
-        fields = ["address", "address_index"]
-        ordering = ["-address_index"]
-
-        if isinstance(with_tx, str) and with_tx.lower() == "false":
-            with_tx = False
-
-        if isinstance(exclude_pos, str) and exclude_pos.lower() == "false":
-            exclude_pos = False
-
-        if with_tx:
-            queryset = queryset.annotate(
-                tx_count=Count("transactions__txid", distinct=True)
+        
+        # Build base annotation for extracting address index from path
+        # This handles both receiving (0/X) and change (1/X) addresses
+        def get_annotated_queryset(path_prefix):
+            """Get addresses with a specific path prefix (0/ or 1/) and extract index"""
+            return base_queryset.filter(
+                address_path__startswith=f'{path_prefix}/'
+            ).annotate(
+                address_index=Cast(
+                    Substr(F("address_path"), Value(f"{path_prefix}/(\\d+)")), BigIntegerField()
+                )
+            ).filter(
+                address_index__isnull=False
             )
-            queryset = queryset.filter(tx_count__gt=0)
-            ordering = ["-tx_count", "-address_index"]
-            fields.append("tx_count")
-
+        
+        # Get receiving and change addresses separately
+        receiving_qs = get_annotated_queryset('0')
+        change_qs = get_annotated_queryset('1')
+        
+        # Apply POS filtering if needed
         if isinstance(posid, int) and posid >= 0:
-            POSID_MULTIPLIER = Value(10**POS_ID_MAX_DIGITS)
-            queryset = queryset.annotate(posid=F("address_index") % POSID_MULTIPLIER)
-            queryset = queryset.annotate(
-                payment_index=Floor(F("address_index") / POSID_MULTIPLIER)
+            POSID_MULTIPLIER = 10**POS_ID_MAX_DIGITS
+            receiving_qs = receiving_qs.annotate(
+                posid=F("address_index") % POSID_MULTIPLIER
+            ).annotate(
+                payment_index=Floor(F("address_index") / Value(POSID_MULTIPLIER))
+            ).filter(
+                address_index__gte=POSID_MULTIPLIER,
+                posid=posid
             )
-            queryset = queryset.filter(address_index__gte=POSID_MULTIPLIER)
-            queryset = queryset.filter(posid=posid)
-            # queryset = queryset.filter(address_index__gte=models.Value(0))
-            fields.append("posid")
-            fields.append("payment_index")
+            change_qs = change_qs.annotate(
+                posid=F("address_index") % POSID_MULTIPLIER
+            ).annotate(
+                payment_index=Floor(F("address_index") / Value(POSID_MULTIPLIER))
+            ).filter(
+                address_index__gte=POSID_MULTIPLIER,
+                posid=posid
+            )
         elif exclude_pos:
-            POSID_MULTIPLIER = Value(10**POS_ID_MAX_DIGITS)
-            MAX_UNHARDENED_ADDRESS_INDEX = Value(2**32 - 1)
-            queryset = queryset.exclude(
+            POSID_MULTIPLIER = 10**POS_ID_MAX_DIGITS
+            MAX_UNHARDENED_ADDRESS_INDEX = 2**32 - 1
+            receiving_qs = receiving_qs.exclude(
                 address_index__gte=POSID_MULTIPLIER,
                 address_index__lte=MAX_UNHARDENED_ADDRESS_INDEX,
             )
-
-        queryset = queryset.values(*fields).order_by(*ordering)
-        if len(queryset):
-            address = queryset[0]
-        else:
-            address = None
-
+            change_qs = change_qs.exclude(
+                address_index__gte=POSID_MULTIPLIER,
+                address_index__lte=MAX_UNHARDENED_ADDRESS_INDEX,
+            )
+        
+        # Apply transaction filter if needed
+        if isinstance(with_tx, str) and with_tx.lower() == "false":
+            with_tx = False
+            
+        if with_tx:
+            receiving_qs = receiving_qs.annotate(
+                tx_count=Count("transactions__txid", distinct=True)
+            ).filter(tx_count__gt=0)
+            change_qs = change_qs.annotate(
+                tx_count=Count("transactions__txid", distinct=True)
+            ).filter(tx_count__gt=0)
+        
+        # OPTIMIZED: Instead of loading all indices into memory, check incrementally
+        # This stops at the first gap, avoiding loading thousands of records
+        last_consecutive_index = -1
+        MAX_ADDRESS_CHECK = 10000  # Reasonable upper limit for address index
+        
+        for potential_index in range(MAX_ADDRESS_CHECK):
+            # Check if this index exists in either receiving or change addresses
+            # Using exists() is more efficient than fetching the full object
+            exists_in_receiving = receiving_qs.filter(address_index=potential_index).exists()
+            exists_in_change = change_qs.filter(address_index=potential_index).exists()
+            
+            if exists_in_receiving or exists_in_change:
+                last_consecutive_index = potential_index
+            else:
+                # First gap found, stop checking
+                break
+        
+        # Get the actual address object for the last index
+        address = None
+        if last_consecutive_index >= 0:
+            # Try receiving address first
+            address_obj = receiving_qs.filter(
+                address_index=last_consecutive_index
+            ).first()
+            
+            if not address_obj:
+                # Try change address
+                address_obj = change_qs.filter(
+                    address_index=last_consecutive_index
+                ).first()
+            
+            if address_obj:
+                address_data = {
+                    "address": address_obj.address,
+                    "address_index": last_consecutive_index
+                }
+                
+                # Add optional fields if they were requested
+                if with_tx and hasattr(address_obj, 'tx_count'):
+                    address_data["tx_count"] = address_obj.tx_count
+                    
+                if isinstance(posid, int) and posid >= 0:
+                    if hasattr(address_obj, 'posid'):
+                        address_data["posid"] = address_obj.posid
+                    if hasattr(address_obj, 'payment_index'):
+                        address_data["payment_index"] = address_obj.payment_index
+                
+                address = address_data
+        
         data = {
             "wallet_hash": wallet_hash,
             "address": address,
         }
+
+        # Cache the result for 24 hours
+        # This is safe because the cache is invalidated when:
+        # 1. New addresses are added to the wallet
+        # 2. Addresses receive transactions (which may affect with_tx variant)
+        # 3. advance_subscription flag changes on addresses
+        cache.set(cache_key, json.dumps(data), 86400)
 
         return Response(data)
 

@@ -14,20 +14,25 @@ from functools import wraps
 # Connect to Redis
 redis_client = settings.REDISKV
 
+
 def redis_cache(expiration_seconds=3600):  # Add expiration as a parameter
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
             key = f"{func.__name__}:{args}:{kwargs}"
             cached_value = redis_client.get(key)
-            
+
             if cached_value:
                 return json.loads(cached_value)  # Return cached value
-            
+
             result = func(*args, **kwargs)  # Call the function if not cached
-            redis_client.set(key, json.dumps(result), ex=expiration_seconds)  # Auto-expire after X seconds
+            redis_client.set(
+                key, json.dumps(result), ex=expiration_seconds
+            )  # Auto-expire after X seconds
             return result
+
         return wrapper
+
     return decorator
 
 
@@ -43,18 +48,17 @@ def retry(max_retries):
                     if retries >= max_retries:
                         raise exception
                     time.sleep(1)
+
         return wrapper_retry
+
     return decorator_retry
 
 
 class BCHN(object):
     def __init__(self):
         self.max_retries = 20
-        self.source = 'bchn'
-        self.fulcrum = {
-            'host': settings.BCHN_HOST,
-            'port': settings.FULCRUM_PORT
-        }
+        self.source = "bchn"
+        self.fulcrum = {"host": settings.BCHN_HOST, "port": settings.FULCRUM_PORT}
 
     def _get_rpc_connection(self):
         """Create a new RPC connection for each request"""
@@ -63,7 +67,9 @@ class BCHN(object):
     def _close_connection(self, connection):
         """Safely close the RPC connection"""
         try:
-            if hasattr(connection, '_conn') and isinstance(connection._conn, http.client.HTTPConnection):
+            if hasattr(connection, "_conn") and isinstance(
+                connection._conn, http.client.HTTPConnection
+            ):
                 connection._conn.close()
         except Exception as e:
             logging.warning(f"Error closing RPC connection: {str(e)}")
@@ -90,16 +96,16 @@ class BCHN(object):
         try:
             block_hash = connection.getblockhash(block)
             block_data = connection.getblock(block_hash, verbosity)
-            return block_data['tx']
+            return block_data["tx"]
         finally:
             self._close_connection(connection)
 
     @retry(max_retries=3)
     def get_block_stats(self, block_number_or_hash, stats=None):
         """
-            block_number_or_hash: (int | str) 
-            stats: (None, List<str>) provide list of strings to return only a subset of stats
-                See https://docs.bitcoincashnode.org/doc/json-rpc/getblockstats/ for valid values
+        block_number_or_hash: (int | str)
+        stats: (None, List<str>) provide list of strings to return only a subset of stats
+            See https://docs.bitcoincashnode.org/doc/json-rpc/getblockstats/ for valid values
         """
         connection = self._get_rpc_connection()
         try:
@@ -109,7 +115,7 @@ class BCHN(object):
 
     # Cache to prevent multiple requests when parsing transaction in '._parse_transaction()'
     @redis_cache(expiration_seconds=60)
-    def _get_raw_transaction(self, txid, verbosity:int=2, max_retries:int=None):
+    def _get_raw_transaction(self, txid, verbosity: int = 2, max_retries: int = None):
         retries = 0
         if max_retries is None:
             max_retries = self.max_retries
@@ -124,10 +130,12 @@ class BCHN(object):
             except Exception as exception:
                 retries += 1
                 if retries >= max_retries:
-                    if 'No such mempool or blockchain transaction' in str(exception):
+                    if "No such mempool or blockchain transaction" in str(exception):
                         break
                     else:
-                        logging.exception(f'ERROR IN FETCHING TXN DETAILS: {txid}', exception)
+                        logging.exception(
+                            f"ERROR IN FETCHING TXN DETAILS: {txid}", exception
+                        )
                         raise exception
                 time.sleep(1)
 
@@ -143,31 +151,35 @@ class BCHN(object):
     def build_tx_from_hex(self, tx_hex, tx_fee=None):
         txn = self._decode_raw_transaction(tx_hex)
         if not tx_fee:
-            tx_fee = math.ceil(txn['size'] * settings.TX_FEE_RATE)
-        for i, tx_input in enumerate(txn['vin']):
-            _input_details = self.get_input_details(tx_input['txid'], tx_input['vout'])
+            tx_fee = math.ceil(txn["size"] * settings.TX_FEE_RATE)
+        for i, tx_input in enumerate(txn["vin"]):
+            _input_details = self.get_input_details(tx_input["txid"], tx_input["vout"])
 
-            if 'value' in _input_details:
-                txn['vin'][i]['value'] = _input_details['value'] / 10 ** 8
+            if "value" in _input_details:
+                txn["vin"][i]["value"] = _input_details["value"] / 10**8
 
-            if 'address' in _input_details:
-                txn['vin'][i]['address'] = _input_details['address']
+            if "address" in _input_details:
+                txn["vin"][i]["address"] = _input_details["address"]
 
-            if 'token_data' in _input_details:
-                txn['vin'][i]['tokenData'] = _input_details['token_data']
+            if "token_data" in _input_details:
+                txn["vin"][i]["tokenData"] = _input_details["token_data"]
 
-        txn['tx_fee'] = tx_fee
-        txn['timestamp'] = None
+        txn["tx_fee"] = tx_fee
+        txn["timestamp"] = None
         return txn
 
-    def parse_transaction_from_hex(self, tx_hex, tx_fee=None, include_hex=False, include_no_address=True):
+    def parse_transaction_from_hex(
+        self, tx_hex, tx_fee=None, include_hex=False, include_no_address=True
+    ):
         txn = self._decode_raw_transaction(tx_hex)
 
-        parsed_txn = self._parse_transaction(txn, include_hex=include_hex, include_no_address=include_no_address)
-        if 'tx_fee' not in parsed_txn:
+        parsed_txn = self._parse_transaction(
+            txn, include_hex=include_hex, include_no_address=include_no_address
+        )
+        if "tx_fee" not in parsed_txn:
             if not tx_fee:
-                tx_fee = math.ceil(txn['size'] * settings.TX_FEE_RATE)
-            parsed_txn['tx_fee'] = tx_fee
+                tx_fee = math.ceil(txn["size"] * settings.TX_FEE_RATE)
+            parsed_txn["tx_fee"] = tx_fee
 
         return parsed_txn
 
@@ -175,133 +187,143 @@ class BCHN(object):
     def get_transaction(self, tx_hash, include_hex=False, include_no_address=False):
         txn = self._get_raw_transaction(tx_hash)
         if txn:
-            return self._parse_transaction(txn, include_hex=include_hex, include_no_address=include_no_address)
+            return self._parse_transaction(
+                txn, include_hex=include_hex, include_no_address=include_no_address
+            )
 
     def _parse_transaction(self, txn, include_hex=False, include_no_address=False):
-        tx_hash = txn['hash']
-        
+        tx_hash = txn["hash"]
+
         # NOTE: very new transactions doesnt have timestamp
         time = timezone.now().timestamp()
-        if 'time' in txn.keys():
-            time = txn['time']
+        if "time" in txn.keys():
+            time = txn["time"]
 
         transaction = {
-            'txid': tx_hash,
-            'timestamp': time,
-            'size': txn['size'],
-            'confirmations': txn.get('confirmations'),
-            'valid': True
+            "txid": tx_hash,
+            "timestamp": time,
+            "size": txn["size"],
+            "confirmations": txn.get("confirmations"),
+            "valid": True,
         }
 
         if include_hex:
             transaction["hex"] = txn["hex"]
 
-        transaction['inputs'] = []
+        transaction["inputs"] = []
         total_input_sats = 0
         total_output_sats = 0
         can_calculate_fee = True
 
-        for tx_input in txn['vin']:
+        for tx_input in txn["vin"]:
             # Coinbase transactions are reward to miners when there is a new block mined
-            if 'coinbase' in tx_input:
-                transaction['inputs'].append(tx_input)
+            if "coinbase" in tx_input:
+                transaction["inputs"].append(tx_input)
                 can_calculate_fee = False  # Coinbase has no fee
                 continue
 
-            input_txid = tx_input['txid']
+            input_txid = tx_input["txid"]
             value = None
 
-            if 'prevout' in tx_input.keys():
-                prevout = tx_input['prevout']
-                if 'value' in prevout:
-                    value = prevout['value']
+            if "prevout" in tx_input.keys():
+                prevout = tx_input["prevout"]
+                if "value" in prevout:
+                    value = prevout["value"]
                     # Convert BCH to satoshis if needed (value < 100000000 likely means BCH)
                     if isinstance(value, (int, float)) and value < 100000000:
-                        total_input_sats += round(value * (10 ** 8))
+                        total_input_sats += round(value * (10**8))
                     else:
                         total_input_sats += value
                 else:
                     can_calculate_fee = False
-                
+
                 input_token_data = None
-                scriptPubKey = prevout['scriptPubKey']
+                scriptPubKey = prevout["scriptPubKey"]
 
-                if 'address' in scriptPubKey.keys():
-                    input_address = scriptPubKey['address']
+                if "address" in scriptPubKey.keys():
+                    input_address = scriptPubKey["address"]
                 else:
-                    _input_details = self.get_input_details(input_txid, tx_input['vout'])
+                    _input_details = self.get_input_details(
+                        input_txid, tx_input["vout"]
+                    )
                     # for multisig input prevouts (no address given on data)
-                    input_address = _input_details.get('address') if _input_details else None
+                    input_address = (
+                        _input_details.get("address") if _input_details else None
+                    )
 
-                if 'tokenData' in prevout.keys():
-                    input_token_data = prevout['tokenData']
+                if "tokenData" in prevout.keys():
+                    input_token_data = prevout["tokenData"]
             else:
-                _input_details = self.get_input_details(input_txid, tx_input['vout'])
-                if _input_details and 'value' in _input_details:
-                    value = _input_details.get('value')
+                _input_details = self.get_input_details(input_txid, tx_input["vout"])
+                if _input_details and "value" in _input_details:
+                    value = _input_details.get("value")
                     total_input_sats += value
                 else:
                     can_calculate_fee = False
-                
-                input_token_data = _input_details.get('token_data') if _input_details else None
-                input_address = _input_details.get('address') if _input_details else None
+
+                input_token_data = (
+                    _input_details.get("token_data") if _input_details else None
+                )
+                input_address = (
+                    _input_details.get("address") if _input_details else None
+                )
 
             if not include_no_address and not input_address:
                 continue
 
-            input_txid = tx_input['txid']
+            input_txid = tx_input["txid"]
             data = {
-                'txid': input_txid,
-                'spent_index': tx_input['vout'],
-                'value': value,
-                'token_data': input_token_data,
-                'address': input_address
+                "txid": input_txid,
+                "spent_index": tx_input["vout"],
+                "value": value,
+                "token_data": input_token_data,
+                "address": input_address,
             }
-            transaction['inputs'].append(data)
+            transaction["inputs"].append(data)
 
-        transaction['outputs'] = []
-        outputs = txn['vout']
+        transaction["outputs"] = []
+        outputs = txn["vout"]
 
         for tx_output in outputs:
             data = self._parse_output(tx_output)
-            if not include_no_address and not data.get('address'):
+            if not include_no_address and not data.get("address"):
                 continue
-            transaction['outputs'].append(data)
+            transaction["outputs"].append(data)
             # Sum output values (already in satoshis from _parse_output)
-            if 'value' in data:
-                total_output_sats += data['value']
+            if "value" in data:
+                total_output_sats += data["value"]
 
         # Calculate fee: prefer calculated, then RPC fee, then estimate
         if can_calculate_fee and total_input_sats > 0:
-            transaction['tx_fee'] = total_input_sats - total_output_sats
-        elif 'fee' in txn:
-            transaction['tx_fee'] = round(txn['fee'] * (10 ** 8))
+            transaction["tx_fee"] = total_input_sats - total_output_sats
+        elif "fee" in txn:
+            transaction["tx_fee"] = round(txn["fee"] * (10**8))
         else:
             # Last resort: estimate (should be rare)
-            transaction['tx_fee'] = math.ceil(txn['size'] * settings.TX_FEE_RATE)
-        
+            transaction["tx_fee"] = math.ceil(txn["size"] * settings.TX_FEE_RATE)
+
         return transaction
 
     def _parse_output(self, tx_output):
         details = {
-            'index': tx_output['n'],
-            'token_data': None,
+            "index": tx_output["n"],
+            "token_data": None,
         }
-        if 'value' in tx_output.keys():
-            details['value'] = round(tx_output['value'] * (10 ** 8))
-            
-        if 'scriptPubKey' in tx_output.keys():
-            script_pubkey = tx_output['scriptPubKey']
-            if 'addresses' in script_pubkey.keys():
-                details['address'] = script_pubkey['addresses'][0]
-            elif script_pubkey.get('type') == 'nulldata':
-                # remove first characters '6a'
-                details['op_return'] = script_pubkey['hex'][2:]
-            else:
-                details['script'] = script_pubkey.get('hex')
+        if "value" in tx_output.keys():
+            details["value"] = round(tx_output["value"] * (10**8))
 
-        if 'tokenData' in tx_output.keys():
-            details['token_data'] = tx_output['tokenData']
+        if "scriptPubKey" in tx_output.keys():
+            script_pubkey = tx_output["scriptPubKey"]
+            if "addresses" in script_pubkey.keys():
+                details["address"] = script_pubkey["addresses"][0]
+            elif script_pubkey.get("type") == "nulldata":
+                # remove first characters '6a'
+                details["op_return"] = script_pubkey["hex"][2:]
+            else:
+                details["script"] = script_pubkey.get("hex")
+
+        if "tokenData" in tx_output.keys():
+            details["token_data"] = tx_output["tokenData"]
 
         return details
 
@@ -313,15 +335,15 @@ class BCHN(object):
         finally:
             self._close_connection(connection)
 
-    @retry(max_retries=3)  
+    @retry(max_retries=3)
     def broadcast_transaction(self, hex_str):
         connection = self._get_rpc_connection()
         try:
             return connection.sendrawtransaction(hex_str)
         finally:
             self._close_connection(connection)
-    
-    def get_tx_output(self, txid:str, vout:int, include_mempool=True):
+
+    def get_tx_output(self, txid: str, vout: int, include_mempool=True):
         try:
             connection = self._get_rpc_connection()
             return connection.gettxout(txid, vout)
@@ -331,16 +353,16 @@ class BCHN(object):
     def get_input_details(self, txid, vout_index):
         previous_tx = self._get_raw_transaction(txid)
         if previous_tx:
-            previous_out = previous_tx['vout'][vout_index]
+            previous_out = previous_tx["vout"][vout_index]
             return self._parse_output(previous_out)
-    
+
     def _recvall(self, sock):
         BUFF_SIZE = 4096
         data = bytearray()
         while True:
             packet = sock.recv(BUFF_SIZE)
             data.extend(packet)
-            if data.endswith(bytes('\r\n', 'utf-8')):
+            if data.endswith(bytes("\r\n", "utf-8")):
                 break
         return data
 
@@ -348,29 +370,52 @@ class BCHN(object):
         data = '{ "id": 0, "method": "blockchain.address.listunspent",'
         data += '"params": ["%s", "include_tokens"] }' % (address)
 
-        with socket.create_connection((
-            self.fulcrum['host'],
-            self.fulcrum['port']
-        )) as sock:
-            sock.send(data.encode('utf-8')+b'\n')
+        with socket.create_connection(
+            (self.fulcrum["host"], self.fulcrum["port"])
+        ) as sock:
+            sock.send(data.encode("utf-8") + b"\n")
             response_byte = self._recvall(sock)
             response = response_byte.decode()
             response = json.loads(response.strip())
-            return response['result']
-        
+            return response["result"]
+
     def get_address_transactions(self, address, limit=None, offset=None):
         data = '{ "id": 0, "method": "blockchain.address.get_history",'
         data += '"params": ["%s"] }' % (address)
 
-        with socket.create_connection((
-            self.fulcrum['host'],
-            self.fulcrum['port']
-        )) as sock:
-            sock.send(data.encode('utf-8')+b'\n')
+        with socket.create_connection(
+            (self.fulcrum["host"], self.fulcrum["port"])
+        ) as sock:
+            sock.send(data.encode("utf-8") + b"\n")
             response_byte = self._recvall(sock)
             response = response_byte.decode()
             response = json.loads(response.strip())
-            return response['result']
+            return response["result"]
+
+    def check_address_history(self, address):
+        """
+        Check if an address has any transaction history.
+
+        Uses blockchain.address.get_first_use which returns a minimal response
+        indicating if/when an address was first used. Much more efficient than
+        get_history for addresses with thousands of transactions.
+
+        Returns:
+            bool: True if address has transaction history, False otherwise
+        """
+        data = '{ "id": 0, "method": "blockchain.address.get_first_use",'
+        data += '"params": ["%s"] }' % (address)
+
+        with socket.create_connection(
+            (self.fulcrum["host"], self.fulcrum["port"])
+        ) as sock:
+            sock.send(data.encode("utf-8") + b"\n")
+            response_byte = self._recvall(sock)
+            response = response_byte.decode()
+            response = json.loads(response.strip())
+            result = response.get("result")
+            # get_first_use returns [height, tx_hash, funding_tx_pos] if used, null if never used
+            return bool(result)
 
     def get_dsproof(self, identifier, limit=None, offset=None):
         """
@@ -379,25 +424,23 @@ class BCHN(object):
         data = '{ "id": 0, "method": "blockchain.transaction.dsproof.get",'
         data += '"params": ["%s"] }' % (identifier)
 
-        with socket.create_connection((
-            self.fulcrum['host'],
-            self.fulcrum['port']
-        )) as sock:
-            sock.send(data.encode('utf-8')+b'\n')
+        with socket.create_connection(
+            (self.fulcrum["host"], self.fulcrum["port"])
+        ) as sock:
+            sock.send(data.encode("utf-8") + b"\n")
             response_byte = self._recvall(sock)
             response = response_byte.decode()
             response = json.loads(response.strip())
-            return response['result']
+            return response["result"]
 
     def get_fulcrum_server_features(self, limit=None, offset=None):
         data = '{ "id": 0, "method": "server.features" }'
 
-        with socket.create_connection((
-            self.fulcrum['host'],
-            self.fulcrum['port']
-        )) as sock:
-            sock.send(data.encode('utf-8')+b'\n')
+        with socket.create_connection(
+            (self.fulcrum["host"], self.fulcrum["port"])
+        ) as sock:
+            sock.send(data.encode("utf-8") + b"\n")
             response_byte = self._recvall(sock)
             response = response_byte.decode()
             response = json.loads(response.strip())
-            return response['result']
+            return response["result"]

@@ -1,30 +1,19 @@
-from .transaction_proposal import (
-    MultisigTransactionProposalListCreateView,
-    MultisigTransactionProposalDetailView,
-    SignaturesAddView,
-    SignerSignaturesAddView,
-    BroadcastTransactionProposalView,
-    FinalizeTransactionProposalView,
-    TransactionProposalStatusView
-)
-
 from .wallet import (
     MultisigWalletListCreateView,
-    MultisigWalletDetailView,
-    RenameMultisigWalletView,
-    MultisigWalletUtxosView
+    # MultisigWalletDetailView,
+    # RenameMultisigWalletView,
+    # MultisigWalletUtxosView
+)
+
+from .transaction import (
+    ProposalListCreateView,
+    ProposalDetailView,
+    ProposalInputListView,
 )
 
 __all__ = [
-    "MultisigTransactionProposalListCreateView",
-    "MultisigTransactionProposalDetailView",
-    "SignaturesAddView",
-    "SignerSignaturesAddView",
-    "BroadcastTransactionProposalView",
-    "FinalizeTransactionProposalView",
-    "TransactionProposalStatusView",
     "MultisigWalletListCreateView",
-    "MultisigWalletDetailView",
-    "RenameMultisigWalletView"
-    "MultisigWalletUtxosView"
+    "ProposalListCreateView",
+    "ProposalDetailView",
+    "ProposalInputListView"
 ]
