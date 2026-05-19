@@ -225,6 +225,28 @@ class PosDeviceLinkRequestV2Serializer(PermissionSerializerMixin, serializers.Se
         if not merchant or merchant.wallet_hash != wallet.wallet_hash:
             raise exceptions.PermissionDenied("Instance does not belong to authenticated wallet")
 
+    def check_permissions(self):
+        if not self.context or "request" not in self.context:
+            return
+
+        request = self.context["request"]
+
+        # older versions didnt need authentication
+        if HasMinPaytacaVersionHeader.on_request(request):
+            return
+
+        wallet = request.user
+
+        if not isinstance(wallet, Wallet) or not wallet.is_authenticated:
+            raise exceptions.PermissionDenied()
+
+        merchant = None
+        if self.pos_device:
+            merchant = self.pos_device.merchant
+
+        if not merchant or merchant.wallet_hash != wallet.wallet_hash:
+            raise exceptions.PermissionDenied("Instance does not belong to authenticated wallet")
+
     @classmethod
     def generate_redis_key(cls, code):
         return f"posdevicelink:{code}"
@@ -258,6 +280,25 @@ class PosDeviceLinkRequestV2Serializer(PermissionSerializerMixin, serializers.Se
 class PosDeviceSetupNfcPaymentSerializer(serializers.Serializer):
     HARD_MIN_TTL = 60 * 5
     HARD_MAX_TTL = 86_400 * 7
+
+    wallet_hash = serializers.CharField()
+    posid = serializers.IntegerField()
+    encrypted_data = serializers.CharField()
+    signature = serializers.CharField()
+    code_ttl = serializers.IntegerField(default=86_400)
+
+    def validate(self, data):
+        wallet_hash = data["wallet_hash"]
+        posid = data["posid"]
+
+        pos_device = PosDevice.objects.filter(wallet_hash=wallet_hash, posid = posid).first()
+        if not pos_device:
+            raise serializers.ValidationError("pos device does not exist")
+        if pos_device.nfc_payments_enabled:
+            raise serializers.ValidationError("pos device is already setup for nfc payments")
+
+        self.pos_device = pos_device
+        return data
     
     @classmethod
     def generate_redis_key(cls, code):

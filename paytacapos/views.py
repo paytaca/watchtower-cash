@@ -206,6 +206,16 @@ class PosDeviceViewSet(
             return Response(serializer.errors, status=400)
         return Response(serializer.validated_data["encrypted_data"])
 
+    @decorators.action(methods=["get"], detail=False)
+    def nfc_code_data(self, request, *args, **kwargs):
+        nfc_code = request.query_params.get("code", None)
+        nfc_request_data = PosDeviceSetupNfcPaymentSerializer.retrieve_setup_request_data(nfc_code)
+        code_ttl = 60 * 5
+        serializer = PosDeviceSetupNfcPaymentSerializer(data=nfc_request_data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=400)
+        return Response(serializer.validated_data["encrypted_data"])
+
     @swagger_auto_schema(method="post", request_body=LinkedDeviceInfoSerializer)
     @decorators.action(methods=["post"], detail=False)
     def redeem_link_device_code(self, request, *args, **kwargs):
@@ -277,9 +287,11 @@ class PosDeviceViewSet(
         return Response(serializer.data)
     
     @swagger_auto_schema(method="post", request_body=None)
-    @decorators.action(methods=["post"], detail=True, url_path="enable-nfc-payments", authentication_classes=[WalletAuthentication], permission_classes=[permissions.IsAuthenticated])
-    def enable_nfc_payments(self, request, *args, **kwargs):
-        instance = self.get_object()
+    @decorators.action(methods=["post"], detail=False, url_path=r"(?P<posid>[^/.]+)/enable-nfc-payments", authentication_classes=[WalletAuthentication], permission_classes=[permissions.AllowAny])
+    def enable_nfc_payments(self, request, posid=None):
+        instance = PosDevice.objects.filter(posid=posid).first()
+        if not instance:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
         instance.nfc_payments_enabled = True
         instance.save()
         return Response(self.serializer_class(instance).data)
