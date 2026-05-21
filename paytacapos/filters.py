@@ -69,7 +69,15 @@ class MerchantFilter(filters.FilterSet):
         if not isinstance(value, str):
             return queryset
 
-        ids = [merchant_id.strip() for merchant_id in value.split(",") if merchant_id.strip()]
+        ids = []
+        for merchant_id in value.split(","):
+            merchant_id = merchant_id.strip()
+            if merchant_id:
+                try:
+                    ids.append(int(merchant_id))
+                except ValueError:
+                    pass
+
         if not ids:
             return queryset
 
