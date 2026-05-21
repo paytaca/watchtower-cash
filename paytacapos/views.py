@@ -156,6 +156,22 @@ class PosDeviceViewSet(
         data = serializer.save_link_request()
         return Response(data)
 
+    @swagger_auto_schema(method="post", request_body=PosDeviceLinkRequestV2Serializer, responses={ 200: PosDeviceLinkSerializer })
+    @decorators.action(methods=["post"], detail=False)
+    def generate_link_device_code_v2(self, request, *args, **kwargs):
+        serializer = PosDeviceLinkRequestV2Serializer(data=request.data, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        data = serializer.save_link_request()
+        return Response(data)
+    
+    @swagger_auto_schema(method="post", request_body=PosDeviceSetupNfcPaymentSerializer, responses={ 200: PosDeviceLinkSerializer })
+    @decorators.action(methods=["post"], detail=False)
+    def generate_nfc_setup_code(self, request, *args, **kwargs):
+        serializer = PosDeviceSetupNfcPaymentSerializer(data=request.data, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        data = serializer.save_setup_request()
+        return Response(data)
+
     @swagger_auto_schema(
         method="get",
         responses={ 200: openapi.Schema(type=openapi.TYPE_STRING) },
@@ -167,21 +183,76 @@ class PosDeviceViewSet(
     def link_code_data(self, request, *args, **kwargs):
         link_code = request.query_params.get("code", None)
         link_request_data = PosDeviceLinkRequestSerializer.retrieve_link_request_data(link_code)
-        code_ttl = 60 * 5
-        serializer = PosDeviceLinkRequestSerializer(data=link_request_data)
+        serializer = PosDeviceLinkRequestSerializer(data=link_request_data, context={'request': request})
         if not serializer.is_valid():
             return Response(serializer.errors, status=400)
         return Response(serializer.validated_data["encrypted_xpubkey"])
+    
+    @swagger_auto_schema(
+        method="get",
+        responses={ 200: openapi.Schema(type=openapi.TYPE_STRING) },
+        manual_parameters=[
+            openapi.Parameter(name="code", type=openapi.TYPE_STRING, in_=openapi.IN_QUERY),
+        ]
+    )
+    @decorators.action(methods=["get"], detail=False)
+    def link_code_data_v2(self, request, *args, **kwargs):
+        link_code = request.query_params.get("code", None)
+        link_request_data = PosDeviceLinkRequestV2Serializer.retrieve_link_request_data(link_code)
+        serializer = PosDeviceLinkRequestV2Serializer(data=link_request_data, context={'request': request})
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=400)
+        return Response(serializer.validated_data["encrypted_data"])
+
+    @swagger_auto_schema(
+        method="get",
+        responses={ 200: openapi.Schema(type=openapi.TYPE_STRING) },
+        manual_parameters=[
+            openapi.Parameter(name="code", type=openapi.TYPE_STRING, in_=openapi.IN_QUERY),
+        ]
+    )
+    @decorators.action(methods=["get"], detail=False)
+    def nfc_code_data(self, request, *args, **kwargs):
+        nfc_code = request.query_params.get("code", None)
+        nfc_request_data = PosDeviceSetupNfcPaymentSerializer.retrieve_setup_request_data(nfc_code)
+        serializer = PosDeviceSetupNfcPaymentSerializer(data=nfc_request_data, context={'request': request})
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=400)
+        return Response(serializer.validated_data["encrypted_data"])
 
     @swagger_auto_schema(method="post", request_body=LinkedDeviceInfoSerializer)
     @decorators.action(methods=["post"], detail=False)
     def redeem_link_device_code(self, request, *args, **kwargs):
-        serializer = LinkedDeviceInfoSerializer(data=request.data)
+        serializer = LinkedDeviceInfoSerializer(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
         instance = serializer.save()
         serializer.remove_link_code_data()
         send_device_update(instance.pos_device, action="link")
         return Response(self.serializer_class(instance.pos_device).data)
+
+    @swagger_auto_schema(method="post", request_body=LinkedDeviceInfoV2Serializer)
+    @decorators.action(methods=["post"], detail=False)
+    def redeem_link_device_code_v2(self, request, *args, **kwargs):
+        serializer = LinkedDeviceInfoV2Serializer(data=request.data, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        instance = serializer.save()
+        serializer.remove_link_code_data()
+
+        pos_device = instance.pos_device
+        if not pos_device.nfc_payments_enabled:
+            pos_device.nfc_payments_enabled = True
+            pos_device.save()
+
+        send_device_update(pos_device, action="link")
+        return Response(self.serializer_class(pos_device).data)
+    
+    @swagger_auto_schema(method="post", request_body=RedeemNfcSetupCodeSerializer)
+    @decorators.action(methods=["post"], detail=False)
+    def redeem_nfc_request_code(self, request):
+        serializer = RedeemNfcSetupCodeSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        instance = serializer.save()
+        return Response(self.serializer_class(instance).data)
 
     @swagger_auto_schema(
         method="get",

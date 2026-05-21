@@ -105,14 +105,12 @@ class PosDeviceLinkSerializer(serializers.Serializer):
     code = serializers.CharField()
     expires = serializers.CharField(read_only=True)
 
-
-class PosDeviceLinkRequestSerializer(PermissionSerializerMixin, serializers.Serializer):
+class BaseLinkRequestSerializer(PermissionSerializerMixin, serializers.Serializer):
     HARD_MIN_TTL = 60 * 5
     HARD_MAX_TTL = 86_400 * 7
 
     wallet_hash = serializers.CharField()
     posid = serializers.IntegerField()
-    encrypted_xpubkey = serializers.CharField()
     signature = serializers.CharField()
     code_ttl = serializers.IntegerField(default=86_400 * 2)
 
@@ -120,7 +118,7 @@ class PosDeviceLinkRequestSerializer(PermissionSerializerMixin, serializers.Seri
         wallet_hash = data["wallet_hash"]
         posid = data["posid"]
 
-        pos_device = PosDevice.objects.filter(wallet_hash=wallet_hash, posid = posid).first()
+        pos_device = PosDevice.objects.filter(wallet_hash=wallet_hash, posid=posid).first()
         if not pos_device:
             raise serializers.ValidationError("pos device does not exist")
         if pos_device.linked_device:
@@ -180,6 +178,128 @@ class PosDeviceLinkRequestSerializer(PermissionSerializerMixin, serializers.Seri
         now = timezone.now()
         expires = now + timezone.timedelta(seconds=code_ttl)
         return { "code": code, "expires": expires.timestamp() }
+
+
+class PosDeviceLinkRequestSerializer(BaseLinkRequestSerializer):
+    encrypted_xpubkey = serializers.CharField()
+
+
+class PosDeviceLinkRequestV2Serializer(BaseLinkRequestSerializer):
+    encrypted_data = serializers.CharField()
+
+class PosDeviceSetupNfcPaymentSerializer(PermissionSerializerMixin, serializers.Serializer):
+    HARD_MIN_TTL = 60 * 5
+    HARD_MAX_TTL = 86_400 * 7
+
+    wallet_hash = serializers.CharField()
+    posid = serializers.IntegerField()
+    encrypted_data = serializers.CharField()
+    signature = serializers.CharField()
+    code_ttl = serializers.IntegerField(default=86_400)
+
+    def validate(self, data):
+        wallet_hash = data["wallet_hash"]
+        posid = data["posid"]
+
+        pos_device = PosDevice.objects.filter(wallet_hash=wallet_hash, posid = posid).first()
+        if not pos_device:
+            raise serializers.ValidationError("pos device does not exist")
+        if pos_device.nfc_payments_enabled:
+            raise serializers.ValidationError("pos device is already setup for nfc payments")
+
+        self.pos_device = pos_device
+        return data
+    
+    def check_permissions(self):
+        if not self.context or "request" not in self.context:
+            return
+
+        request = self.context["request"]
+
+        # older versions didnt need authentication
+        if HasMinPaytacaVersionHeader.on_request(request):
+            return
+
+        wallet = request.user
+
+        if not isinstance(wallet, Wallet) or not wallet.is_authenticated:
+            raise exceptions.PermissionDenied()
+
+        merchant = None
+        if self.pos_device:
+            merchant = self.pos_device.merchant
+
+        if not merchant or merchant.wallet_hash != wallet.wallet_hash:
+            raise exceptions.PermissionDenied("Instance does not belong to authenticated wallet")
+    
+    @classmethod
+    def generate_redis_key(cls, code):
+        return f"posdevicenfcsetup:{code}"
+    
+    @classmethod
+    def retrieve_setup_request_data(cls, code):
+        redis_key = cls.generate_redis_key(code)
+        encoded_data = REDIS_CLIENT.get(redis_key)
+        try:
+            return json.loads(encoded_data)
+        except (json.JSONDecodeError, TypeError):
+            return None
+    
+    def save_setup_request(self):
+        code = uuid4().hex
+        redis_key = self.generate_redis_key(code)
+        data = json.dumps(self.validated_data).encode()
+
+        try:
+            code_ttl = self.validated_data["code_ttl"]
+        except:
+            code_ttl = 86_400 # seconds
+        code_ttl = max(code_ttl, self.HARD_MIN_TTL)
+        code_ttl = min(code_ttl, self.HARD_MAX_TTL)
+
+        REDIS_CLIENT.set(redis_key, data, ex=code_ttl)
+        now = timezone.now()
+        expires = now + timezone.timedelta(seconds=code_ttl)
+        return { "code": code, "expires": expires.timestamp() }
+
+
+class RedeemNfcSetupCodeSerializer(serializers.Serializer):
+    verifying_pubkey = serializers.CharField(write_only=True)
+    nfc_code = serializers.CharField()
+
+    def validate(self, data):
+        nfc_code = data["nfc_code"]
+        verifying_pubkey = data["verifying_pubkey"]
+
+        nfc_request_data = PosDeviceSetupNfcPaymentSerializer.retrieve_setup_request_data(nfc_code)
+        data_serializer = PosDeviceSetupNfcPaymentSerializer(data=nfc_request_data)
+        if not data_serializer.is_valid():
+            raise serializers.ValidationError("data from nfc setup code is invalid")
+
+        encrypted_data = data_serializer.validated_data["encrypted_data"]
+        signature = data_serializer.validated_data["signature"]
+        if not bitcoin.ecdsa_verify(encrypted_data, signature, verifying_pubkey):
+            raise serializers.ValidationError("invalid verifying pubkey")
+
+        data["setup_data"] = data_serializer.validated_data
+        return data
+
+    def save(self):
+        setup_data = self.validated_data["setup_data"]
+        wallet_hash = setup_data["wallet_hash"]
+        posid = setup_data["posid"]
+
+        pos_device = PosDevice.objects.filter(wallet_hash=wallet_hash, posid=posid).first()
+        if not pos_device:
+            raise serializers.ValidationError("pos device not found")
+
+        pos_device.nfc_payments_enabled = True
+        pos_device.save()
+
+        nfc_code = self.validated_data["nfc_code"]
+        REDIS_CLIENT.delete(PosDeviceSetupNfcPaymentSerializer.generate_redis_key(nfc_code))
+
+        return pos_device
 
 
 class UnlinkDeviceSerializer(serializers.Serializer):
@@ -252,7 +372,10 @@ class UnlinkDeviceRequestSerializer(serializers.ModelSerializer):
         return super().create(validated_data)
 
 
-class LinkedDeviceInfoSerializer(serializers.ModelSerializer):
+class BaseLinkedDeviceInfoSerializer(serializers.ModelSerializer):
+    link_request_serializer_class = None  # set by subclasses
+    encrypted_field = None  # set by subclasses
+
     verifying_pubkey = serializers.CharField(write_only=True)
     link_code = serializers.CharField()
     unlink_request = UnlinkDeviceRequestSerializer(read_only=True)
@@ -269,7 +392,6 @@ class LinkedDeviceInfoSerializer(serializers.ModelSerializer):
             "is_suspended",
             "unlink_request",
         ]
-
         extra_kwargs = {
             "is_suspended": {
                 "read_only": True,
@@ -280,19 +402,19 @@ class LinkedDeviceInfoSerializer(serializers.ModelSerializer):
         if not self.instance:
             return
         redis_key = f"posdevicelink:{self.instance.link_code}"
-        encoded_data = REDIS_CLIENT.delete(redis_key)
+        REDIS_CLIENT.delete(redis_key)
 
     def validate(self, data):
         verifying_pubkey = data.pop("verifying_pubkey")
         link_code = data["link_code"]
-        link_code_data = PosDeviceLinkRequestSerializer.retrieve_link_request_data(link_code)
-        data_serializer = PosDeviceLinkRequestSerializer(data=link_code_data)
+        link_code_data = self.link_request_serializer_class.retrieve_link_request_data(link_code)
+        data_serializer = self.link_request_serializer_class(data=link_code_data)
         if not data_serializer.is_valid():
             raise serializers.ValidationError("data from link code is invalid")
 
-        encrypted_xpubkey = data_serializer.validated_data["encrypted_xpubkey"]
+        encrypted = data_serializer.validated_data[self.encrypted_field]
         signature = data_serializer.validated_data["signature"]
-        if not bitcoin.ecdsa_verify(encrypted_xpubkey, signature, verifying_pubkey):
+        if not bitcoin.ecdsa_verify(encrypted, signature, verifying_pubkey):
             raise serializers.ValidationError("invalid verifying pubkey")
 
         data["link_code_data"] = data_serializer.validated_data
@@ -304,7 +426,7 @@ class LinkedDeviceInfoSerializer(serializers.ModelSerializer):
         if not pos_device:
             raise serializers.ValidationError("pos device not found")
 
-        if pos_device.linked_device and pos_device.linked_device != link_code:
+        if pos_device.linked_device and pos_device.linked_device.link_code != link_code:
             raise serializers.ValidationError("pos device is already linked")
 
         return data
@@ -319,7 +441,7 @@ class LinkedDeviceInfoSerializer(serializers.ModelSerializer):
 
         pos_device = PosDevice.objects.filter(wallet_hash=wallet_hash, posid=posid).first()
         if not pos_device:
-            raise ValidationError("pos device not found")
+            raise serializers.ValidationError("pos device not found")
 
         if pos_device.linked_device and pos_device.linked_device.link_code == link_code:
             instance = super().update(pos_device.linked_device, validated_data)
@@ -330,6 +452,15 @@ class LinkedDeviceInfoSerializer(serializers.ModelSerializer):
 
         return instance
 
+
+class LinkedDeviceInfoSerializer(BaseLinkedDeviceInfoSerializer):
+    link_request_serializer_class = PosDeviceLinkRequestSerializer
+    encrypted_field = "encrypted_xpubkey"
+
+
+class LinkedDeviceInfoV2Serializer(BaseLinkedDeviceInfoSerializer):
+    link_request_serializer_class = PosDeviceLinkRequestV2Serializer
+    encrypted_field = "encrypted_data"
 
 class PosDeviceSerializer(PermissionSerializerMixin, serializers.ModelSerializer):
     posid = serializers.IntegerField(help_text="Resolves to a new posid if negative value")
@@ -350,7 +481,11 @@ class PosDeviceSerializer(PermissionSerializerMixin, serializers.ModelSerializer
             "merchant_id",
             "branch_id",
             "linked_device",
+            "nfc_payments_enabled",
         ]
+        extra_kwargs = {
+            "nfc_payments_enabled": {"read_only": True},
+        }
 
     def __init__(self, *args, supress_merchant_info_validations=False, **kwargs):
         self.supress_merchant_info_validations = supress_merchant_info_validations
