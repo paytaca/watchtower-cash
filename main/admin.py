@@ -22,7 +22,9 @@ from django.utils.html import format_html
 from django.conf import settings
 import datetime
 import json
+import logging
 
+logger = logging.getLogger(__name__)
 
 admin.site.site_header = 'WatchTower.Cash Admin'
 admin.site.site_title = 'WatchTower.Cash Admin'
@@ -870,6 +872,12 @@ class CashTokenInfoAdmin(admin.ModelAdmin):
         'decimals',
     ]
 
+    search_fields = [
+        'name',
+        'symbol',
+        'description',
+    ]
+
 
 class CashFungibleTokenAdmin(admin.ModelAdmin):
     list_display = [
@@ -879,7 +887,17 @@ class CashFungibleTokenAdmin(admin.ModelAdmin):
         'decimals',
     ]
 
+    search_fields = [
+        'category',
+        'info__name',
+        'info__symbol',
+    ]
+
     actions = ['refetch_metadata']
+
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related("info")
 
     def name(self, obj):
         if obj.info:
@@ -900,7 +918,6 @@ class CashFungibleTokenAdmin(admin.ModelAdmin):
         """Refetch token metadata from BCMR indexer for selected tokens"""
         updated_count = 0
         error_count = 0
-        skipped_count = 0
 
         for token in queryset:
             try:
@@ -909,8 +926,6 @@ class CashFungibleTokenAdmin(admin.ModelAdmin):
                 updated_count += 1
             except Exception as e:
                 error_count += 1
-                import logging
-                logger = logging.getLogger(__name__)
                 logger.warning(f'Error refetching metadata for token {token.category}: {str(e)}')
 
         if updated_count > 0:
@@ -941,6 +956,18 @@ class CashNonFungibleTokenAdmin(admin.ModelAdmin):
         'nft_details',
     ]
 
+    search_fields = [
+        'category',
+        'commitment',
+        'info__name',
+        'info__symbol',
+    ]
+
+    actions = ['refetch_metadata']
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related("info")
+
     def name(self, obj):
         if obj.info:
             return obj.info.name
@@ -960,6 +987,36 @@ class CashNonFungibleTokenAdmin(admin.ModelAdmin):
         if obj.info:
             return obj.info.nft_details
         return None
+
+    def refetch_metadata(self, request, queryset):
+        """Refetch token metadata from BCMR indexer for selected tokens"""
+        updated_count = 0
+        error_count = 0
+
+        for token in queryset:
+            try:
+                # Force refresh metadata
+                token.fetch_metadata(force_refresh=True)
+                updated_count += 1
+            except Exception as e:
+                error_count += 1
+                logger.warning(f'Error refetching metadata for token {token.category}: {str(e)}')
+
+        if updated_count > 0:
+            self.message_user(
+                request,
+                f'Successfully refetched metadata for {updated_count} token(s).',
+                messages.SUCCESS
+            )
+
+        if error_count > 0:
+            self.message_user(
+                request,
+                f'Failed to refetch metadata for {error_count} token(s). Check logs for details.',
+                messages.WARNING
+            )
+
+    refetch_metadata.short_description = "Refetch metadata from BCMR"
     
 
 class TransactionBroadcastAdmin(DynamicRawIDMixin, admin.ModelAdmin):
