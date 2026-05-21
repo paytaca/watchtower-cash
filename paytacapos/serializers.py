@@ -225,28 +225,6 @@ class PosDeviceLinkRequestV2Serializer(PermissionSerializerMixin, serializers.Se
         if not merchant or merchant.wallet_hash != wallet.wallet_hash:
             raise exceptions.PermissionDenied("Instance does not belong to authenticated wallet")
 
-    def check_permissions(self):
-        if not self.context or "request" not in self.context:
-            return
-
-        request = self.context["request"]
-
-        # older versions didnt need authentication
-        if HasMinPaytacaVersionHeader.on_request(request):
-            return
-
-        wallet = request.user
-
-        if not isinstance(wallet, Wallet) or not wallet.is_authenticated:
-            raise exceptions.PermissionDenied()
-
-        merchant = None
-        if self.pos_device:
-            merchant = self.pos_device.merchant
-
-        if not merchant or merchant.wallet_hash != wallet.wallet_hash:
-            raise exceptions.PermissionDenied("Instance does not belong to authenticated wallet")
-
     @classmethod
     def generate_redis_key(cls, code):
         return f"posdevicelink:{code}"
