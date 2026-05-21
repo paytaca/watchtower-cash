@@ -617,6 +617,9 @@ class PosDeviceSerializer(PermissionSerializerMixin, serializers.ModelSerializer
             "linked_device",
             "nfc_payments_enabled",
         ]
+        extra_kwargs = {
+            "nfc_payments_enabled": {"read_only": True},
+        }
 
     def __init__(self, *args, supress_merchant_info_validations=False, **kwargs):
         self.supress_merchant_info_validations = supress_merchant_info_validations
