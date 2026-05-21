@@ -114,7 +114,7 @@ class PosDeviceLinkRequestSerializer(PermissionSerializerMixin, serializers.Seri
     posid = serializers.IntegerField()
     encrypted_xpubkey = serializers.CharField()
     signature = serializers.CharField()
-    code_ttl = serializers.IntegerField(default=86_400)
+    code_ttl = serializers.IntegerField(default=86_400 * 2)
 
     def validate(self, data):
         wallet_hash = data["wallet_hash"]
