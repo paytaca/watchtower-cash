@@ -441,7 +441,7 @@ class BaseLinkedDeviceInfoSerializer(serializers.ModelSerializer):
 
         pos_device = PosDevice.objects.filter(wallet_hash=wallet_hash, posid=posid).first()
         if not pos_device:
-            raise ValidationError("pos device not found")
+            raise serializers.ValidationError("pos device not found")
 
         if pos_device.linked_device and pos_device.linked_device.link_code == link_code:
             instance = super().update(pos_device.linked_device, validated_data)
