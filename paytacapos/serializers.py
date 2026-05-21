@@ -255,7 +255,7 @@ class PosDeviceLinkRequestV2Serializer(PermissionSerializerMixin, serializers.Se
         expires = now + timezone.timedelta(seconds=code_ttl)
         return { "code": code, "expires": expires.timestamp() }
 
-class PosDeviceSetupNfcPaymentSerializer(serializers.Serializer):
+class PosDeviceSetupNfcPaymentSerializer(PermissionSerializerMixin, serializers.Serializer):
     HARD_MIN_TTL = 60 * 5
     HARD_MAX_TTL = 86_400 * 7
 
@@ -277,6 +277,28 @@ class PosDeviceSetupNfcPaymentSerializer(serializers.Serializer):
 
         self.pos_device = pos_device
         return data
+    
+    def check_permissions(self):
+        if not self.context or "request" not in self.context:
+            return
+
+        request = self.context["request"]
+
+        # older versions didnt need authentication
+        if HasMinPaytacaVersionHeader.on_request(request):
+            return
+
+        wallet = request.user
+
+        if not isinstance(wallet, Wallet) or not wallet.is_authenticated:
+            raise exceptions.PermissionDenied()
+
+        merchant = None
+        if self.pos_device:
+            merchant = self.pos_device.merchant
+
+        if not merchant or merchant.wallet_hash != wallet.wallet_hash:
+            raise exceptions.PermissionDenied("Instance does not belong to authenticated wallet")
     
     @classmethod
     def generate_redis_key(cls, code):
@@ -307,6 +329,46 @@ class PosDeviceSetupNfcPaymentSerializer(serializers.Serializer):
         now = timezone.now()
         expires = now + timezone.timedelta(seconds=code_ttl)
         return { "code": code, "expires": expires.timestamp() }
+
+
+class RedeemNfcSetupCodeSerializer(serializers.Serializer):
+    verifying_pubkey = serializers.CharField(write_only=True)
+    nfc_code = serializers.CharField()
+
+    def validate(self, data):
+        nfc_code = data["nfc_code"]
+        verifying_pubkey = data["verifying_pubkey"]
+
+        nfc_request_data = PosDeviceSetupNfcPaymentSerializer.retrieve_setup_request_data(nfc_code)
+        data_serializer = PosDeviceSetupNfcPaymentSerializer(data=nfc_request_data)
+        if not data_serializer.is_valid():
+            raise serializers.ValidationError("data from nfc setup code is invalid")
+
+        encrypted_data = data_serializer.validated_data["encrypted_data"]
+        signature = data_serializer.validated_data["signature"]
+        if not bitcoin.ecdsa_verify(encrypted_data, signature, verifying_pubkey):
+            raise serializers.ValidationError("invalid verifying pubkey")
+
+        data["setup_data"] = data_serializer.validated_data
+        return data
+
+    def save(self):
+        setup_data = self.validated_data["setup_data"]
+        wallet_hash = setup_data["wallet_hash"]
+        posid = setup_data["posid"]
+
+        pos_device = PosDevice.objects.filter(wallet_hash=wallet_hash, posid=posid).first()
+        if not pos_device:
+            raise serializers.ValidationError("pos device not found")
+
+        pos_device.nfc_payments_enabled = True
+        pos_device.save()
+
+        nfc_code = self.validated_data["nfc_code"]
+        REDIS_CLIENT.delete(PosDeviceSetupNfcPaymentSerializer.generate_redis_key(nfc_code))
+
+        return pos_device
+
 
 class UnlinkDeviceSerializer(serializers.Serializer):
     verifying_pubkey = serializers.CharField()
