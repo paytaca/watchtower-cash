@@ -508,7 +508,7 @@ class LinkedDeviceInfoV2Serializer(serializers.ModelSerializer):
         if not pos_device:
             raise serializers.ValidationError("pos device not found")
 
-        if pos_device.linked_device and pos_device.linked_device != link_code:
+        if pos_device.linked_device and pos_device.linked_device.link_code != link_code:
             raise serializers.ValidationError("pos device is already linked")
 
         return data
