@@ -204,6 +204,13 @@ class PosDeviceViewSet(
             return Response(serializer.errors, status=400)
         return Response(serializer.validated_data["encrypted_data"])
 
+    @swagger_auto_schema(
+        method="get",
+        responses={ 200: openapi.Schema(type=openapi.TYPE_STRING) },
+        manual_parameters=[
+            openapi.Parameter(name="code", type=openapi.TYPE_STRING, in_=openapi.IN_QUERY),
+        ]
+    )
     @decorators.action(methods=["get"], detail=False)
     def nfc_code_data(self, request, *args, **kwargs):
         nfc_code = request.query_params.get("code", None)
