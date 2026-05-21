@@ -246,7 +246,7 @@ class PosDeviceViewSet(
         send_device_update(pos_device, action="link")
         return Response(self.serializer_class(pos_device).data)
     
-    @swagger_auto_schema(method="post", request_body=None)
+    @swagger_auto_schema(method="post", request_body=RedeemNfcSetupCodeSerializer)
     @decorators.action(methods=["post"], detail=False)
     def redeem_nfc_request_code(self, request):
         serializer = RedeemNfcSetupCodeSerializer(data=request.data)
