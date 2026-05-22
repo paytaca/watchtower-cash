@@ -164,12 +164,12 @@ class PosDeviceViewSet(
         data = serializer.save_link_request()
         return Response(data)
     
-    @swagger_auto_schema(method="post", request_body=PosDeviceSetupNfcPaymentSerializer, responses={ 200: PosDeviceLinkSerializer })
+    @swagger_auto_schema(method="post", request_body=PosDeviceNfcRequestSerializer, responses={ 200: PosDeviceLinkSerializer })
     @decorators.action(methods=["post"], detail=False)
-    def generate_nfc_setup_code(self, request, *args, **kwargs):
-        serializer = PosDeviceSetupNfcPaymentSerializer(data=request.data, context={'request': request})
+    def generate_nfc_request_code(self, request, *args, **kwargs):
+        serializer = PosDeviceNfcRequestSerializer(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
-        data = serializer.save_setup_request()
+        data = serializer.save_request_code()
         return Response(data)
 
     @swagger_auto_schema(
@@ -212,10 +212,10 @@ class PosDeviceViewSet(
         ]
     )
     @decorators.action(methods=["get"], detail=False)
-    def nfc_code_data(self, request, *args, **kwargs):
+    def nfc_request_code_data(self, request, *args, **kwargs):
         nfc_code = request.query_params.get("code", None)
-        nfc_request_data = PosDeviceSetupNfcPaymentSerializer.retrieve_setup_request_data(nfc_code)
-        serializer = PosDeviceSetupNfcPaymentSerializer(data=nfc_request_data, context={'request': request})
+        nfc_request_data = PosDeviceNfcRequestSerializer.retrieve_request_code_data(nfc_code)
+        serializer = PosDeviceNfcRequestSerializer(data=nfc_request_data, context={'request': request})
         if not serializer.is_valid():
             return Response(serializer.errors, status=400)
         return Response(serializer.validated_data["encrypted_data"])
@@ -246,10 +246,10 @@ class PosDeviceViewSet(
         send_device_update(pos_device, action="link")
         return Response(self.serializer_class(pos_device).data)
     
-    @swagger_auto_schema(method="post", request_body=RedeemNfcSetupCodeSerializer)
+    @swagger_auto_schema(method="post", request_body=RedeemNfcRequestCodeSerializer)
     @decorators.action(methods=["post"], detail=False)
     def redeem_nfc_request_code(self, request):
-        serializer = RedeemNfcSetupCodeSerializer(data=request.data)
+        serializer = RedeemNfcRequestCodeSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         instance = serializer.save()
         return Response(self.serializer_class(instance).data)
