@@ -183,11 +183,10 @@ class BaseLinkRequestSerializer(PermissionSerializerMixin, serializers.Serialize
 class PosDeviceLinkRequestSerializer(BaseLinkRequestSerializer):
     encrypted_xpubkey = serializers.CharField()
 
-
 class PosDeviceLinkRequestV2Serializer(BaseLinkRequestSerializer):
     encrypted_data = serializers.CharField()
 
-class PosDeviceSetupNfcPaymentSerializer(PermissionSerializerMixin, serializers.Serializer):
+class PosDeviceNfcRequestSerializer(PermissionSerializerMixin, serializers.Serializer):
     HARD_MIN_TTL = 60 * 5
     HARD_MAX_TTL = 86_400 * 7
 
@@ -263,7 +262,7 @@ class PosDeviceSetupNfcPaymentSerializer(PermissionSerializerMixin, serializers.
         return { "code": code, "expires": expires.timestamp() }
 
 
-class RedeemNfcSetupCodeSerializer(serializers.Serializer):
+class RedeemNfcRequestCodeSerializer(serializers.Serializer):
     verifying_pubkey = serializers.CharField(write_only=True)
     nfc_code = serializers.CharField()
 
@@ -271,8 +270,8 @@ class RedeemNfcSetupCodeSerializer(serializers.Serializer):
         nfc_code = data["nfc_code"]
         verifying_pubkey = data["verifying_pubkey"]
 
-        nfc_request_data = PosDeviceSetupNfcPaymentSerializer.retrieve_setup_request_data(nfc_code)
-        data_serializer = PosDeviceSetupNfcPaymentSerializer(data=nfc_request_data)
+        nfc_request_data = PosDeviceNfcRequestSerializer.retrieve_setup_request_data(nfc_code)
+        data_serializer = PosDeviceNfcRequestSerializer(data=nfc_request_data)
         if not data_serializer.is_valid():
             raise serializers.ValidationError("data from nfc setup code is invalid")
 
@@ -297,7 +296,7 @@ class RedeemNfcSetupCodeSerializer(serializers.Serializer):
         pos_device.save()
 
         nfc_code = self.validated_data["nfc_code"]
-        REDIS_CLIENT.delete(PosDeviceSetupNfcPaymentSerializer.generate_redis_key(nfc_code))
+        REDIS_CLIENT.delete(PosDeviceNfcRequestSerializer.generate_redis_key(nfc_code))
 
         return pos_device
 
