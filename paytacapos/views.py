@@ -169,7 +169,7 @@ class PosDeviceViewSet(
     def generate_nfc_request_code(self, request, *args, **kwargs):
         serializer = PosDeviceNfcRequestSerializer(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
-        data = serializer.save_setup_request()
+        data = serializer.save_request_code()
         return Response(data)
 
     @swagger_auto_schema(
@@ -214,7 +214,7 @@ class PosDeviceViewSet(
     @decorators.action(methods=["get"], detail=False)
     def nfc_request_code_data(self, request, *args, **kwargs):
         nfc_code = request.query_params.get("code", None)
-        nfc_request_data = PosDeviceNfcRequestSerializer.retrieve_setup_request_data(nfc_code)
+        nfc_request_data = PosDeviceNfcRequestSerializer.retrieve_request_code_data(nfc_code)
         serializer = PosDeviceNfcRequestSerializer(data=nfc_request_data, context={'request': request})
         if not serializer.is_valid():
             return Response(serializer.errors, status=400)
