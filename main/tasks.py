@@ -1584,8 +1584,26 @@ def process_history_recpts_or_senders(_list, key, BCH_OR_SLP):
 
 
 @shared_task(queue='contract_history')
-def parse_contract_history(txid, address, tx_fee=None, senders=[], recipients=[]):
+def parse_contract_history(txid, address, tx_fee=None, senders=None, recipients=None):
     BCH_OR_SLP = 'bch_or_slp'
+
+    if senders is None:
+        senders = []
+    if recipients is None:
+        recipients = []
+
+    # Derive senders, recipients, and tx_fee from the blockchain when not provided
+    # (e.g. when called from backfill command)
+    if not senders or not recipients or tx_fee is None:
+        bch_tx = NODE.BCH.get_transaction(txid)
+        if bch_tx:
+            if not senders:
+                senders = [parse_utxo_to_tuple(i) for i in bch_tx['inputs']]
+            if not recipients:
+                recipients = [parse_utxo_to_tuple(i) for i in bch_tx['outputs']]
+            if tx_fee is None:
+                tx_fee = bch_tx['tx_fee']
+
     if type(tx_fee) is str:
         tx_fee = float(tx_fee)
 
@@ -1601,8 +1619,9 @@ def parse_contract_history(txid, address, tx_fee=None, senders=[], recipients=[]
 
         if record_type == 'outgoing':
             if key == BCH_OR_SLP:
-                amount = abs(amount) - ((tx_fee / 100000000) or 0)
-                amount = round(amount, 8)
+                if tx_fee is not None:
+                    amount = abs(amount) - (tx_fee / 100000000)
+                    amount = round(amount, 8)
             amount = abs(amount) * -1
 
         if amount == 0: continue
@@ -2331,6 +2350,26 @@ def transaction_post_save_task(self, address, transaction_id, blockheight_id=Non
             senders=senders['bch'],
             recipients=recipients['bch']
         )
+    if senders['bch']:
+        # If this outgoing tx spends from a contract (P2SH) address, trigger contract history.
+        # This covers the case where the contract is the sender but no new Transaction
+        # record was created with the contract address (only existing UTXOs were marked spent).
+        contract_input_addresses = Address.objects.filter(
+            transactions__spending_txid=txid,
+        ).distinct()
+        for contract_address in contract_input_addresses:
+            if is_p2sh_address(contract_address.address):
+                # Skip if this is the same address already handled by the parse_contract branch above,
+                # to avoid double-triggering when a contract sends to itself or another contract.
+                if parse_contract and contract_address.address == address:
+                    continue
+                parse_contract_history.delay(
+                    txid,
+                    contract_address.address,
+                    tx_fee=tx_fee,
+                    senders=senders['bch'],
+                    recipients=recipients['bch']
+                )
     
     # Mark txn as processed
     Transaction.objects.filter(id=transaction_id).update(post_save_processed=timezone.now())
