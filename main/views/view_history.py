@@ -174,7 +174,6 @@ class ContractHistoryView(APIView):
             F("tx_timestamp").desc(nulls_last=True),
             F("date_created").desc(nulls_last=True),
         )
-        qs = qs.filter(token__name="bch")
         history = qs.values(
             "record_type",
             "txid",
@@ -186,6 +185,10 @@ class ContractHistoryView(APIView):
             "tx_timestamp",
             "usd_price",
             "market_prices",
+            "token__name",
+            "token__tokenid",
+            "cashtoken_ft__category",
+            "cashtoken_nft__category",
         )
 
         pages = Paginator(history, 10)
