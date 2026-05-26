@@ -7,10 +7,15 @@ from datetime import timedelta
 def backfill_ad_expires_at(apps, schema_editor):
     Ad = apps.get_model('rampp2p', 'Ad')
     now = timezone.now()
-    ads = list(Ad.objects.filter(deleted_at__isnull=True, expires_at__isnull=True))
-    for ad in ads:
+    batch = []
+    for ad in Ad.objects.filter(deleted_at__isnull=True, expires_at__isnull=True).iterator():
         ad.expires_at = max(ad.created_at + timedelta(days=30), now)
-    Ad.objects.bulk_update(ads, ['expires_at'])
+        batch.append(ad)
+        if len(batch) >= 1000:
+            Ad.objects.bulk_update(batch, ['expires_at'])
+            batch = []
+    if batch:
+        Ad.objects.bulk_update(batch, ['expires_at'])
 
 class Migration(migrations.Migration):
 

@@ -1,4 +1,6 @@
 from django.contrib import admin
+from django.utils import timezone
+from datetime import timedelta
 from rampp2p.models import *
 from rampp2p.forms import *
 from rampp2p.slackbot.send import MessageBase
@@ -69,9 +71,11 @@ class AdAdmin(admin.ModelAdmin):
     soft_delete.short_description = "Soft delete selected ads"
 
     def mark_public(self, request, queryset):
+        now = timezone.now()
         for ad in queryset:
             ad.is_public = True
-            ad.save()
+            ad.expires_at = now + timedelta(days=30)
+            ad.save(update_fields=['is_public', 'expires_at', 'modified_at'])
     
     mark_public.short_description = "Mark selected ads as public"
 

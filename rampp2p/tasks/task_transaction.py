@@ -223,8 +223,9 @@ def handle_order_status(action: str, contract: Contract, txn: Dict):
             ad = contract.order.ad_snapshot.ad
             if status_type in (StatusType.RELEASED, StatusType.REFUNDED):
                 days = 60 if status_type == StatusType.RELEASED else 30
+                was_expired = ad.expires_at and ad.expires_at <= timezone.now()
                 ad.expires_at = timezone.now() + timedelta(days=days)
-                if not ad.is_public:
+                if not ad.is_public and was_expired:
                     ad.is_public = True
                 ad.save(update_fields=['expires_at', 'is_public', 'modified_at'])
 

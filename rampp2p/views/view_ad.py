@@ -981,12 +981,15 @@ class AdViewSet(viewsets.GenericViewSet):
         ).count()
 
     def public_ad_count(self, user_wallet_hash, fiat_currency_id, trade_type):
+        now = timezone.now()
         return models.Ad.objects.filter(
             owner__wallet_hash=user_wallet_hash,
             fiat_currency__id=fiat_currency_id,
             trade_type=trade_type,
             is_public=True,
             deleted_at__isnull=True,
+        ).filter(
+            Q(expires_at__isnull=True) | Q(expires_at__gt=now)
         ).count()
 
 
