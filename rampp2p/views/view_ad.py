@@ -867,6 +867,12 @@ class AdViewSet(viewsets.GenericViewSet):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         ad = serializer.save()
+
+        # Renew expiry when owner re-publishes an expired ad
+        if is_public and ad.expires_at and ad.expires_at <= timezone.now():
+            ad.expires_at = timezone.now() + timedelta(days=30)
+            ad.save(update_fields=['expires_at'])
+
         context = {"wallet_hash": wallet_hash}
         serializer = serializers.AdSerializer(ad, context=context)
 

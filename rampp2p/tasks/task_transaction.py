@@ -4,6 +4,7 @@ from django.conf import settings
 from django.utils import timezone
 from django.core.exceptions import ValidationError
 from django.db.models import Q
+from datetime import timedelta
 
 from rampp2p.utils import bch_to_satoshi
 from rampp2p.utils.handler import update_order_status
@@ -217,6 +218,15 @@ def handle_order_status(action: str, contract: Contract, txn: Dict):
             if status_type == StatusType.RELEASED or status_type == StatusType.REFUNDED:
                 logger.info(f'Removing subscription to contract {transaction.contract.address}')
                 remove_subscription(transaction.contract.address, transaction.contract.id)
+
+            # Extend ad expiry on trade completion
+            ad = contract.order.ad_snapshot.ad
+            if status_type in (StatusType.RELEASED, StatusType.REFUNDED):
+                days = 60 if status_type == StatusType.RELEASED else 30
+                ad.expires_at = timezone.now() + timedelta(days=days)
+                if not ad.is_public:
+                    ad.is_public = True
+                ad.save(update_fields=['expires_at', 'is_public'])
 
             # Send push notifications to contract parties
             party_a = contract.order.owner.wallet_hash
