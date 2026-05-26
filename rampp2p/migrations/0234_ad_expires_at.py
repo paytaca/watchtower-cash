@@ -7,15 +7,14 @@ from datetime import timedelta
 def backfill_ad_expires_at(apps, schema_editor):
     Ad = apps.get_model('rampp2p', 'Ad')
     now = timezone.now()
-    batch = []
-    for ad in Ad.objects.filter(deleted_at__isnull=True, expires_at__isnull=True).iterator():
-        ad.expires_at = max(ad.created_at + timedelta(days=30), now)
-        batch.append(ad)
-        if len(batch) >= 1000:
-            Ad.objects.bulk_update(batch, ['expires_at'])
-            batch = []
-    if batch:
-        Ad.objects.bulk_update(batch, ['expires_at'])
+    # Give all existing non-deleted ads a 30-day window from now so they
+    # remain visible immediately after the migration runs. Using
+    # `max(created_at + 30d, now)` caused ads older than 30 days to receive
+    # an expires_at equal to the migration run time, making them expire
+    # instantly and disappear from all listings.
+    Ad.objects.filter(deleted_at__isnull=True, expires_at__isnull=True).update(
+        expires_at=now + timedelta(days=30)
+    )
 
 class Migration(migrations.Migration):
 
