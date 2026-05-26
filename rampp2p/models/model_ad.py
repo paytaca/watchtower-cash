@@ -54,6 +54,7 @@ class Ad(models.Model):
     instructions = models.TextField(blank=True, null=True)
     description = models.TextField(blank=True, null=True)
     is_public = models.BooleanField(default=True)
+    expires_at = models.DateTimeField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     modified_at = models.DateTimeField(auto_now=True)
     deleted_at = models.DateTimeField(blank=True, null=True)
@@ -77,6 +78,8 @@ class Ad(models.Model):
             models.Index(fields=['trade_limits_in_fiat', 'trade_amount_fiat'], name='rampp2p_ad_trade_fiat_idx'),
             # Composite index for public ads filtering with ordering
             models.Index(fields=['is_public', 'deleted_at', 'created_at'], name='rampp2p_ad_public_listing_idx'),
+            # Index for expiry queries
+            models.Index(fields=['expires_at'], name='rampp2p_ad_expires_at_idx'),
         ]
 
     def __str__(self):
@@ -86,6 +89,11 @@ class Ad(models.Model):
     def delete(self):
         self.deleted_at = timezone.now()
         self.save()
+    
+    def save(self, *args, **kwargs):
+        if not self.pk and not self.expires_at:
+            self.expires_at = timezone.now() + timedelta(days=30)
+        super().save(*args, **kwargs)
     
     @property
     def appeal_cooldown(self):

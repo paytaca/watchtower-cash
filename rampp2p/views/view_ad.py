@@ -62,6 +62,7 @@ class CashInAdViewSet(viewsets.GenericViewSet):
             & Q(trade_amount__gt=0)
             & Q(trade_limits_in_fiat=False)
             & Q(fiat_currency__symbol=currency)
+            & (Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now()))
         )
 
         queryset = queryset.exclude(owner__wallet_hash=wallet_hash)
@@ -317,6 +318,7 @@ class CashInAdViewSet(viewsets.GenericViewSet):
             & Q(is_public=True)
             & (Q(trade_amount_sats__gte=1000) | Q(trade_amount_fiat__gt=0))
             & Q(fiat_currency__symbol=currency.symbol)
+            & (Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now()))
         )
 
         # Exclude ads owned by caller
@@ -575,6 +577,7 @@ class AdViewSet(viewsets.GenericViewSet):
                         (Q(trade_limits_in_fiat=False) & Q(trade_amount_sats__gte=1000))
                         | (Q(trade_limits_in_fiat=True) & Q(trade_amount_fiat__gt=0))
                     )
+                    & (Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now()))
                 )
 
             # filters
@@ -867,6 +870,12 @@ class AdViewSet(viewsets.GenericViewSet):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         ad = serializer.save()
+
+        # Renew expiry on any private-to-public transition
+        if private_to_public:
+            ad.expires_at = timezone.now() + timedelta(days=30)
+            ad.save(update_fields=['expires_at', 'modified_at'])
+
         context = {"wallet_hash": wallet_hash}
         serializer = serializers.AdSerializer(ad, context=context)
 
@@ -972,12 +981,15 @@ class AdViewSet(viewsets.GenericViewSet):
         ).count()
 
     def public_ad_count(self, user_wallet_hash, fiat_currency_id, trade_type):
+        now = timezone.now()
         return models.Ad.objects.filter(
             owner__wallet_hash=user_wallet_hash,
             fiat_currency__id=fiat_currency_id,
             trade_type=trade_type,
             is_public=True,
             deleted_at__isnull=True,
+        ).filter(
+            Q(expires_at__isnull=True) | Q(expires_at__gt=now)
         ).count()
 
 
