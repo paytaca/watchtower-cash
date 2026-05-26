@@ -221,7 +221,7 @@ def handle_order_status(action: str, contract: Contract, txn: Dict):
 
             # Extend ad expiry on trade completion
             ad = contract.order.ad_snapshot.ad
-            if status_type in (StatusType.RELEASED, StatusType.REFUNDED):
+            if status_type in (StatusType.RELEASED, StatusType.REFUNDED) and ad.deleted_at is None:
                 days = 60 if status_type == StatusType.RELEASED else 30
                 was_expired = ad.expires_at and ad.expires_at <= timezone.now()
                 ad.expires_at = timezone.now() + timedelta(days=days)

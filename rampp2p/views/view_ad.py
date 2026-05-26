@@ -874,7 +874,7 @@ class AdViewSet(viewsets.GenericViewSet):
         # Renew expiry on any private-to-public transition
         if private_to_public:
             ad.expires_at = timezone.now() + timedelta(days=30)
-            ad.save(update_fields=['expires_at'])
+            ad.save(update_fields=['expires_at', 'modified_at'])
 
         context = {"wallet_hash": wallet_hash}
         serializer = serializers.AdSerializer(ad, context=context)
