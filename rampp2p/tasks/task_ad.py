@@ -15,4 +15,4 @@ def expire_ads():
     )
     count = expired_ads.count()
     expired_ads.update(is_public=False, modified_at=now)
-    logger.warning(f'Expired {count} ads')
+    logger.info(f'Expired {count} ads')

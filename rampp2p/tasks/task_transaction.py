@@ -226,7 +226,7 @@ def handle_order_status(action: str, contract: Contract, txn: Dict):
                 ad.expires_at = timezone.now() + timedelta(days=days)
                 if not ad.is_public:
                     ad.is_public = True
-                ad.save(update_fields=['expires_at', 'is_public'])
+                ad.save(update_fields=['expires_at', 'is_public', 'modified_at'])
 
             # Send push notifications to contract parties
             party_a = contract.order.owner.wallet_hash

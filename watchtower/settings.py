@@ -291,6 +291,7 @@ CELERY_IMPORTS = (
     "rampp2p.tasks.task_marketprice",
     "rampp2p.tasks.task_transaction",
     "rampp2p.tasks.task_order",
+    "rampp2p.tasks.task_ad",
     "stablehedge.tasks",
     "paytacapos.tasks",
 )

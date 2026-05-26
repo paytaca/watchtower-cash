@@ -62,6 +62,7 @@ class CashInAdViewSet(viewsets.GenericViewSet):
             & Q(trade_amount__gt=0)
             & Q(trade_limits_in_fiat=False)
             & Q(fiat_currency__symbol=currency)
+            & (Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now()))
         )
 
         queryset = queryset.exclude(owner__wallet_hash=wallet_hash)
@@ -317,6 +318,7 @@ class CashInAdViewSet(viewsets.GenericViewSet):
             & Q(is_public=True)
             & (Q(trade_amount_sats__gte=1000) | Q(trade_amount_fiat__gt=0))
             & Q(fiat_currency__symbol=currency.symbol)
+            & (Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now()))
         )
 
         # Exclude ads owned by caller
@@ -575,6 +577,7 @@ class AdViewSet(viewsets.GenericViewSet):
                         (Q(trade_limits_in_fiat=False) & Q(trade_amount_sats__gte=1000))
                         | (Q(trade_limits_in_fiat=True) & Q(trade_amount_fiat__gt=0))
                     )
+                    & (Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now()))
                 )
 
             # filters
@@ -868,8 +871,8 @@ class AdViewSet(viewsets.GenericViewSet):
 
         ad = serializer.save()
 
-        # Renew expiry when owner re-publishes an expired ad
-        if is_public and ad.expires_at and ad.expires_at <= timezone.now():
+        # Renew expiry on any private-to-public transition
+        if private_to_public:
             ad.expires_at = timezone.now() + timedelta(days=30)
             ad.save(update_fields=['expires_at'])
 
