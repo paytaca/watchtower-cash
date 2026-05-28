@@ -33,7 +33,7 @@ class MerchantFilter(filters.FilterSet):
     street = filters.CharFilter(field_name="location__street", lookup_expr="icontains")
     category = filters.CharFilter(field_name="category__name", lookup_expr="icontains")
     has_vault = filters.BooleanFilter(method="has_vault_filter")
-
+    nfc_enabled = filters.BooleanFilter(field_name="nfc_enabled")
     active = filters.BooleanFilter()
     verified = filters.BooleanFilter()
     name = filters.CharFilter(method="name_address_filter")
@@ -56,6 +56,7 @@ class MerchantFilter(filters.FilterSet):
             "city",
             "street",
             "category",
+            "nfc_enabled",
         ]
 
     def wallet_hashes_filter(self, queryset, name, value):

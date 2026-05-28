@@ -2,6 +2,7 @@ import logging
 from rest_framework import permissions, exceptions
 
 from paytacapos.models import Merchant, PaymentMethod
+from watchtower import settings
 
 LOGGER = logging.getLogger("django")
 
@@ -34,6 +35,17 @@ class HasMerchantObjectPermission(permissions.BasePermission):
             return obj.wallet_hash == wallet.wallet_hash
 
         return obj.merchant.wallet_hash == wallet.wallet_hash
+
+class NFCServerHasPermission(permissions.BasePermission):
+    def has_permission(self, request, view):
+        return True
+    
+    def has_object_permission(self, request, view, obj):
+        if request.method != 'PATCH': return False
+        nfc_token = request.headers.get('X_NFC_SERVER_TOKEN', '')
+        if nfc_token and nfc_token == settings.NFC_SERVER_TOKEN:
+            return True
+        return False
 
 class HasMinPaytacaVersionHeader(permissions.BasePermission):
     """

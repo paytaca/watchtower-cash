@@ -4,6 +4,7 @@ from main.models import Wallet as MainWallet
 from rampp2p.models import Peer as PeerWallet
 from rampp2p.models import Arbiter as ArbiterWallet
 from .models import AuthToken
+from django.contrib.auth.models import AnonymousUser
 
 from cryptography.fernet import Fernet, InvalidToken
 from django.conf import settings
@@ -129,7 +130,7 @@ class WalletAuthentication(BaseAuthentication):
         wallet_hash, token_key = self.get_auth_headers(request)
 
         if not wallet_hash:
-            return (None, None)
+            return None
 
         wallet = self.get_wallet(wallet_hash)
 
@@ -140,3 +141,15 @@ class WalletAuthentication(BaseAuthentication):
             wallet.is_authenticated = True
 
         return (wallet, token_key) 
+
+class NfcServerAuthentication(BaseAuthentication):
+    def authenticate(self, request):
+        nfc_token = request.headers.get('X_NFC_SERVER_TOKEN', '')
+        
+        if not nfc_token:
+            return None
+
+        if nfc_token != settings.NFC_SERVER_TOKEN:
+            raise AuthenticationFailed('Invalid NFC server token')
+        
+        return (AnonymousUser(), nfc_token)

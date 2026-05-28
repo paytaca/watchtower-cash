@@ -27,7 +27,7 @@ from rest_framework.exceptions import MethodNotAllowed
 
 from .serializers import *
 from .filters import *
-from .permissions import HasMerchantObjectPermission, HasMinPaytacaVersionHeader, HasPaymentObjectPermission
+from .permissions import HasMerchantObjectPermission, HasMinPaytacaVersionHeader, HasPaymentObjectPermission, NFCServerHasPermission
 from .pagination import CustomLimitOffsetPagination, WalletHistoryPageNumberPagination
 from .utils.websocket import send_device_update
 from .utils.report import SalesSummary
@@ -38,7 +38,7 @@ from main.models import Address, Transaction, Wallet, WalletHistory, Transaction
 from rampp2p.models import MarketPrice
 from .tasks import process_cashout_input_txns
 
-from authentication.token import WalletAuthentication
+from authentication.token import NfcServerAuthentication, WalletAuthentication
 from django.core.exceptions import ValidationError
 
 import math
@@ -314,10 +314,11 @@ class MerchantViewSet(viewsets.ModelViewSet):
     filterset_class = MerchantFilter
 
     permission_classes = [
-        HasMinPaytacaVersionHeader | HasMerchantObjectPermission,
+        HasMinPaytacaVersionHeader | HasMerchantObjectPermission | NFCServerHasPermission,
     ]
     authentication_classes = [
         WalletAuthentication,
+        NfcServerAuthentication
     ]
 
     def get_object(self, *args, **kwargs):

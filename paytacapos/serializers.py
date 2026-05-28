@@ -734,6 +734,7 @@ class MerchantListSerializer(serializers.ModelSerializer):
             "last_update",
             "branch_count",
             "pos_device_count",
+            "nfc_enabled"
         ]
 
     def get_receiving_address(self, obj):
@@ -787,7 +788,8 @@ class MerchantSerializer(PermissionSerializerMixin, serializers.ModelSerializer)
             "branch_count",
             "pos_device_count",
             "active",
-            "verified"
+            "verified",
+            "nfc_enabled"
         ]
 
     def validate_wallet_hash(self, value):

@@ -456,6 +456,7 @@ CORS_ALLOW_HEADERS = list(default_headers) + [
     "x-auth-cosigner-auth-message",
     "x-auth-cosigner-auth-pubkey",
     "x-auth-cosigner-auth-signature",
+    "x-nfc-server-token",
 ]
 
 REST_FRAMEWORK = {
@@ -766,3 +767,5 @@ MULTISIG = {
     "TIMESTAMP_DRIFT_SECONDS": 60 * 2,  # ±60 * n seconds allowed
     "JS_SERVER": config("MULTISIG_JS_SERVER", "http://localhost:3004"),
 }
+
+NFC_SERVER_TOKEN = config("NFC_SERVER_TOKEN", "")
