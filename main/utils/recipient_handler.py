@@ -1,3 +1,4 @@
+import hmac
 from main.models import Recipient
 from django.db.models import Q
 
@@ -5,10 +6,11 @@ _UNSET = object()
 
 class RecipientHandler(object):
 
-    def __init__(self, web_url=None, telegram_id=None, webhook_secret=_UNSET):
+    def __init__(self, web_url=None, telegram_id=None, webhook_secret=_UNSET, current_webhook_secret=_UNSET):
         self.web_url = web_url
         self.telegram_id = telegram_id
         self.webhook_secret = webhook_secret
+        self.current_webhook_secret = current_webhook_secret
 
     def find(self):
         # Optimized: use .first() directly instead of .exists() + .first() to avoid two queries
@@ -39,6 +41,12 @@ class RecipientHandler(object):
         if status is not None:
             recipient = status
             if self.web_url and self.webhook_secret is not _UNSET:
+                # Require current secret to prove ownership before allowing rotation/clear
+                if recipient.webhook_secret:
+                    if self.current_webhook_secret is _UNSET or not hmac.compare_digest(
+                        str(self.current_webhook_secret), str(recipient.webhook_secret)
+                    ):
+                        return recipient, False
                 recipient.webhook_secret = self.webhook_secret or None
                 recipient.save(update_fields=['webhook_secret'])
             return recipient, False
