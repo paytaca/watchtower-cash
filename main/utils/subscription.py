@@ -5,7 +5,7 @@ from django.conf import settings
 from django.db import transaction as trans
 from django.db.models import Q
 from main.mqtt import publish_message
-from main.utils.recipient_handler import RecipientHandler
+from main.utils.recipient_handler import RecipientHandler, _UNSET
 from django.db import IntegrityError
 from main.utils.address_validator import *
 from main.utils.address_converter import *
@@ -86,7 +86,7 @@ def new_subscription(**kwargs):
     wallet_index = kwargs.get('wallet_index', None)
     address_index = kwargs.get('address_index', None)
     web_url = kwargs.get('webhook_url', None)
-    webhook_secret = kwargs.get('webhook_secret', None)
+    webhook_secret = kwargs.get('webhook_secret', _UNSET)
     telegram_id = kwargs.get('telegram_id', None)
     chat_identity = kwargs.get('chat_identity', None)
     remove_duplicate_path = kwargs.get('remove_duplicate_path', False)

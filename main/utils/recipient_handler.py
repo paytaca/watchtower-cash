@@ -1,9 +1,11 @@
 from main.models import Recipient
 from django.db.models import Q
 
+_UNSET = object()
+
 class RecipientHandler(object):
 
-    def __init__(self, web_url=None, telegram_id=None, webhook_secret=None):
+    def __init__(self, web_url=None, telegram_id=None, webhook_secret=_UNSET):
         self.web_url = web_url
         self.telegram_id = telegram_id
         self.webhook_secret = webhook_secret
@@ -30,14 +32,14 @@ class RecipientHandler(object):
             recipient = Recipient()
             recipient.web_url = self.web_url
             recipient.telegram_id = self.telegram_id
-            if self.web_url and self.webhook_secret:
-                recipient.webhook_secret = self.webhook_secret
+            if self.web_url and self.webhook_secret is not _UNSET:
+                recipient.webhook_secret = self.webhook_secret or None
             recipient.save()
             return recipient, True
         if status is not None:
             recipient = status
-            if self.web_url and self.webhook_secret:
-                recipient.webhook_secret = self.webhook_secret
+            if self.web_url and self.webhook_secret is not _UNSET:
+                recipient.webhook_secret = self.webhook_secret or None
                 recipient.save(update_fields=['webhook_secret'])
             return recipient, False
         return status, False
