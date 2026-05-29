@@ -1,4 +1,3 @@
-import secrets
 from main.models import Recipient
 from django.db.models import Q
 
@@ -31,8 +30,8 @@ class RecipientHandler(object):
             recipient = Recipient()
             recipient.web_url = self.web_url
             recipient.telegram_id = self.telegram_id
-            if self.web_url:
-                recipient.webhook_secret = self.webhook_secret or secrets.token_hex(32)
+            if self.web_url and self.webhook_secret:
+                recipient.webhook_secret = self.webhook_secret
             recipient.save()
             return recipient, True
         if status is not None:
