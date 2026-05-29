@@ -16,7 +16,6 @@ from anyhedge.utils.address import pubkey_to_cashaddr
 from rampp2p.models import MarketPrice
 
 from .models import *
-from .permissions import HasMinPaytacaVersionHeader
 from .utils.broadcast import broadcast_transaction
 from .utils.totp import generate_pos_device_totp
 from .utils.websocket import send_device_update
@@ -133,10 +132,6 @@ class BaseLinkRequestSerializer(PermissionSerializerMixin, serializers.Serialize
 
         request = self.context["request"]
 
-        # older versions didnt need authentication
-        if HasMinPaytacaVersionHeader.on_request(request):
-            return
-
         wallet = request.user
 
         if not isinstance(wallet, Wallet) or not wallet.is_authenticated:
@@ -214,10 +209,6 @@ class PosDeviceNfcRequestSerializer(PermissionSerializerMixin, serializers.Seria
             return
 
         request = self.context["request"]
-
-        # older versions didnt need authentication
-        if HasMinPaytacaVersionHeader.on_request(request):
-            return
 
         wallet = request.user
 
@@ -561,10 +552,6 @@ class PosDeviceSerializer(PermissionSerializerMixin, serializers.ModelSerializer
 
         request = self.context["request"]
 
-        # older versions didnt need authentication
-        if HasMinPaytacaVersionHeader.on_request(request):
-            return
-
         wallet = request.user
 
         if not isinstance(wallet, Wallet) or not wallet.is_authenticated:
@@ -816,10 +803,6 @@ class MerchantSerializer(PermissionSerializerMixin, serializers.ModelSerializer)
         
         request = self.context["request"]
 
-        # older versions didnt need authentication
-        if HasMinPaytacaVersionHeader.on_request(request):
-            return
-
         wallet = request.user
 
         if not isinstance(wallet, Wallet) or not wallet.is_authenticated:
@@ -924,10 +907,6 @@ class BranchSerializer(PermissionSerializerMixin, serializers.ModelSerializer):
             return
         
         request = self.context["request"]
-
-        # older versions didnt need authentication
-        if HasMinPaytacaVersionHeader.on_request(request):
-            return
 
         wallet = request.user
 
