@@ -1,4 +1,5 @@
 from main.models import Recipient
+from main.utils.webhook import encrypt_webhook_secret
 from django.db.models import Q
 
 _UNSET = object()
@@ -56,7 +57,8 @@ class RecipientHandler(object):
             recipient.web_url = self.web_url
             recipient.telegram_id = self.telegram_id
             if self.web_url and self.webhook_secret is not _UNSET:
-                recipient.webhook_secret = self.webhook_secret or None
+                plaintext = self.webhook_secret or None
+                recipient.webhook_secret = encrypt_webhook_secret(plaintext) if plaintext else None
             recipient.save()
             return recipient, True
         if status is not None:

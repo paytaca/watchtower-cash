@@ -569,7 +569,7 @@ class Transaction(PostgresModel):
 class Recipient(PostgresModel):
     web_url = models.CharField(max_length=300, null=True, blank=True, db_index=True)
     telegram_id = models.CharField(max_length=50, null=True, blank=True, db_index=True)
-    webhook_secret = models.CharField(max_length=64, null=True, blank=True)
+    webhook_secret = models.CharField(max_length=255, null=True, blank=True)
     valid = models.BooleanField(default=True)
 
     def __str__(self):

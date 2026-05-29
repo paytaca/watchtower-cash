@@ -3,7 +3,9 @@ from rest_framework.response import Response
 from rest_framework import status
 
 from main.utils.subscription import new_subscription
+from main.utils.webhook import encrypt_webhook_secret, decrypt_webhook_secret
 from main.models import Recipient
+from main.throttles import WebhookSecretThrottle
 from rest_framework.permissions import AllowAny
 from rest_framework import generics
 from rest_framework.views import APIView
@@ -51,6 +53,7 @@ class RecipientWebhookSecretView(APIView):
             the initial secret) or if current_webhook_secret is wrong.
     """
     permission_classes = [AllowAny,]
+    throttle_classes = [WebhookSecretThrottle,]
 
     def post(self, request):
         serializer = RecipientWebhookSecretCreateSerializer(data=request.data)
@@ -63,7 +66,7 @@ class RecipientWebhookSecretView(APIView):
         if Recipient.objects.filter(web_url=web_url).exists():
             return Response({'error': 'recipient_already_exists'}, status=status.HTTP_409_CONFLICT)
 
-        Recipient.objects.create(web_url=web_url, webhook_secret=webhook_secret)
+        Recipient.objects.create(web_url=web_url, webhook_secret=encrypt_webhook_secret(webhook_secret))
         return Response({'success': True}, status=status.HTTP_201_CREATED)
 
     def patch(self, request):
@@ -83,9 +86,9 @@ class RecipientWebhookSecretView(APIView):
         if not recipient.webhook_secret:
             return Response({'error': 'no_webhook_secret_set'}, status=status.HTTP_403_FORBIDDEN)
 
-        if not hmac.compare_digest(current_secret, recipient.webhook_secret):
+        if not hmac.compare_digest(current_secret, decrypt_webhook_secret(recipient.webhook_secret)):
             return Response({'error': 'invalid_current_webhook_secret'}, status=status.HTTP_403_FORBIDDEN)
 
-        recipient.webhook_secret = new_secret
+        recipient.webhook_secret = encrypt_webhook_secret(new_secret) if new_secret else None
         recipient.save(update_fields=['webhook_secret'])
         return Response({'success': True}, status=status.HTTP_200_OK)
