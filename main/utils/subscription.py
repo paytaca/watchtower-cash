@@ -86,6 +86,7 @@ def new_subscription(**kwargs):
     wallet_index = kwargs.get('wallet_index', None)
     address_index = kwargs.get('address_index', None)
     web_url = kwargs.get('webhook_url', None)
+    webhook_secret = kwargs.get('webhook_secret', None)
     telegram_id = kwargs.get('telegram_id', None)
     chat_identity = kwargs.get('chat_identity', None)
     remove_duplicate_path = kwargs.get('remove_duplicate_path', False)
@@ -123,7 +124,8 @@ def new_subscription(**kwargs):
                 if proceed:
                     obj_recipient = RecipientHandler(
                         web_url=web_url,
-                        telegram_id=telegram_id
+                        telegram_id=telegram_id,
+                        webhook_secret=webhook_secret,
                     )
                     recipient, created = obj_recipient.get_or_create()
                                     
@@ -131,6 +133,9 @@ def new_subscription(**kwargs):
                         # Renew validity.
                         recipient.valid = True
                         recipient.save()
+
+                    if web_url and recipient and recipient.webhook_secret:
+                        response['webhook_secret'] = recipient.webhook_secret
 
                     token_address = address
                     if is_token_address(address):

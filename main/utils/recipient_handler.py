@@ -1,11 +1,13 @@
+import secrets
 from main.models import Recipient
 from django.db.models import Q
 
 class RecipientHandler(object):
 
-    def __init__(self, web_url=None, telegram_id=None):
+    def __init__(self, web_url=None, telegram_id=None, webhook_secret=None):
         self.web_url = web_url
         self.telegram_id = telegram_id
+        self.webhook_secret = webhook_secret
 
     def find(self):
         # Optimized: use .first() directly instead of .exists() + .first() to avoid two queries
@@ -29,8 +31,14 @@ class RecipientHandler(object):
             recipient = Recipient()
             recipient.web_url = self.web_url
             recipient.telegram_id = self.telegram_id
+            if self.web_url:
+                recipient.webhook_secret = self.webhook_secret or secrets.token_hex(32)
             recipient.save()
             return recipient, True
         if status is not None:
-            return status, False
+            recipient = status
+            if self.web_url and self.webhook_secret:
+                recipient.webhook_secret = self.webhook_secret
+                recipient.save(update_fields=['webhook_secret'])
+            return recipient, False
         return status, False
