@@ -1,3 +1,4 @@
+import hmac
 import logging
 from rest_framework import permissions, exceptions
 
@@ -43,7 +44,7 @@ class NFCServerHasPermission(permissions.BasePermission):
     def has_object_permission(self, request, view, obj):
         if request.method != 'PATCH': return False
         nfc_token = request.headers.get('X_NFC_SERVER_TOKEN', '')
-        if nfc_token and nfc_token == settings.NFC_SERVER_TOKEN:
+        if nfc_token and hmac.compare_digest(nfc_token, settings.NFC_SERVER_TOKEN):
             return True
         return False
 

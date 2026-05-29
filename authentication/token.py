@@ -1,3 +1,4 @@
+import hmac
 from rest_framework.authentication import BaseAuthentication
 from rest_framework.exceptions import AuthenticationFailed
 from main.models import Wallet as MainWallet
@@ -149,7 +150,7 @@ class NfcServerAuthentication(BaseAuthentication):
         if not nfc_token:
             return None
 
-        if nfc_token != settings.NFC_SERVER_TOKEN:
+        if not hmac.compare_digest(nfc_token, settings.NFC_SERVER_TOKEN):
             raise AuthenticationFailed('Invalid NFC server token')
         
         return (AnonymousUser(), nfc_token)
