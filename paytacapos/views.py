@@ -27,7 +27,7 @@ from rest_framework.exceptions import MethodNotAllowed
 
 from .serializers import *
 from .filters import *
-from .permissions import HasMerchantObjectPermission, HasMinPaytacaVersionHeader, HasPaymentObjectPermission
+from .permissions import HasMerchantObjectPermission, HasPaymentObjectPermission
 from .pagination import CustomLimitOffsetPagination, WalletHistoryPageNumberPagination
 from .utils.websocket import send_device_update
 from .utils.report import SalesSummary
@@ -76,7 +76,7 @@ class PosDeviceViewSet(
     filterset_class = PosDeviceFilter
 
     permission_classes = [
-        HasMinPaytacaVersionHeader | HasMerchantObjectPermission,
+        HasMerchantObjectPermission,
     ]
 
     authentication_classes = [
@@ -314,7 +314,7 @@ class MerchantViewSet(viewsets.ModelViewSet):
     filterset_class = MerchantFilter
 
     permission_classes = [
-        HasMinPaytacaVersionHeader | HasMerchantObjectPermission,
+        HasMerchantObjectPermission,
     ]
     authentication_classes = [
         WalletAuthentication,
@@ -507,7 +507,7 @@ class BranchViewSet(viewsets.ModelViewSet):
     filterset_class = BranchFilter
 
     permission_classes = [
-        HasMinPaytacaVersionHeader | HasMerchantObjectPermission,
+        HasMerchantObjectPermission,
     ]
 
     authentication_classes = [
