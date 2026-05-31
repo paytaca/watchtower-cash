@@ -2686,6 +2686,18 @@ def fetch_latest_bch_fiat_prices(currencies=None):
     elif isinstance(currencies, str):
         currencies = [c.strip().upper() for c in currencies.split(",") if c.strip()]
 
+    try:
+        from rampp2p.models import FiatCurrency
+        rampp2p_currencies = FiatCurrency.objects.all().values_list('symbol', flat=True)
+        existing = {c.upper() for c in currencies}
+        for c in rampp2p_currencies:
+            c = c.upper().strip()
+            if c and c not in existing:
+                currencies.append(c)
+                existing.add(c)
+    except Exception:
+        pass
+
     currencies_lower = [c.lower() for c in currencies if c]
     if "usd" not in currencies_lower:
         currencies_lower.append("usd")
