@@ -377,7 +377,7 @@ CELERY_BEAT_SCHEDULE = {
     },
     "fetch_latest_bch_fiat_prices": {
         "task": "main.tasks.fetch_latest_bch_fiat_prices",
-        "schedule": 60 * 2,
+        "schedule": 25,
     },
     # 'preload_smartbch_blocks': {
     #     'task': 'smartbch.tasks.preload_new_blocks_task',
