@@ -2645,11 +2645,14 @@ def resolve_wallet_history_usd_values(txid=None, is_contract=False):
 def _get_active_wallet_currencies(max_currencies=16, cache_ttl=3600):
     """Return currencies used by recently-active wallets, cached in Redis for 1 hour."""
     cache_key = "active_wallet_currencies"
-    cached = REDIS_STORAGE.get(cache_key)
-    if cached:
-        currencies = json.loads(cached.decode())
-        if isinstance(currencies, list) and currencies:
-            return currencies
+    try:
+        cached = REDIS_STORAGE.get(cache_key)
+        if cached:
+            currencies = json.loads(cached.decode())
+            if isinstance(currencies, list) and currencies:
+                return currencies
+    except Exception:
+        pass
 
     recent = timezone.now() - timezone.timedelta(days=30)
     active_wallets = WalletHistory.objects.filter(
@@ -2668,7 +2671,10 @@ def _get_active_wallet_currencies(max_currencies=16, cache_ttl=3600):
     if "USD" not in currencies:
         currencies.insert(0, "USD")
 
-    REDIS_STORAGE.set(cache_key, json.dumps(currencies), ex=cache_ttl)
+    try:
+        REDIS_STORAGE.set(cache_key, json.dumps(currencies), ex=cache_ttl)
+    except Exception:
+        pass
     return currencies
 
 
@@ -2690,25 +2696,33 @@ def fetch_latest_bch_fiat_prices(currencies=None):
         timeout=15,
         headers={"x-cg-pro-api-key": settings.COINGECKO_API_KEY},
     )
-    response_timestamp = timezone.datetime.strptime(
-        resp.headers["Date"], "%a, %d %b %Y %H:%M:%S %Z"
-    ).replace(tzinfo=pytz.UTC)
+    response_timestamp = timezone.now()
+    date_header = resp.headers.get("Date")
+    if date_header:
+        response_timestamp = timezone.datetime.strptime(
+            date_header, "%a, %d %b %Y %H:%M:%S %Z"
+        ).replace(tzinfo=pytz.UTC)
     rates = resp.json().get("bitcoin-cash", {})
 
     results = []
     for currency in currencies:
         currency_low = currency.lower()
         if currency_low == "ars":
-            usd_rate = Decimal(rates.get("usd", 0))
-            yadio = requests.get(f"https://api.yadio.io/rate/{currency_low}/usd", timeout=15).json()
+            usd_rate = Decimal(str(rates.get("usd", 0)))
+            try:
+                yadio = requests.get(f"https://api.yadio.io/rate/{currency_low}/usd", timeout=15).json()
+            except (requests.RequestException, ValueError) as e:
+                LOGGER.warning(f"Yadio fetch failed for ARS: {e}")
+                continue
             if isinstance(yadio, dict) and "rate" in yadio:
-                price_value = Decimal(yadio["rate"]) * usd_rate
-                ts = timezone.datetime.fromtimestamp(yadio.get("timestamp", 0) / 1000, tz=pytz.UTC)
+                price_value = Decimal(str(yadio["rate"])) * usd_rate
+                yadio_ts = yadio.get("timestamp") or response_timestamp.timestamp()
+                ts = timezone.datetime.fromtimestamp(yadio_ts / 1000, tz=pytz.UTC)
                 source = "coingecko-yadio"
             else:
                 continue
         elif currency_low in rates:
-            price_value = Decimal(rates[currency_low])
+            price_value = Decimal(str(rates[currency_low]))
             ts = response_timestamp
             source = "coingecko"
         else:
