@@ -2691,18 +2691,25 @@ def fetch_latest_bch_fiat_prices(currencies=None):
         currencies_lower.append("usd")
     vs_currencies = ",".join(currencies_lower)
 
-    resp = requests.get(
-        f"https://pro-api.coingecko.com/api/v3/simple/price/?ids=bitcoin-cash&vs_currencies={vs_currencies}",
-        timeout=15,
-        headers={"x-cg-pro-api-key": settings.COINGECKO_API_KEY},
-    )
+    try:
+        resp = requests.get(
+            f"https://pro-api.coingecko.com/api/v3/simple/price/?ids=bitcoin-cash&vs_currencies={vs_currencies}",
+            timeout=15,
+            headers={"x-cg-pro-api-key": settings.COINGECKO_API_KEY},
+        )
+        resp.raise_for_status()
+        response_data = resp.json()
+    except (requests.RequestException, ValueError) as e:
+        LOGGER.error(f"CoinGecko fetch failed for currencies {vs_currencies}: {e}")
+        raise
+
     response_timestamp = timezone.now()
     date_header = resp.headers.get("Date")
     if date_header:
         response_timestamp = timezone.datetime.strptime(
             date_header, "%a, %d %b %Y %H:%M:%S %Z"
         ).replace(tzinfo=pytz.UTC)
-    rates = resp.json().get("bitcoin-cash", {})
+    rates = response_data.get("bitcoin-cash", {})
 
     results = []
     for currency in currencies:
@@ -2716,8 +2723,11 @@ def fetch_latest_bch_fiat_prices(currencies=None):
                 continue
             if isinstance(yadio, dict) and "rate" in yadio:
                 price_value = Decimal(str(yadio["rate"])) * usd_rate
-                yadio_ts = yadio.get("timestamp") or response_timestamp.timestamp()
-                ts = timezone.datetime.fromtimestamp(yadio_ts / 1000, tz=pytz.UTC)
+                yadio_ts = yadio.get("timestamp")
+                if yadio_ts:
+                    ts = timezone.datetime.fromtimestamp(yadio_ts / 1000, tz=pytz.UTC)
+                else:
+                    ts = response_timestamp
                 source = "coingecko-yadio"
             else:
                 continue
