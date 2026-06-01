@@ -256,3 +256,75 @@ class TestRecipientHandlerOwnership(TestCase):
             handler.get_or_create()
         except WebhookOwnershipRequired:
             self.fail('WebhookOwnershipRequired raised unexpectedly')
+
+
+# ---------------------------------------------------------------------------
+# RecipientHandler — find() path ownership check (issue #1)
+# ---------------------------------------------------------------------------
+
+@override_settings(WEBHOOK_SECRET_KEY=_TEST_FERNET_KEY)
+class TestRecipientHandlerFindOwnership(TestCase):
+    """
+    RecipientHandler.find() returns an existing Recipient directly.
+    The get_or_create() wrapper must verify ownership on that path too,
+    or an attacker can subscribe arbitrary addresses to a victim URL.
+    """
+
+    def setUp(self):
+        self.web_url = 'https://claimed.example.com/webhook/'
+        Recipient.objects.create(
+            web_url=self.web_url,
+            webhook_secret=encrypt_webhook_secret(_SECRET),
+        )
+
+    def test_find_path_raises_without_secret(self):
+        # Attacker provides the same web_url with no webhook_secret
+        handler = RecipientHandler(web_url=self.web_url)
+        with self.assertRaises(WebhookOwnershipRequired):
+            handler.get_or_create()
+
+    def test_find_path_raises_with_wrong_secret(self):
+        handler = RecipientHandler(web_url=self.web_url, webhook_secret='wrong' * 8)
+        with self.assertRaises(WebhookOwnershipRequired):
+            handler.get_or_create()
+
+    def test_find_path_allows_correct_secret(self):
+        handler = RecipientHandler(web_url=self.web_url, webhook_secret=_SECRET)
+        recipient, created = handler.get_or_create()
+        self.assertFalse(created)
+        self.assertEqual(recipient.web_url, self.web_url)
+
+    def test_find_path_allows_url_with_no_secret(self):
+        Recipient.objects.create(web_url='https://open.example.com/webhook/')
+        handler = RecipientHandler(web_url='https://open.example.com/webhook/')
+        # No secret on the existing recipient — no ownership check required
+        try:
+            handler.get_or_create()
+        except WebhookOwnershipRequired:
+            self.fail('WebhookOwnershipRequired raised unexpectedly for unsecured URL')
+
+
+# ---------------------------------------------------------------------------
+# send_webhook — decryption failure returns _FailedResponse (issue #5)
+# ---------------------------------------------------------------------------
+
+@override_settings(WEBHOOK_SECRET_KEY=_TEST_FERNET_KEY)
+class TestSendWebhookDecryptionFailure(TestCase):
+
+    @patch('main.utils.webhook.requests.post')
+    def test_returns_500_on_invalid_ciphertext(self, mock_post):
+        """
+        If the stored ciphertext is malformed (e.g. key was rotated),
+        send_webhook must NOT propagate the exception — it should return a
+        synthetic 500 response so the caller's resp.status_code logic still
+        works and the Celery task can schedule a retry instead of crashing.
+        """
+        r = MagicMock()
+        r.id = 42
+        r.web_url = 'https://example.com/webhook/'
+        r.webhook_secret = 'not-a-valid-fernet-token'
+
+        resp = send_webhook(r, {'txid': 'abc'})
+
+        self.assertEqual(resp.status_code, 500)
+        mock_post.assert_not_called()

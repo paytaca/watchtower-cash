@@ -1,4 +1,4 @@
-import logging, json, requests, hmac, hashlib
+import logging, json, requests
 from main.utils.webhook import send_webhook
 import pytz, time
 import math

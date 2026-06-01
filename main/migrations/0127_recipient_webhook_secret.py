@@ -13,6 +13,6 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='recipient',
             name='webhook_secret',
-            field=models.CharField(blank=True, max_length=64, null=True),
+            field=models.CharField(blank=True, max_length=255, null=True),
         ),
     ]

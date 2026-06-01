@@ -1,5 +1,7 @@
+import hmac
+
 from main.models import Recipient
-from main.utils.webhook import encrypt_webhook_secret
+from main.utils.webhook import encrypt_webhook_secret, decrypt_webhook_secret
 from django.db.models import Q
 
 _UNSET = object()
@@ -63,5 +65,17 @@ class RecipientHandler(object):
             return recipient, True
         if status is not None:
             recipient = status
+            if recipient.webhook_secret:
+                if self.webhook_secret is _UNSET:
+                    raise WebhookOwnershipRequired(
+                        f"A recipient with web_url '{recipient.web_url}' already has a "
+                        "webhook_secret. Provide the current secret to subscribe additional "
+                        "addresses for this URL."
+                    )
+                stored = decrypt_webhook_secret(recipient.webhook_secret)
+                if len(self.webhook_secret) != len(stored) or not hmac.compare_digest(self.webhook_secret, stored):
+                    raise WebhookOwnershipRequired(
+                        f"Invalid webhook_secret for web_url '{recipient.web_url}'."
+                    )
             return recipient, False
         return status, False

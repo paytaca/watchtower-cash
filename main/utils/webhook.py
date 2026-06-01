@@ -29,6 +29,11 @@ def decrypt_webhook_secret(ciphertext: str) -> str:
     return _get_fernet().decrypt(ciphertext.encode('utf-8')).decode('utf-8')
 
 
+class _FailedResponse:
+    """Synthetic response returned when webhook signing cannot proceed."""
+    status_code = 500
+
+
 def send_webhook(recipient, data):
     """
     POST data to recipient.web_url.
@@ -37,12 +42,19 @@ def send_webhook(recipient, data):
     signed with HMAC-SHA256 via the X-Watchtower-Signature header.
     Otherwise, falls back to form-encoded for backward compatibility.
 
-    Returns the requests.Response object.
+    Returns the requests.Response object (or _FailedResponse on decryption error).
     """
-    logger.info(f"Sending webhook to {recipient.web_url} with data: {data}")
+    logger.info(f"Sending webhook to {recipient.web_url}")
 
     if recipient.webhook_secret:
-        plaintext_secret = decrypt_webhook_secret(recipient.webhook_secret)
+        try:
+            plaintext_secret = decrypt_webhook_secret(recipient.webhook_secret)
+        except Exception:
+            logger.exception(
+                "Failed to decrypt webhook secret for recipient %s — skipping signed delivery",
+                recipient.id,
+            )
+            return _FailedResponse()
         payload_bytes = json.dumps(data, sort_keys=True, separators=(', ', ': ')).encode('utf-8')
         sig = hmac.new(
             plaintext_secret.encode('utf-8'),
@@ -56,6 +68,7 @@ def send_webhook(recipient, data):
                 'Content-Type': 'application/json',
                 'X-Watchtower-Signature': f'sha256={sig}',
             },
+            timeout=10,
         )
 
-    return requests.post(recipient.web_url, data=data)
+    return requests.post(recipient.web_url, data=data, timeout=10)
