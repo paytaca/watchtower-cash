@@ -209,7 +209,7 @@ def client_acknowledgement(self, tx_obj_id):
                     if recipient.valid:
                         if recipient.web_url:
                             LOGGER.info(f"Webhook call to be sent to: {recipient.web_url}")
-                            LOGGER.info(f"Data: {str(data)}")
+                            LOGGER.debug(f"Data: {str(data)}")
                             resp = send_webhook(recipient, data)
                             if resp.status_code == 200:
                                 this_transaction.update(acknowledged=True)

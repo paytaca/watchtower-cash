@@ -17,5 +17,5 @@ class RecipientWebhookSecretCreateSerializer(serializers.Serializer):
 
 class RecipientWebhookSecretRotateSerializer(serializers.Serializer):
     web_url = serializers.CharField(max_length=300)
-    current_webhook_secret = serializers.CharField(allow_blank=True)
+    current_webhook_secret = serializers.CharField(allow_blank=True, max_length=255)
     new_webhook_secret = serializers.CharField(max_length=64, allow_blank=True)
