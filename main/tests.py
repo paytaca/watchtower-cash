@@ -11,7 +11,7 @@ from rest_framework.test import APIClient
 
 from main.models import Recipient
 from main.throttles import WebhookSecretThrottle
-from main.utils.recipient_handler import RecipientHandler, WebhookOwnershipRequired
+from main.utils.recipient_handler import RecipientHandler, WebhookOwnershipRequired, WebhookSecretRegistrationRequired
 from main.utils.webhook import encrypt_webhook_secret, decrypt_webhook_secret, send_webhook
 
 # Fixed Fernet key used across all webhook tests — never use in production
@@ -303,6 +303,14 @@ class TestRecipientHandlerFindOwnership(TestCase):
             handler.get_or_create()
         except WebhookOwnershipRequired:
             self.fail('WebhookOwnershipRequired raised unexpectedly for unsecured URL')
+
+    def test_find_path_raises_when_secret_provided_for_unclaimed_url(self):
+        # URL exists but has no secret. Caller provides a secret — we can't verify
+        # ownership, so we must reject rather than silently drop the secret.
+        Recipient.objects.create(web_url='https://open.example.com/webhook/')
+        handler = RecipientHandler(web_url='https://open.example.com/webhook/', webhook_secret=_SECRET)
+        with self.assertRaises(WebhookSecretRegistrationRequired):
+            handler.get_or_create()
 
 
 # ---------------------------------------------------------------------------

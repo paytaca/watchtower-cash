@@ -5,7 +5,7 @@ from django.conf import settings
 from django.db import transaction as trans
 from django.db.models import Q
 from main.mqtt import publish_message
-from main.utils.recipient_handler import RecipientHandler, _UNSET, WebhookOwnershipRequired
+from main.utils.recipient_handler import RecipientHandler, _UNSET, WebhookOwnershipRequired, WebhookSecretRegistrationRequired
 from django.db import IntegrityError
 from main.utils.address_validator import *
 from main.utils.address_converter import *
@@ -131,6 +131,9 @@ def new_subscription(**kwargs):
                         recipient, created = obj_recipient.get_or_create()
                     except WebhookOwnershipRequired:
                         response['error'] = 'webhook_url_already_has_secret'
+                        break
+                    except WebhookSecretRegistrationRequired:
+                        response['error'] = 'webhook_url_secret_not_registered'
                         break
                                     
                     if recipient and not created:

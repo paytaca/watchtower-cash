@@ -16,6 +16,16 @@ class WebhookOwnershipRequired(Exception):
     pass
 
 
+class WebhookSecretRegistrationRequired(Exception):
+    """
+    Raised when a caller provides a webhook_secret while subscribing to a web_url
+    that exists but has no secret registered yet. Ownership of the URL cannot be
+    verified without a pre-registered secret, so the caller must first use
+    POST /recipient/webhook-secret/ to claim the URL, then subscribe.
+    """
+    pass
+
+
 class RecipientHandler(object):
 
     def __init__(self, web_url=None, telegram_id=None, webhook_secret=_UNSET):
@@ -77,5 +87,13 @@ class RecipientHandler(object):
                     raise WebhookOwnershipRequired(
                         f"Invalid webhook_secret for web_url '{recipient.web_url}'."
                     )
+            elif self.webhook_secret is not _UNSET and self.webhook_secret:
+                # Caller supplied a secret but this URL has none registered.
+                # We cannot verify ownership, so we cannot accept the secret.
+                # The caller must use POST /recipient/webhook-secret/ first.
+                raise WebhookSecretRegistrationRequired(
+                    f"web_url '{recipient.web_url}' has no webhook_secret registered. "
+                    "Use POST /recipient/webhook-secret/ to claim this URL before subscribing."
+                )
             return recipient, False
         return status, False

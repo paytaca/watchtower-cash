@@ -30,7 +30,9 @@ Content-Type: application/json
 
 Subscribe addresses as normal via `POST /api/subscribe/`. Pass `webhook_url` and, if the URL has a secret registered, you **must** also pass the matching `webhook_secret` (minimum 32 characters).
 
-This check runs for **both** new recipient creation and existing recipient lookups. An attacker who knows your URL but not your secret cannot attach their addresses to your endpoint — `WebhookOwnershipRequired` is raised and the request is rejected with `error: webhook_url_already_has_secret`.
+This check runs for **both** new recipient creation and existing recipient lookups. An attacker who knows your URL but not your secret cannot attach their addresses to your endpoint — the request is rejected with `error: webhook_url_already_has_secret`.
+
+**Important — registration must come first.** If a URL already has subscribers (from before a secret was set) and you now try to subscribe with a `webhook_secret`, the request will be rejected with `error: webhook_url_secret_not_registered`. Because there is no pre-registered secret to verify against, ownership of the URL cannot be proven through the subscribe call alone. You must call `POST /api/recipient/webhook-secret/` first to claim the URL, and only then subscribe with the secret.
 
 URLs that have no secret registered are unrestricted — any subscriber can attach to them (legacy behaviour).
 
@@ -168,5 +170,6 @@ This must be set (and kept stable) on all Watchtower instances. Rotating this ke
 | Secret leakage from DB | Fernet encryption at rest |
 | Timing attacks on verification | `hmac.compare_digest()` on both sides |
 | DDoS via subscription spam | `WebhookOwnershipRequired` blocks new recipients sharing a claimed URL — enforced on both the create and find paths |
+| Secret squatting on existing URLs | `WebhookSecretRegistrationRequired` prevents a caller from supplying a secret for a URL that has existing subscribers but no registered secret; ownership cannot be verified without a pre-registered secret |
 | Brute-force secret guessing | Rate limit: 10 req/min per IP on the management endpoint |
 | URL squatting | First-one-wins registration; challenge-response ownership proof is a planned future improvement |
