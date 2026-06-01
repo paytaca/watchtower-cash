@@ -94,12 +94,12 @@ class RecipientWebhookSecretView(APIView):
         if not recipient.webhook_secret:
             return Response({'error': 'no_webhook_secret_set'}, status=status.HTTP_403_FORBIDDEN)
 
-        if new_secret and len(new_secret) < 32:
-            return Response({'error': 'new_webhook_secret_too_short'}, status=status.HTTP_400_BAD_REQUEST)
-
         stored = decrypt_webhook_secret(recipient.webhook_secret)
         if len(current_secret) != len(stored) or not hmac.compare_digest(current_secret, stored):
             return Response({'error': 'invalid_current_webhook_secret'}, status=status.HTTP_403_FORBIDDEN)
+
+        if new_secret and len(new_secret) < 32:
+            return Response({'error': 'new_webhook_secret_too_short'}, status=status.HTTP_400_BAD_REQUEST)
 
         recipient.webhook_secret = encrypt_webhook_secret(new_secret) if new_secret else None
         recipient.save(update_fields=['webhook_secret'])
