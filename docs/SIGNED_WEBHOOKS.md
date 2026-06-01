@@ -28,9 +28,11 @@ Content-Type: application/json
 
 ### 2. Subscribing addresses
 
-Subscribe addresses as normal via `POST /api/subscribe/`. Pass `webhook_url` and optionally a `webhook_secret` (minimum 32 characters). If the URL already has a secret registered via the step above, the subscription will succeed only if the same secret is provided (or no secret is given and none was pre-registered).
+Subscribe addresses as normal via `POST /api/subscribe/`. Pass `webhook_url` and, if the URL has a secret registered, you **must** also pass the matching `webhook_secret` (minimum 32 characters).
 
-If a different secret is detected for an existing URL that already has one, `WebhookOwnershipRequired` is raised and the subscription is rejected with `error: webhook_url_already_has_secret`.
+This check runs for **both** new recipient creation and existing recipient lookups. An attacker who knows your URL but not your secret cannot attach their addresses to your endpoint — `WebhookOwnershipRequired` is raised and the request is rejected with `error: webhook_url_already_has_secret`.
+
+URLs that have no secret registered are unrestricted — any subscriber can attach to them (legacy behaviour).
 
 ### 3. Outgoing request format
 
@@ -165,6 +167,6 @@ This must be set (and kept stable) on all Watchtower instances. Rotating this ke
 | Replay attacks | (future) Add a timestamp/nonce claim to the payload |
 | Secret leakage from DB | Fernet encryption at rest |
 | Timing attacks on verification | `hmac.compare_digest()` on both sides |
-| DDoS via subscription spam | `WebhookOwnershipRequired` blocks new recipients sharing a claimed URL |
+| DDoS via subscription spam | `WebhookOwnershipRequired` blocks new recipients sharing a claimed URL — enforced on both the create and find paths |
 | Brute-force secret guessing | Rate limit: 10 req/min per IP on the management endpoint |
 | URL squatting | First-one-wins registration; challenge-response ownership proof is a planned future improvement |
