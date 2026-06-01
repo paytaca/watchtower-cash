@@ -104,11 +104,15 @@ return hmac.compare_digest(f'sha256={expected}', sig_header)
 const crypto = require('crypto');
 
 function verifySignature(rawBody, sigHeader, secret) {
+    if (!sigHeader || !sigHeader.startsWith('sha256=')) return false;
     const expected = 'sha256=' + crypto
         .createHmac('sha256', secret)
         .update(rawBody)   // Buffer of the raw request body
         .digest('hex');
-    return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(sigHeader));
+    const a = Buffer.from(expected);
+    const b = Buffer.from(sigHeader);
+    if (a.length !== b.length) return false;
+    return crypto.timingSafeEqual(a, b);
 }
 ```
 
