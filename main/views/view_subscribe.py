@@ -1,4 +1,5 @@
 import hmac
+from django.db import IntegrityError
 from rest_framework.response import Response
 from rest_framework import status
 
@@ -63,10 +64,17 @@ class RecipientWebhookSecretView(APIView):
         web_url = serializer.validated_data['web_url']
         webhook_secret = serializer.validated_data['webhook_secret']
 
-        if Recipient.objects.filter(web_url=web_url).exists():
+        try:
+            _, created = Recipient.objects.get_or_create(
+                web_url=web_url,
+                defaults={'webhook_secret': encrypt_webhook_secret(webhook_secret)},
+            )
+        except IntegrityError:
             return Response({'error': 'recipient_already_exists'}, status=status.HTTP_409_CONFLICT)
 
-        Recipient.objects.create(web_url=web_url, webhook_secret=encrypt_webhook_secret(webhook_secret))
+        if not created:
+            return Response({'error': 'recipient_already_exists'}, status=status.HTTP_409_CONFLICT)
+
         return Response({'success': True}, status=status.HTTP_201_CREATED)
 
     def patch(self, request):
@@ -86,7 +94,11 @@ class RecipientWebhookSecretView(APIView):
         if not recipient.webhook_secret:
             return Response({'error': 'no_webhook_secret_set'}, status=status.HTTP_403_FORBIDDEN)
 
-        if not hmac.compare_digest(current_secret, decrypt_webhook_secret(recipient.webhook_secret)):
+        if new_secret and len(new_secret) < 32:
+            return Response({'error': 'new_webhook_secret_too_short'}, status=status.HTTP_400_BAD_REQUEST)
+
+        stored = decrypt_webhook_secret(recipient.webhook_secret)
+        if len(current_secret) != len(stored) or not hmac.compare_digest(current_secret, stored):
             return Response({'error': 'invalid_current_webhook_secret'}, status=status.HTTP_403_FORBIDDEN)
 
         recipient.webhook_secret = encrypt_webhook_secret(new_secret) if new_secret else None

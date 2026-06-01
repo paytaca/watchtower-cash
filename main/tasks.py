@@ -224,8 +224,6 @@ def client_acknowledgement(self, tx_obj_id):
                                 LOGGER.error(resp)
                                 self.retry(countdown=3)
 
-                            this_transaction.update(acknowledged=True)
-
                 if websocket:
                     tokenid = transaction.token.tokenid
                     room_name = transaction.address.address.replace(':','_')

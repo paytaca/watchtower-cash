@@ -43,13 +43,12 @@ def send_webhook(recipient, data):
 
     if recipient.webhook_secret:
         plaintext_secret = decrypt_webhook_secret(recipient.webhook_secret)
-        payload_bytes = json.dumps(data, sort_keys=True).encode('utf-8')
+        payload_bytes = json.dumps(data, sort_keys=True, separators=(', ', ': ')).encode('utf-8')
         sig = hmac.new(
             plaintext_secret.encode('utf-8'),
             payload_bytes,
             hashlib.sha256,
         ).hexdigest()
-        logger.info(f"Webhook signature: {sig}")
         return requests.post(
             recipient.web_url,
             data=payload_bytes,

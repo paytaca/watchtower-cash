@@ -50,7 +50,17 @@ The body is a **canonicalised JSON** string — keys sorted alphabetically, no e
 
 ## Verifying the signature
 
-Always verify against the **raw request body** — do not re-parse and re-serialise, as that risks introducing encoding differences.
+Always verify against the **raw request body** — do not re-parse and re-serialise.
+
+Watchtower sends the exact sorted-JSON bytes as the body (`json.dumps(data, sort_keys=True).encode('utf-8')`), so the signed bytes and the transmitted bytes are identical. Re-parsing and re-serialising on the receiver can introduce subtle differences (separator style, float precision, unicode escapes) that break the signature check.
+
+```
+# ✅ Correct
+payload_bytes = request.body
+
+# ❌ Wrong — re-serialising can differ from what was signed
+payload_bytes = json.dumps(json.loads(request.body), sort_keys=True).encode('utf-8')
+```
 
 ### Python (Django)
 
