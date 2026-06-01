@@ -3,6 +3,7 @@ import hmac
 import json
 from unittest.mock import patch, MagicMock
 
+import requests as requests_lib
 from cryptography.fernet import Fernet, InvalidToken
 from django.test import TestCase, override_settings
 from django.urls import reverse
@@ -328,3 +329,30 @@ class TestSendWebhookDecryptionFailure(TestCase):
 
         self.assertEqual(resp.status_code, 500)
         mock_post.assert_not_called()
+
+    @patch('main.utils.webhook.requests.post', side_effect=requests_lib.exceptions.Timeout)
+    def test_returns_599_on_timeout_signed(self, mock_post):
+        """
+        A Timeout (or any RequestException) on a signed request must not
+        propagate — callers expect a .status_code, not an exception.
+        599 falls into the else/retry branch in client_acknowledgement.
+        """
+        r = MagicMock()
+        r.id = 1
+        r.web_url = 'https://example.com/webhook/'
+        r.webhook_secret = encrypt_webhook_secret(_SECRET)
+
+        resp = send_webhook(r, {'txid': 'abc'})
+
+        self.assertEqual(resp.status_code, 599)
+
+    @patch('main.utils.webhook.requests.post', side_effect=requests_lib.exceptions.ConnectionError)
+    def test_returns_599_on_network_error_unsigned(self, mock_post):
+        """Same guarantee for unsigned (legacy) recipients."""
+        r = MagicMock()
+        r.web_url = 'https://example.com/webhook/'
+        r.webhook_secret = None
+
+        resp = send_webhook(r, {'txid': 'abc'})
+
+        self.assertEqual(resp.status_code, 599)

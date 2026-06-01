@@ -30,8 +30,9 @@ def decrypt_webhook_secret(ciphertext: str) -> str:
 
 
 class _FailedResponse:
-    """Synthetic response returned when webhook signing cannot proceed."""
-    status_code = 500
+    """Synthetic response returned when webhook delivery cannot proceed."""
+    def __init__(self, status_code=500):
+        self.status_code = status_code
 
 
 def send_webhook(recipient, data):
@@ -54,21 +55,29 @@ def send_webhook(recipient, data):
                 "Failed to decrypt webhook secret for recipient %s — skipping signed delivery",
                 recipient.id,
             )
-            return _FailedResponse()
+            return _FailedResponse(status_code=500)
         payload_bytes = json.dumps(data, sort_keys=True, separators=(', ', ': ')).encode('utf-8')
         sig = hmac.new(
             plaintext_secret.encode('utf-8'),
             payload_bytes,
             hashlib.sha256,
         ).hexdigest()
-        return requests.post(
-            recipient.web_url,
-            data=payload_bytes,
-            headers={
-                'Content-Type': 'application/json',
-                'X-Watchtower-Signature': f'sha256={sig}',
-            },
-            timeout=10,
-        )
+        try:
+            return requests.post(
+                recipient.web_url,
+                data=payload_bytes,
+                headers={
+                    'Content-Type': 'application/json',
+                    'X-Watchtower-Signature': f'sha256={sig}',
+                },
+                timeout=10,
+            )
+        except requests.RequestException:
+            logger.exception("Network error sending signed webhook to %s", recipient.web_url)
+            return _FailedResponse(status_code=599)
 
-    return requests.post(recipient.web_url, data=data, timeout=10)
+    try:
+        return requests.post(recipient.web_url, data=data, timeout=10)
+    except requests.RequestException:
+        logger.exception("Network error sending webhook to %s", recipient.web_url)
+        return _FailedResponse(status_code=599)
