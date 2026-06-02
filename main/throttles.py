@@ -103,3 +103,18 @@ class RebuildHistoryThrottle(throttling.BaseThrottle):
 
     def wait(self):
         return int(self.token_bucket.get_wait_time())
+
+
+class WebhookSecretThrottle(throttling.SimpleRateThrottle):
+    """
+    Throttle for POST/PATCH /recipient/webhook-secret/ — limits brute-force
+    attempts against current_webhook_secret. Rate configured via
+    DEFAULT_THROTTLE_RATES['webhook_secret'] in settings (default: 10/min).
+    """
+    scope = 'webhook_secret'
+
+    def get_cache_key(self, request, view):
+        return self.cache_format % {
+            'scope': self.scope,
+            'ident': self.get_ident(request),
+        }

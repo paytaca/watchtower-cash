@@ -7,6 +7,7 @@ from django.utils import timezone
 
 from main.models import Subscription
 from main.tasks import send_telegram_message
+from main.utils.webhook import send_webhook
 
 from smartbch.models import (
     TransactionTransfer,
@@ -65,9 +66,8 @@ def send_transaction_transfer_notification_to_subscriber(
     if recipient and recipient.valid:
         if recipient.web_url:
             LOGGER.info(f"Webhook call to be sent to: {recipient.web_url}")
-            LOGGER.info(f"Data: {str(data)}")
-
-            resp = requests.post(recipient.web_url, data=data)
+            LOGGER.debug(f"Data: {str(data)}")
+            resp = send_webhook(recipient, data)
             if resp.status_code == 200:
                 remarks.append("Sent to web url.")
                 LOGGER.info(

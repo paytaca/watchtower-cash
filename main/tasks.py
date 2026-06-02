@@ -1,4 +1,5 @@
 import logging, json, requests
+from main.utils.webhook import send_webhook
 import pytz, time
 import math
 from decimal import Decimal
@@ -208,8 +209,8 @@ def client_acknowledgement(self, tx_obj_id):
                     if recipient.valid:
                         if recipient.web_url:
                             LOGGER.info(f"Webhook call to be sent to: {recipient.web_url}")
-                            LOGGER.info(f"Data: {str(data)}")
-                            resp = requests.post(recipient.web_url,data=data)
+                            LOGGER.debug(f"Data: {str(data)}")
+                            resp = send_webhook(recipient, data)
                             if resp.status_code == 200:
                                 this_transaction.update(acknowledged=True)
                                 LOGGER.info(f'ACKNOWLEDGEMENT SENT TX INFO : {transaction.txid} TO: {recipient.web_url} DATA: {str(data)}')
@@ -222,8 +223,6 @@ def client_acknowledgement(self, tx_obj_id):
                             else:
                                 LOGGER.error(resp)
                                 self.retry(countdown=3)
-
-                            this_transaction.update(acknowledged=True)
 
                 if websocket:
                     tokenid = transaction.token.tokenid
@@ -2642,51 +2641,134 @@ def resolve_wallet_history_usd_values(txid=None, is_contract=False):
 
     return txids_updated
 
-@shared_task(queue='wallet_history_2', max_retries=3)
-def fetch_latest_usd_price():
-    CURRENCY = "USD"
-    RELATIVE_CURRENCY = "BCH"
-    to_timestamp = timezone.now()
-    from_timestamp = to_timestamp - timezone.timedelta(minutes=10)
-    coingecko_resp = requests.get(
-        # "https://api.coingecko.com/api/v3/coins/bitcoin-cash/market_chart/range?" + \
-        "https://pro-api.coingecko.com/api/v3/coins/bitcoin-cash/market_chart/range?" + \
-        f"vs_currency={CURRENCY}" + \
-        f"&from={from_timestamp.timestamp()}" + \
-        f"&to={to_timestamp.timestamp()}",
-        headers={
-            'x-cg-pro-api-key': settings.COINGECKO_API_KEY
-        }
-    )
-
-    coingecko_prices_list = None
+def _get_active_wallet_currencies(max_currencies=16, cache_ttl=3600):
+    """Return currencies used by recently-active wallets, cached in Redis for 1 hour."""
+    cache_key = "active_wallet_currencies"
     try:
-        response_data = coingecko_resp.json()
-        if isinstance(response_data, dict) and "prices" in response_data:
-            coingecko_prices_list = response_data.get("prices", [])
-    except json.decoder.JSONDecodeError:
+        cached = REDIS_STORAGE.get(cache_key)
+        if cached:
+            currencies = json.loads(cached.decode())
+            if isinstance(currencies, list) and currencies:
+                return currencies
+    except Exception:
         pass
 
-    asset_prices = []
-    for coingecko_price_data in coingecko_prices_list:
-        timestamp = coingecko_price_data[0]/1000
-        timestamp_obj = timezone.datetime.fromtimestamp(timestamp).replace(tzinfo=pytz.UTC)
-        price_value = Decimal(coingecko_price_data[1])
-        instance, created = AssetPriceLog.objects.update_or_create(
-            currency=CURRENCY,
-            relative_currency=RELATIVE_CURRENCY,
-            timestamp=timestamp_obj,
-            source="coingecko",
-            defaults={ "price_value": price_value }
+    recent = timezone.now() - timezone.timedelta(days=30)
+    active_wallets = WalletHistory.objects.filter(
+        tx_timestamp__gte=recent,
+    ).values_list("wallet__wallet_hash", flat=True).distinct()
+
+    currency_counts = WalletPreferences.objects.filter(
+        wallet__wallet_hash__in=active_wallets,
+    ).exclude(
+        selected_currency=""
+    ).values("selected_currency").annotate(
+        count=models.Count("selected_currency")
+    ).order_by("-count").values_list("selected_currency", flat=True)[:max_currencies]
+
+    currencies = [c.upper().strip() for c in currency_counts if c.strip()]
+    if "USD" not in currencies:
+        currencies.insert(0, "USD")
+
+    try:
+        REDIS_STORAGE.set(cache_key, json.dumps(currencies), ex=cache_ttl)
+    except Exception:
+        pass
+    return currencies
+
+
+@shared_task(queue='wallet_history_2', max_retries=3)
+def fetch_latest_bch_fiat_prices(currencies=None):
+    RELATIVE_CURRENCY = "BCH"
+    if not currencies:
+        currencies = _get_active_wallet_currencies()
+    elif isinstance(currencies, str):
+        currencies = [c.strip().upper() for c in currencies.split(",") if c.strip()]
+
+    try:
+        from rampp2p.models import FiatCurrency
+        rampp2p_currencies = FiatCurrency.objects.all().values_list('symbol', flat=True)
+        existing = {c.upper() for c in currencies}
+        for c in rampp2p_currencies:
+            c = c.upper().strip()
+            if c and c not in existing:
+                currencies.append(c)
+                existing.add(c)
+    except Exception:
+        pass
+
+    currencies_lower = [c.lower() for c in currencies if c]
+    if "usd" not in currencies_lower:
+        currencies_lower.append("usd")
+    vs_currencies = ",".join(currencies_lower)
+
+    try:
+        resp = requests.get(
+            f"https://pro-api.coingecko.com/api/v3/simple/price/?ids=bitcoin-cash&vs_currencies={vs_currencies}",
+            timeout=15,
+            headers={"x-cg-pro-api-key": settings.COINGECKO_API_KEY},
         )
-        asset_prices.append({
+        resp.raise_for_status()
+        response_data = resp.json()
+    except (requests.RequestException, ValueError) as e:
+        LOGGER.error(f"CoinGecko fetch failed for currencies {vs_currencies}: {e}")
+        raise
+
+    response_timestamp = timezone.now()
+    date_header = resp.headers.get("Date")
+    if date_header:
+        response_timestamp = timezone.datetime.strptime(
+            date_header, "%a, %d %b %Y %H:%M:%S %Z"
+        ).replace(tzinfo=pytz.UTC)
+    rates = response_data.get("bitcoin-cash", {})
+
+    results = []
+    for currency in currencies:
+        currency_low = currency.lower()
+        if currency_low == "ars":
+            usd_rate = Decimal(str(rates.get("usd", 0)))
+            try:
+                yadio = requests.get(f"https://api.yadio.io/rate/{currency_low}/usd", timeout=15).json()
+            except (requests.RequestException, ValueError) as e:
+                LOGGER.warning(f"Yadio fetch failed for ARS: {e}")
+                continue
+            if isinstance(yadio, dict) and "rate" in yadio:
+                price_value = Decimal(str(yadio["rate"])) * usd_rate
+                yadio_ts = yadio.get("timestamp")
+                if yadio_ts:
+                    ts = timezone.datetime.fromtimestamp(yadio_ts / 1000, tz=pytz.UTC)
+                else:
+                    ts = response_timestamp
+                source = "coingecko-yadio"
+            else:
+                continue
+        elif currency_low in rates:
+            price_value = Decimal(str(rates[currency_low]))
+            ts = response_timestamp
+            source = "coingecko"
+        else:
+            continue
+
+        instance, _ = AssetPriceLog.objects.update_or_create(
+            currency=currency,
+            relative_currency=RELATIVE_CURRENCY,
+            timestamp=ts,
+            source=source,
+            defaults={"price_value": price_value},
+        )
+        results.append({
             "currency": instance.currency,
             "timestamp": instance.timestamp,
             "source": instance.source,
             "price_value": instance.price_value,
         })
 
-    return asset_prices
+    return results
+
+
+@shared_task(queue='wallet_history_2', max_retries=3)
+def fetch_latest_usd_price():
+    return fetch_latest_bch_fiat_prices(currencies=["USD"])
 
 @shared_task(queue='wallet_history_2', max_retries=3)
 def parse_wallet_history_market_values(wallet_history_id):
