@@ -472,6 +472,9 @@ REST_FRAMEWORK = {
     ],
     "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
     "DEFAULT_FILTER_BACKENDS": ["django_filters.rest_framework.DjangoFilterBackend"],
+    "DEFAULT_THROTTLE_RATES": {
+        "webhook_secret": "10/min",
+    },
 }
 
 SIMPLE_JWT = {
@@ -516,6 +519,10 @@ TRANSACTIONS_PER_CHUNK = 100
 # Sideshift credentials
 SIDESHIFT_SECRET_KEY = config("SIDESHIFT_SECRET_KEY")
 SIDESHIFT_AFFILIATE_ID = config("SIDESHIFT_AFFILIATE_ID")
+
+# Webhook HMAC signing — generate with:
+# python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+WEBHOOK_SECRET_KEY = config("WEBHOOK_SECRET_KEY", default=None)
 
 LOGGING = {
     "version": 1,

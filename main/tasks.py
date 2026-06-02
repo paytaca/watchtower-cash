@@ -1,4 +1,5 @@
 import logging, json, requests
+from main.utils.webhook import send_webhook
 import pytz, time
 import math
 from decimal import Decimal
@@ -208,8 +209,8 @@ def client_acknowledgement(self, tx_obj_id):
                     if recipient.valid:
                         if recipient.web_url:
                             LOGGER.info(f"Webhook call to be sent to: {recipient.web_url}")
-                            LOGGER.info(f"Data: {str(data)}")
-                            resp = requests.post(recipient.web_url,data=data)
+                            LOGGER.debug(f"Data: {str(data)}")
+                            resp = send_webhook(recipient, data)
                             if resp.status_code == 200:
                                 this_transaction.update(acknowledged=True)
                                 LOGGER.info(f'ACKNOWLEDGEMENT SENT TX INFO : {transaction.txid} TO: {recipient.web_url} DATA: {str(data)}')
@@ -222,8 +223,6 @@ def client_acknowledgement(self, tx_obj_id):
                             else:
                                 LOGGER.error(resp)
                                 self.retry(countdown=3)
-
-                            this_transaction.update(acknowledged=True)
 
                 if websocket:
                     tokenid = transaction.token.tokenid

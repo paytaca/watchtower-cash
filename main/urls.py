@@ -92,6 +92,7 @@ main_urls += [
         name="task-status",
     ),
     re_path(r"^subscription/$", views.SubscribeViewSet.as_view(), name="subscribe"),
+    re_path(r"^recipient/webhook-secret/$", views.RecipientWebhookSecretView.as_view(), name="recipient-webhook-secret"),
     re_path(
         r"^blockheight/latest/$", views.BlockHeightViewSet.as_view(), name="blockheight"
     ),
