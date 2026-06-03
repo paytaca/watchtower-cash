@@ -163,6 +163,7 @@ class Merchant(models.Model):
     category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, blank=True)
     description = models.TextField(default='', blank=True)
     active = models.BooleanField(default=False)
+    nfc_enabled = models.BooleanField(default=False)
 
     logo = models.ImageField(upload_to='merchant_logos', null=True, blank=True)
     logo_30 = models.ImageField(upload_to='merchant_logos', null=True, blank=True)

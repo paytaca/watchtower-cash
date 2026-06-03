@@ -1,7 +1,8 @@
 import logging
 from rest_framework import permissions, exceptions
-
+from django.contrib.auth.models import AnonymousUser
 from paytacapos.models import Merchant, PaymentMethod
+from authentication.token import has_valid_nfc_server_token
 
 LOGGER = logging.getLogger("django")
 
@@ -34,6 +35,13 @@ class HasMerchantObjectPermission(permissions.BasePermission):
             return obj.wallet_hash == wallet.wallet_hash
 
         return obj.merchant.wallet_hash == wallet.wallet_hash
+
+class IsNFCServer(permissions.BasePermission):
+    def has_permission(self, request, view):
+        return isinstance(request.user, AnonymousUser) and request.auth
+    
+    def has_object_permission(self, request, view, obj):
+        return self.has_permission(request, view)
 
 class HasMinPaytacaVersionHeader(permissions.BasePermission):
     """

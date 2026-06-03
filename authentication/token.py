@@ -1,15 +1,31 @@
+import hmac
 from rest_framework.authentication import BaseAuthentication
 from rest_framework.exceptions import AuthenticationFailed
 from main.models import Wallet as MainWallet
 from rampp2p.models import Peer as PeerWallet
 from rampp2p.models import Arbiter as ArbiterWallet
 from .models import AuthToken
+from django.contrib.auth.models import AnonymousUser
 
 from cryptography.fernet import Fernet, InvalidToken
 from django.conf import settings
 
 import logging
 logger = logging.getLogger(__name__)
+
+
+def get_nfc_server_token_from_request(request):
+    return (
+        request.headers.get('x-nfc-server-token')
+        or request.headers.get('X-NFC-SERVER-TOKEN')
+        or request.headers.get('X_NFC_SERVER_TOKEN')
+        or request.META.get('HTTP_X_NFC_SERVER_TOKEN')
+        or ''
+    )
+
+def has_valid_nfc_server_token(request):
+    nfc_token = get_nfc_server_token_from_request(request)
+    return bool(nfc_token) and hmac.compare_digest(nfc_token, settings.NFC_SERVER_TOKEN)
 
 def get_wallet_hash_from_request(request):
     """
@@ -129,7 +145,7 @@ class WalletAuthentication(BaseAuthentication):
         wallet_hash, token_key = self.get_auth_headers(request)
 
         if not wallet_hash:
-            return (None, None)
+            return None
 
         wallet = self.get_wallet(wallet_hash)
 
@@ -140,3 +156,18 @@ class WalletAuthentication(BaseAuthentication):
             wallet.is_authenticated = True
 
         return (wallet, token_key) 
+
+class NfcServerAuthentication(BaseAuthentication):
+    def authenticate_header(self, request):
+        return 'X-NFC-Server-Token'
+
+    def authenticate(self, request):
+        nfc_token = get_nfc_server_token_from_request(request)
+        
+        if not nfc_token:
+            return None
+
+        if not has_valid_nfc_server_token(request):
+            raise AuthenticationFailed('Invalid NFC server token')
+        
+        return (AnonymousUser(), nfc_token)

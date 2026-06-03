@@ -721,6 +721,7 @@ class MerchantListSerializer(serializers.ModelSerializer):
             "last_update",
             "branch_count",
             "pos_device_count",
+            "nfc_enabled"
         ]
 
     def get_receiving_address(self, obj):
@@ -774,8 +775,10 @@ class MerchantSerializer(PermissionSerializerMixin, serializers.ModelSerializer)
             "branch_count",
             "pos_device_count",
             "active",
-            "verified"
+            "verified",
+            "nfc_enabled"
         ]
+        read_only_fields = ["nfc_enabled"]
 
     def validate_wallet_hash(self, value):
         if self.instance and self.instance.wallet_hash != value:
@@ -848,6 +851,17 @@ class MerchantSerializer(PermissionSerializerMixin, serializers.ModelSerializer)
         instance = super().update(instance, validated_data)
         result = instance.sync_main_branch_location()
         return instance
+
+
+class MerchantCardRegistrationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Merchant
+        fields = [
+            "id",
+            "wallet_hash",
+            "nfc_enabled",
+        ]
+        read_only_fields = ["id", "wallet_hash"]
 
 
 class BranchMerchantSerializer(serializers.ModelSerializer):
