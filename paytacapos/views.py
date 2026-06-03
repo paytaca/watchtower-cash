@@ -27,7 +27,7 @@ from rest_framework.exceptions import MethodNotAllowed
 
 from .serializers import *
 from .filters import *
-from .permissions import HasMerchantObjectPermission, HasPaymentObjectPermission, NFCServerHasPermission
+from .permissions import HasMerchantObjectPermission, HasPaymentObjectPermission, IsNFCServer
 from .pagination import CustomLimitOffsetPagination, WalletHistoryPageNumberPagination
 from .utils.websocket import send_device_update
 from .utils.report import SalesSummary
@@ -318,7 +318,6 @@ class MerchantViewSet(viewsets.ModelViewSet):
     ]
     authentication_classes = [
         WalletAuthentication,
-        NfcServerAuthentication
     ]
 
     def get_object(self, *args, **kwargs):
@@ -359,6 +358,21 @@ class MerchantViewSet(viewsets.ModelViewSet):
         if instance.devices.count():
             raise exceptions.ValidationError("Unable to remove merchant linked to a device")
         return super().destroy(request, *args, **kwargs)
+
+    @swagger_auto_schema(request_body=MerchantCardRegistrationSerializer, responses={200: MerchantCardRegistrationSerializer})
+    @decorators.action(
+        methods=["patch"],
+        detail=True,
+        url_path="card-registration",
+        authentication_classes=[NfcServerAuthentication],
+        permission_classes=[IsNFCServer],
+    )
+    def card_registration(self, request, *args, **kwargs):
+        instance = self.get_object()
+        serializer = MerchantCardRegistrationSerializer(instance, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
     
     @swagger_auto_schema(request_body=WalletLatestMerchantIndexSerializer, response={ 200: WalletLatestMerchantIndexResponseSerializer })
     @decorators.action(methods=['post'], detail=False)

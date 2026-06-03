@@ -1,9 +1,8 @@
-import hmac
 import logging
 from rest_framework import permissions, exceptions
 
 from paytacapos.models import Merchant, PaymentMethod
-from watchtower import settings
+from authentication.token import has_valid_nfc_server_token
 
 LOGGER = logging.getLogger("django")
 
@@ -37,16 +36,12 @@ class HasMerchantObjectPermission(permissions.BasePermission):
 
         return obj.merchant.wallet_hash == wallet.wallet_hash
 
-class NFCServerHasPermission(permissions.BasePermission):
+class IsNFCServer(permissions.BasePermission):
     def has_permission(self, request, view):
-        return True
+        return has_valid_nfc_server_token(request)
     
     def has_object_permission(self, request, view, obj):
-        if request.method != 'PATCH': return False
-        nfc_token = request.headers.get('X_NFC_SERVER_TOKEN', '')
-        if nfc_token and hmac.compare_digest(nfc_token, settings.NFC_SERVER_TOKEN):
-            return True
-        return False
+        return self.has_permission(request, view)
 
 class HasMinPaytacaVersionHeader(permissions.BasePermission):
     """

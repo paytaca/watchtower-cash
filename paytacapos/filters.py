@@ -1,7 +1,9 @@
 from django_filters import rest_framework as filters
+from rest_framework import exceptions
 
 from .models import *
 from django.db.models import Q, OuterRef
+from authentication.token import has_valid_nfc_server_token
 
 
 class PosDeviceFilter(filters.FilterSet):
@@ -33,7 +35,7 @@ class MerchantFilter(filters.FilterSet):
     street = filters.CharFilter(field_name="location__street", lookup_expr="icontains")
     category = filters.CharFilter(field_name="category__name", lookup_expr="icontains")
     has_vault = filters.BooleanFilter(method="has_vault_filter")
-    nfc_enabled = filters.BooleanFilter(field_name="nfc_enabled")
+    nfc_enabled = filters.BooleanFilter(method="nfc_enabled_filter")
     active = filters.BooleanFilter()
     verified = filters.BooleanFilter()
     name = filters.CharFilter(method="name_address_filter")
@@ -102,6 +104,12 @@ class MerchantFilter(filters.FilterSet):
             Q(pubkey__isnull=value) |
             Q(index__isnull=value)
         )
+
+    def nfc_enabled_filter(self, queryset, name, value):
+        if not has_valid_nfc_server_token(self.request):
+            raise exceptions.PermissionDenied("Filtering by nfc_enabled requires NFC server authentication")
+
+        return queryset.filter(nfc_enabled=value)
 
 class PosWalletHistoryFilter(filters.FilterSet):
     asset_id = filters.CharFilter(method="asset_id_filter")

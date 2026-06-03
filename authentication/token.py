@@ -13,6 +13,20 @@ from django.conf import settings
 import logging
 logger = logging.getLogger(__name__)
 
+
+def get_nfc_server_token_from_request(request):
+    return (
+        request.headers.get('x-nfc-server-token')
+        or request.headers.get('X-NFC-SERVER-TOKEN')
+        or request.headers.get('X_NFC_SERVER_TOKEN')
+        or request.META.get('HTTP_X_NFC_SERVER_TOKEN')
+        or ''
+    )
+
+def has_valid_nfc_server_token(request):
+    nfc_token = get_nfc_server_token_from_request(request)
+    return bool(nfc_token) and hmac.compare_digest(nfc_token, settings.NFC_SERVER_TOKEN)
+
 def get_wallet_hash_from_request(request):
     """
     Best-effort retrieval of wallet hash from headers.
@@ -145,12 +159,12 @@ class WalletAuthentication(BaseAuthentication):
 
 class NfcServerAuthentication(BaseAuthentication):
     def authenticate(self, request):
-        nfc_token = request.headers.get('X_NFC_SERVER_TOKEN', '')
+        nfc_token = get_nfc_server_token_from_request(request)
         
         if not nfc_token:
             return None
 
-        if not hmac.compare_digest(nfc_token, settings.NFC_SERVER_TOKEN):
+        if not has_valid_nfc_server_token(request):
             raise AuthenticationFailed('Invalid NFC server token')
         
         return (AnonymousUser(), nfc_token)
