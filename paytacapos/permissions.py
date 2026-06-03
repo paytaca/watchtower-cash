@@ -1,6 +1,6 @@
 import logging
 from rest_framework import permissions, exceptions
-
+from django.contrib.auth.models import AnonymousUser
 from paytacapos.models import Merchant, PaymentMethod
 from authentication.token import has_valid_nfc_server_token
 
@@ -38,7 +38,7 @@ class HasMerchantObjectPermission(permissions.BasePermission):
 
 class IsNFCServer(permissions.BasePermission):
     def has_permission(self, request, view):
-        return has_valid_nfc_server_token(request)
+        return isinstance(request.user, AnonymousUser) and request.auth
     
     def has_object_permission(self, request, view, obj):
         return self.has_permission(request, view)

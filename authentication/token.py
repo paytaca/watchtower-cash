@@ -158,6 +158,9 @@ class WalletAuthentication(BaseAuthentication):
         return (wallet, token_key) 
 
 class NfcServerAuthentication(BaseAuthentication):
+    def authenticate_header(self, request):
+        return 'X-NFC-Server-Token'
+
     def authenticate(self, request):
         nfc_token = get_nfc_server_token_from_request(request)
         

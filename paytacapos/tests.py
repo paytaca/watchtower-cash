@@ -69,7 +69,7 @@ class TestMerchantCardRegistrationView(TestCase):
             HTTP_X_NFC_SERVER_TOKEN="invalid-token",
         )
 
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 401)
         self.merchant.refresh_from_db()
         self.assertFalse(self.merchant.nfc_enabled)
 
@@ -86,3 +86,16 @@ class TestMerchantCardRegistrationView(TestCase):
         self.merchant.refresh_from_db()
         self.assertEqual(self.merchant.name, "Updated Merchant")
         self.assertFalse(self.merchant.nfc_enabled)
+    
+    def test_nfc_enabled_filter_requires_nfc_token(self):
+        # without token
+        response = self.client.get(reverse("paytacapos-merchants-list"), {"nfc_enabled": "true"})
+        self.assertEqual(response.status_code, 403)
+
+        # with valid token
+        response = self.client.get(
+            reverse("paytacapos-merchants-list"),
+            {"nfc_enabled": "true"},
+            HTTP_X_NFC_SERVER_TOKEN=_TEST_NFC_SERVER_TOKEN,
+        )
+        self.assertEqual(response.status_code, 200)
