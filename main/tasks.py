@@ -345,9 +345,12 @@ def save_record(
         value                : value of transaction (amount = value in BCH, value = varies on tokens)
     """
 
-    subscription = Subscription.objects.filter(
-        address__address=transaction_address             
-    )
+    # Treat the canonical BCH form and the preserved token-address form as the same subscription target.
+    matched_address = Address.objects.filter(
+        Q(address=transaction_address) | Q(token_address=transaction_address)
+    ).first()
+
+    subscription = Subscription.objects.filter(address=matched_address) if matched_address else Subscription.objects.none()
 
     # We are only tracking outputs of either subscribed addresses or those of transactions
     # that spend previous transactions with outputs involving tracked addresses
@@ -359,7 +362,10 @@ def save_record(
     LOGGER.info(f'Saving txid: {transactionid} | #{index} | {transaction_address}\nTriggered from {trigger_info}')
     rampp2p_utils.process_transaction(transactionid, transaction_address, inputs=inputs)
 
-    address_obj, _ = Address.objects.get_or_create(address=transaction_address)
+    if matched_address:
+        address_obj = matched_address
+    else:
+        address_obj, _ = Address.objects.get_or_create(address=transaction_address)
 
     try:
         index = int(index)

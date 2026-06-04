@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from django.db.models import Q
 
 from main.models import Address, Subscription
 
@@ -15,7 +16,8 @@ class LiveUpdatesPaymentSerializer(serializers.Serializer):
     update_type = serializers.ChoiceField(choices=LIVE_UPDATES_PAYMENT_TYPES)
 
     def validate_address(self, value):
-        address = Address.objects.filter(address=value)
+        # Accept either the canonical BCH address or the preserved token-address form.
+        address = Address.objects.filter(Q(address=value) | Q(token_address=value))
         if address.exists():
             subscription = Subscription.objects.filter(address=address.first())
             if subscription.exists():

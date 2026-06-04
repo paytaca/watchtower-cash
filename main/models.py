@@ -243,11 +243,13 @@ class Address(PostgresModel):
             if is_slp_address(self.address):
                 wallet.wallet_type = 'slp'
             elif is_bch_address(self.address) or is_token_address(self.address):
+                original_address = self.address
                 if is_token_address(self.address):
-                    self.address = bch_address_converter(self.address, to_token_addr=False)
-                    self.token_address = self.address
+                    # Keep the token-form address for lookup while storing the BCH form canonically.
+                    self.address = bch_address_converter(original_address, to_token_addr=False)
+                    self.token_address = original_address
                 else:
-                    self.token_address = bch_address_converter(self.address)
+                    self.token_address = bch_address_converter(original_address)
 
                 wallet.wallet_type = 'bch'
             elif re.match("0x[0-9a-f]{40}", self.address, re.IGNORECASE):
