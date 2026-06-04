@@ -183,7 +183,7 @@ class PosDeviceViewSet(
     def link_code_data(self, request, *args, **kwargs):
         link_code = request.query_params.get("code", None)
         link_request_data = PosDeviceLinkRequestSerializer.retrieve_link_request_data(link_code)
-        serializer = PosDeviceLinkRequestSerializer(data=link_request_data, context={'request': request})
+        serializer = PosDeviceLinkRequestSerializer(data=link_request_data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=400)
         return Response(serializer.validated_data["encrypted_xpubkey"])
@@ -199,7 +199,7 @@ class PosDeviceViewSet(
     def link_code_data_v2(self, request, *args, **kwargs):
         link_code = request.query_params.get("code", None)
         link_request_data = PosDeviceLinkRequestV2Serializer.retrieve_link_request_data(link_code)
-        serializer = PosDeviceLinkRequestV2Serializer(data=link_request_data, context={'request': request})
+        serializer = PosDeviceLinkRequestV2Serializer(data=link_request_data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=400)
         return Response(serializer.validated_data["encrypted_data"])
@@ -215,7 +215,7 @@ class PosDeviceViewSet(
     def nfc_request_code_data(self, request, *args, **kwargs):
         nfc_code = request.query_params.get("code", None)
         nfc_request_data = PosDeviceNfcRequestSerializer.retrieve_request_code_data(nfc_code)
-        serializer = PosDeviceNfcRequestSerializer(data=nfc_request_data, context={'request': request})
+        serializer = PosDeviceNfcRequestSerializer(data=nfc_request_data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=400)
         return Response(serializer.validated_data["encrypted_data"])
