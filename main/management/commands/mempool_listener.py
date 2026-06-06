@@ -24,8 +24,6 @@ if settings.BCH_NETWORK == 'mainnet':
 else:
     mqtt_client = mqtt.Client(client_id=mqtt_client_id, clean_session=False)
 
-mqtt_client.connect(settings.MQTT_HOST, settings.MQTT_PORT, keepalive=60)
-
 
 # The callback for when the client receives a CONNACK response from the server.
 def on_connect(client, userdata, flags, rc):
@@ -121,4 +119,22 @@ class Command(BaseCommand):
     help = 'Run the mempool listener'
 
     def handle(self, *args, **options):
+        # Retry initial connection with backoff — MQTT broker (docker-host) may
+        # not be ready when this process starts (startup race condition).
+        reconnect_count, reconnect_delay = 0, FIRST_RECONNECT_DELAY
+        while reconnect_count < MAX_RECONNECT_COUNT:
+            try:
+                mqtt_client.connect(settings.MQTT_HOST, settings.MQTT_PORT, keepalive=60)
+                LOGGER.info(f"Connected to MQTT broker at {settings.MQTT_HOST}:{settings.MQTT_PORT}")
+                break
+            except Exception as err:
+                LOGGER.error(f"MQTT connect failed: {err}. Retrying in {reconnect_delay}s...")
+                time.sleep(reconnect_delay)
+                reconnect_delay *= RECONNECT_RATE
+                reconnect_delay = min(reconnect_delay, MAX_RECONNECT_DELAY)
+                reconnect_count += 1
+        else:
+            LOGGER.error(f"MQTT connect failed after {reconnect_count} attempts. Exiting.")
+            return
+
         mqtt_client.loop_forever()

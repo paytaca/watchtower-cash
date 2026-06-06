@@ -48,6 +48,21 @@ services:
     image: "redis:alpine"
     env_file:
       - /root/watchtower/compose/.env_chipnet
+  emqx:
+    image: "emqx/emqx:5.0.26"
+    environment:
+      - EMQX_NAME=watchtower-chipnet
+      - EMQX_ALLOW_ANONYMOUS=true
+    volumes:
+      - emqx_data:/opt/emqx/data
+      - emqx_log:/opt/emqx/log
+    ports:
+      - "1883:1883"
+      - "8083:8083"
+      - "8084:8084"
+      - "8883:8883"
+      - "18083:18083"
+    restart: on-failure
   backend:
     container_name: watchtower_backend
     build: /root/watchtower
@@ -64,6 +79,9 @@ services:
     depends_on:
       - postgres
       - redis
+      - emqx
 volumes:
   watchtower_db_data:
     external: true
+  emqx_data:
+  emqx_log:
