@@ -225,10 +225,10 @@ def client_acknowledgement(self, tx_obj_id):
                                 self.retry(countdown=3)
 
                 if websocket:
-                    tokenid = transaction.token.tokenid
+                    tokenid = transaction.token.tokenid or ''
                     room_name = transaction.address.address.replace(':','_')
 
-                    if tokenid == settings.WT_DEFAULT_CASHTOKEN_ID:
+                    if token_name.lower() == 'bch' or tokenid == settings.WT_DEFAULT_CASHTOKEN_ID:
                         tokenid = ''
 
                     room_name += f'_{tokenid}'
@@ -3008,7 +3008,7 @@ def _process_mempool_transaction(tx_hash, tx_hex=None, immediate=False, force=Fa
         # if passed through the throttled task queue
         # skip processing if it already has at least 1 confirmation
         if not immediate:
-            if 'confirmations' in tx.keys() and not force:
+            if tx.get('confirmations') and not force:
                 LOGGER.info('Skipped confirmed tx: ' + str(tx_hash))
                 return
 

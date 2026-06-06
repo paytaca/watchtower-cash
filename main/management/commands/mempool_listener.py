@@ -43,9 +43,14 @@ def _addresses_subscribed(tx_hex):
         if 'address' in tx_in.keys():
             tx_addresses.append(tx_in['address'])
     for tx_out in tx['vout']:
-        _addrs = tx_out.get('scriptPubKey').get('addresses')
+        scriptPubKey = tx_out.get('scriptPubKey', {})
+        _addrs = scriptPubKey.get('addresses')
         if _addrs:
             tx_addresses += _addrs
+        else:
+            _addr = scriptPubKey.get('address')
+            if _addr:
+                tx_addresses.append(_addr)
     
     # Check Redis for actively-listening addresses first (fastest)
     if BCHAddressManager.is_any_address_active(tx_addresses):

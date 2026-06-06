@@ -316,6 +316,8 @@ class BCHN(object):
             script_pubkey = tx_output["scriptPubKey"]
             if "addresses" in script_pubkey.keys():
                 details["address"] = script_pubkey["addresses"][0]
+            elif "address" in script_pubkey.keys():
+                details["address"] = script_pubkey["address"]
             elif script_pubkey.get("type") == "nulldata":
                 # remove first characters '6a'
                 details["op_return"] = script_pubkey["hex"][2:]
