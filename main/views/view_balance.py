@@ -226,8 +226,9 @@ class Balance(APIView):
                 data['balance'] = self.truncate(bch_balance, 8)
                 data['valid'] = True
                 
-                # Cache for 5 minutes (same as wallet balance cache)
-                cache.set(cache_key, json.dumps(data), ex=60 * 5)
+                # Cache: 5min (mainnet) / 1min (chipnet/testnet) for faster balance updates
+                cache_ttl = 60 if settings.BCH_NETWORK != 'mainnet' else 60 * 5
+                cache.set(cache_key, json.dumps(data), ex=cache_ttl)
 
         if wallet_hash:
             try:
@@ -324,13 +325,15 @@ class Balance(APIView):
                         data['yield'] = None # compute_wallet_yield(wallet_hash)
                         data['valid'] = True
 
-                        cache.set(bch_cache_key, json.dumps(data), ex=60 * 5) # 5 minutes
+                        cache_ttl = 60 if settings.BCH_NETWORK != 'mainnet' else 60 * 5
+                        cache.set(bch_cache_key, json.dumps(data), ex=cache_ttl)
                 else:
                     ct_cache_key = f'wallet:balance:token:{wallet_hash}:{_category}'
                     cached_data = cache.get(ct_cache_key)
                     if cached_data:
                         data = json.loads(cached_data) 
                     else:
+                        cache_ttl = 60 if settings.BCH_NETWORK != 'mainnet' else 60 * 5
                         try:
                             if is_cashtoken_nft:
                                 token = CashNonFungibleToken.objects.get(
@@ -358,14 +361,14 @@ class Balance(APIView):
                                 data['commitment'] = token.commitment
                                 data['capability'] = token.capability
 
-                            cache.set(ct_cache_key, json.dumps(data), ex=60 * 5) # 5 minutes
+                            cache.set(ct_cache_key, json.dumps(data), ex=cache_ttl)
                         except ObjectDoesNotExist:
                             # Token not found, return zero balance
                             data['balance'] = 0
                             data['spendable'] = 0
                             data['token_id'] = _category
                             data['valid'] = True
-                            cache.set(ct_cache_key, json.dumps(data), ex=60 * 5) # 5 minutes
+                            cache.set(ct_cache_key, json.dumps(data), ex=cache_ttl)
 
             # Update last_balance_check timestamp
             wallet.last_balance_check = timezone.now()

@@ -635,6 +635,13 @@ ANYHEDGE = {
 
 
 BCH_NETWORK = config("BCH_NETWORK", default="chipnet")
+
+# Faster polling for non-mainnet (chipnet/testnet) to reduce balance update latency.
+# Mainnet blocks are larger/more frequent so we keep the default intervals there.
+if BCH_NETWORK != "mainnet":
+    CELERY_BEAT_SCHEDULE["get_latest_block"]["schedule"] = 2
+    CELERY_BEAT_SCHEDULE["manage_blocks"]["schedule"] = 3
+
 RPC_USER = decipher(config("RPC_USER"))
 
 FULCRUM_PORT = 50001

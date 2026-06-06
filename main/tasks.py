@@ -893,6 +893,9 @@ def manage_blocks(self):
 
                 transactions = NODE.BCH.get_block(block.number, verbosity=3)
                 block_time = NODE.BCH.get_block_stats(block.number, stats=["time"])["time"]
+                block_age = timezone.now().timestamp() - block_time
+                LOGGER.info(f"Processing block {block.number} (age: {block_age:.1f}s, "
+                            f"txs: {len(transactions)})")
                 for tx in transactions:
                     tx["time"] = block_time # tx is from .get_block() which doesn't return tx's timestamp
                     parsed_tx = NODE.BCH._parse_transaction(tx)
