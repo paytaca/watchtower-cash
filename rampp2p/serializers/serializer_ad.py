@@ -241,6 +241,7 @@ class StoreAdSerializer(BaseAdSerializer):
             'completion_rate': completion_rate,
             'completed_trades': completed_trades,
             'failed_trades': failed_trades,
+            'reported_at': obj.owner.reported_at,
             'is_online': obj.owner.is_online,
             'last_online_at': obj.owner.last_online_at
         }
