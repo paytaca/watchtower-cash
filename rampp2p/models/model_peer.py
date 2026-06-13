@@ -81,6 +81,56 @@ class Peer(models.Model):
             completion_rate = released_count / completed_count * 100
         return completion_rate
     
+    def get_trade_stats(self):
+        """Fetch all trade stats in a single query instead of 7+ separate queries."""
+        Order = apps.get_model('rampp2p', 'Order')
+        Status = apps.get_model('rampp2p', 'Status')
+        OrderFeedback = apps.get_model('rampp2p', 'OrderFeedback')
+
+        orders = Order.objects.filter(
+            models.Q(ad_snapshot__ad__owner__id=self.id) | models.Q(owner__id=self.id)
+        )
+
+        # Annotate with latest status in a single subquery
+        latest_status_subquery = Status.objects.filter(
+            order_id=models.OuterRef('id')
+        ).order_by('-created_at')[:1]
+
+        orders = orders.annotate(
+            latest_status=models.Subquery(latest_status_subquery.values('status')),
+            latest_status_created_by=models.Subquery(latest_status_subquery.values('created_by'))
+        )
+
+        # Single aggregate query for all counts
+        stats = orders.aggregate(
+            total=models.Count('id'),
+            released=models.Count('id', filter=models.Q(latest_status='RLS')),
+            canceled=models.Count('id', filter=models.Q(latest_status='CNCL', latest_status_created_by=models.F('ad_snapshot__ad__owner__wallet_hash'))),
+            refunded=models.Count('id', filter=models.Q(latest_status='RFN')) - models.Count(
+                'id', filter=models.Q(latest_status='RFN', appeal__owner__wallet_hash=self.wallet_hash)
+            ),
+        )
+
+        released_count = stats['released']
+        canceled_count = stats['canceled']
+        refunded_count = max(0, stats['refunded'])
+        total = stats['total']
+        completed_count = released_count + canceled_count + refunded_count
+        completion_rate = 0
+        if completed_count > 0:
+            completion_rate = released_count / completed_count * 100
+
+        # Rating in a separate simple query (different table)
+        avg_rating = OrderFeedback.objects.filter(to_peer=self).aggregate(models.Avg('rating'))['rating__avg']
+
+        return {
+            'trade_count': total,
+            'completed_trades': released_count,
+            'failed_trades': canceled_count + refunded_count,
+            'completion_rate': completion_rate,
+            'rating': avg_rating,
+        }
+    
 class ReservedName(models.Model):
     peer = models.ForeignKey(Peer, on_delete=models.CASCADE, null=True, blank=True)
     name = models.CharField(max_length=64, unique=True)

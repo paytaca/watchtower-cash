@@ -228,19 +228,16 @@ class StoreAdSerializer(BaseAdSerializer):
         return False
 
     def get_owner(self, obj: models.Ad):
-        trade_count = obj.owner.get_trade_count()
-        completion_rate = obj.owner.get_completion_rate()
-        completed_trades = obj.owner.get_completed_trades_count()
-        failed_trades = obj.owner.get_failed_trades_count()
+        stats = obj.owner.get_trade_stats()
         return {
             'id': obj.owner.id,
             'chat_identity_id': obj.owner.chat_identity_id,
             'name': obj.owner.name,
-            'rating':  obj.owner.average_rating(),
-            'trade_count': trade_count,
-            'completion_rate': completion_rate,
-            'completed_trades': completed_trades,
-            'failed_trades': failed_trades,
+            'rating':  stats['rating'],
+            'trade_count': stats['trade_count'],
+            'completion_rate': stats['completion_rate'],
+            'completed_trades': stats['completed_trades'],
+            'failed_trades': stats['failed_trades'],
             'reported_at': obj.owner.reported_at,
             'is_online': obj.owner.is_online,
             'last_online_at': obj.owner.last_online_at
@@ -344,19 +341,16 @@ class AdSerializer(BaseAdSerializer):
         return fees
     
     def get_owner(self, obj: models.Ad):
-        trade_count = obj.owner.get_trade_count()
-        completion_rate = obj.owner.get_completion_rate()
-        completed_trades = obj.owner.get_completed_trades_count()
-        failed_trades = obj.owner.get_failed_trades_count()
+        stats = obj.owner.get_trade_stats()
         return {
             'id': obj.owner.id,
             'chat_identity_id': obj.owner.chat_identity_id,
             'name': obj.owner.name,
-            'rating':  obj.owner.average_rating(),
-            'trade_count': trade_count,
-            'completion_rate': completion_rate,
-            'completed_trades': completed_trades,
-            'failed_trades': failed_trades,
+            'rating':  stats['rating'],
+            'trade_count': stats['trade_count'],
+            'completion_rate': stats['completion_rate'],
+            'completed_trades': stats['completed_trades'],
+            'failed_trades': stats['failed_trades'],
             'reported_at': obj.owner.reported_at,
             'is_online': obj.owner.is_online,
             'last_online_at': obj.owner.last_online_at
