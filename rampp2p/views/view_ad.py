@@ -9,6 +9,7 @@ from django.db.models import (
     Q,
     Count,
     F,
+    Value,
     ExpressionWrapper,
     DecimalField,
     Case,
