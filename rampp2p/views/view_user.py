@@ -126,14 +126,18 @@ class PeerViewSet(viewsets.GenericViewSet):
     serializer_class = serializers.PeerSerializer
 
     def get_authenticators(self):
-        if self.action == 'create':
-            return []
-        return [TokenAuthentication()]
+        if self.request.method in ['GET', 'PATCH']:
+            return [TokenAuthentication()]
+        if self.request.method == 'POST' and 'pk' in self.kwargs:
+            return [TokenAuthentication()]
+        return []
 
     def get_permissions(self):
-        if self.action == 'create':
-            return [AllowAny()]
-        return [RampP2PIsAuthenticated()]
+        if self.request.method in ['GET', 'PATCH']:
+            return [RampP2PIsAuthenticated()]
+        if self.request.method == 'POST' and 'pk' in self.kwargs:
+            return [RampP2PIsAuthenticated()]
+        return [AllowAny()]
     
     def retrieve(self, request, pk):
         try:
