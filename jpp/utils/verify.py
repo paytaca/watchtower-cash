@@ -77,7 +77,9 @@ def verify_tx_hex(invoice_obj, tx_hex, verify_inputs=True):
         tx_fee = tx_total_input - tx_total_output
         expected_tx_fee = invoice_obj.required_fee_per_byte * tx["size"]
         expected_tx_fee = math.ceil(expected_tx_fee)
-        if tx_fee < expected_tx_fee:
+        # Allow a tolerance of 2 satoshis to account for rounding discrepancies
+        # between client-side and server-side transaction size estimation
+        if expected_tx_fee - tx_fee > 2:
             raise VerifyError(f"Expected tx fee of {expected_tx_fee} satoshis but got {tx_fee} satoshis")
 
     return True
