@@ -261,6 +261,14 @@ class PeerViewSet(viewsets.GenericViewSet):
     def report(self, request, pk):
         reporter_peer = request.user
 
+        reason = request.data.get('reason')
+        valid_reasons = [choice[0] for choice in models.Report.REASON_CHOICES]
+        if not reason or reason not in valid_reasons:
+            return Response(
+                {'error': 'A valid reason is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         try:
             reported_peer = models.Peer.objects.get(pk=pk)
         except models.Peer.DoesNotExist:
@@ -295,7 +303,8 @@ class PeerViewSet(viewsets.GenericViewSet):
 
         models.Report.objects.create(
             reporter=reporter_peer,
-            reported_peer=reported_peer
+            reported_peer=reported_peer,
+            reason=reason
         )
 
         reported_peer.reported_at = timezone.now()
