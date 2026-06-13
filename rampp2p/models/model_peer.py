@@ -63,6 +63,12 @@ class Peer(models.Model):
     def count_released_orders(self):
         return self.get_orders(status='RLS').count()
 
+    def get_completed_trades_count(self):
+        return self.count_released_orders()
+
+    def get_failed_trades_count(self):
+        return self.count_canceled_orders() + self.count_refunded_orders()
+
     def get_completion_rate(self):
         # completion_rate = released_count / (released_count + canceled_count + refunded_count)
         released_count = self.count_released_orders()

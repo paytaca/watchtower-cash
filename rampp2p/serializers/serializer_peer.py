@@ -26,6 +26,8 @@ class PeerProfileSerializer(serializers.ModelSerializer):
 class PeerSerializer(serializers.ModelSerializer):
     trade_count = serializers.SerializerMethodField()
     completion_rate = serializers.SerializerMethodField()
+    completed_trades = serializers.SerializerMethodField()
+    failed_trades = serializers.SerializerMethodField()
     rating = serializers.SerializerMethodField()
 
     class Meta:
@@ -39,6 +41,8 @@ class PeerSerializer(serializers.ModelSerializer):
             'is_disabled',
             'trade_count',
             'completion_rate',
+            'completed_trades',
+            'failed_trades',
             'rating',
             'created_at',
             'is_online',
@@ -53,6 +57,12 @@ class PeerSerializer(serializers.ModelSerializer):
     
     def get_completion_rate(self, obj: Peer):
         return obj.get_completion_rate()
+
+    def get_completed_trades(self, obj: Peer):
+        return obj.get_completed_trades_count()
+
+    def get_failed_trades(self, obj: Peer):
+        return obj.get_failed_trades_count()
 
 class PeerCreateSerializer(serializers.ModelSerializer):
     class Meta:

@@ -230,6 +230,8 @@ class StoreAdSerializer(BaseAdSerializer):
     def get_owner(self, obj: models.Ad):
         trade_count = obj.owner.get_trade_count()
         completion_rate = obj.owner.get_completion_rate()
+        completed_trades = obj.owner.get_completed_trades_count()
+        failed_trades = obj.owner.get_failed_trades_count()
         return {
             'id': obj.owner.id,
             'chat_identity_id': obj.owner.chat_identity_id,
@@ -237,6 +239,8 @@ class StoreAdSerializer(BaseAdSerializer):
             'rating':  obj.owner.average_rating(),
             'trade_count': trade_count,
             'completion_rate': completion_rate,
+            'completed_trades': completed_trades,
+            'failed_trades': failed_trades,
             'is_online': obj.owner.is_online,
             'last_online_at': obj.owner.last_online_at
         }
@@ -250,11 +254,15 @@ class ListAdSerializer(BaseAdSerializer):
 
     trade_count = serializers.SerializerMethodField()
     completion_rate = serializers.SerializerMethodField()
+    completed_trades = serializers.SerializerMethodField()
+    failed_trades = serializers.SerializerMethodField()
 
     class Meta(BaseAdSerializer.Meta):
         fields = BaseAdSerializer.Meta.fields + [
             'trade_count',
             'completion_rate',
+            'completed_trades',
+            'failed_trades',
             'payment_methods',
             'is_public'
         ]
@@ -264,6 +272,12 @@ class ListAdSerializer(BaseAdSerializer):
 
     def get_completion_rate(self, obj: models.Ad):
         return obj.get_completion_rate()
+
+    def get_completed_trades(self, obj: models.Ad):
+        return obj.get_completed_trades_count()
+
+    def get_failed_trades(self, obj: models.Ad):
+        return obj.get_failed_trades_count()
     
 class CashinAdSerializer(BaseAdSerializer):
     """
