@@ -39,6 +39,7 @@ class PeerSerializer(serializers.ModelSerializer):
             'public_key',
             'address',
             'is_disabled',
+            'reported_at',
             'trade_count',
             'completion_rate',
             'completed_trades',

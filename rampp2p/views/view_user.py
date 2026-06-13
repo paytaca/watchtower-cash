@@ -2,12 +2,14 @@ from rest_framework import status, viewsets
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
+from rest_framework.exceptions import AuthenticationFailed
 
 from django.core.exceptions import ValidationError
 from django.db.utils import IntegrityError
 from django.db.models import Q
 from django.http import Http404
 from django.utils import timezone
+from datetime import timedelta
 
 from authentication.token import TokenAuthentication
 from authentication.serializers import UserSerializer
@@ -17,6 +19,7 @@ import rampp2p.serializers as serializers
 import rampp2p.models as models
 from rampp2p.viewcodes import ViewCode
 from rampp2p.utils.signature import verify_signature, get_verification_headers
+from rampp2p.slackbot.send import MessageBase
 
 import math
 from datetime import datetime, timedelta
@@ -123,14 +126,14 @@ class PeerViewSet(viewsets.GenericViewSet):
     serializer_class = serializers.PeerSerializer
 
     def get_authenticators(self):
-        if self.request.method in ['GET', 'PATCH']:
-            return [TokenAuthentication()]
-        return []
+        if self.action == 'create':
+            return []
+        return [TokenAuthentication()]
 
     def get_permissions(self):
-        if self.request.method in ['GET', 'PATCH']:
-            return [RampP2PIsAuthenticated()]
-        return [AllowAny()]
+        if self.action == 'create':
+            return [AllowAny()]
+        return [RampP2PIsAuthenticated()]
     
     def retrieve(self, request, pk):
         try:
@@ -250,6 +253,77 @@ class PeerViewSet(viewsets.GenericViewSet):
             return Response(UserSerializer(user_info).data, status=status.HTTP_200_OK)
         except IntegrityError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+
+    def report(self, request, pk):
+        reporter_peer = request.user
+
+        try:
+            reported_peer = models.Peer.objects.get(pk=pk)
+        except models.Peer.DoesNotExist:
+            raise Http404
+
+        if reporter_peer.id == reported_peer.id:
+            return Response(
+                {'error': 'You cannot report yourself'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        has_trade = models.Order.objects.filter(
+            Q(owner__id=reporter_peer.id) | Q(ad_snapshot__ad__owner__id=reporter_peer.id)
+        ).filter(
+            Q(owner__id=reported_peer.id) | Q(ad_snapshot__ad__owner__id=reported_peer.id)
+        ).exists()
+
+        if not has_trade:
+            return Response(
+                {'error': 'You can only report users you have traded with'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        if models.Report.objects.filter(
+            reporter=reporter_peer,
+            reported_peer=reported_peer
+        ).exists():
+            return Response(
+                {'error': 'You have already reported this user'},
+                status=status.HTTP_409_CONFLICT
+            )
+
+        models.Report.objects.create(
+            reporter=reporter_peer,
+            reported_peer=reported_peer
+        )
+
+        reported_peer.reported_at = timezone.now()
+
+        report_count = models.Report.objects.filter(
+            reported_peer=reported_peer
+        ).count()
+
+        auto_disabled = False
+        if report_count >= 3:
+            reported_peer.is_disabled = True
+            auto_disabled = True
+
+        reported_peer.save()
+
+        if auto_disabled:
+            report_word = "report" if report_count == 1 else "reports"
+            MessageBase.send_message(
+                text=f'User *{reporter_peer.name}* reported *{reported_peer.name}* '
+                     f'— *{reported_peer.name}* has been automatically disabled ({report_count} reports)'
+            )
+        else:
+            report_word = "report" if report_count == 1 else "reports"
+            MessageBase.send_message(
+                text=f'User *{reporter_peer.name}* reported *{reported_peer.name}* '
+                     f'({report_count} {report_word})'
+            )
+
+        return Response(
+            {'detail': 'User reported successfully'},
+            status=status.HTTP_200_OK
+        )
 
 class ArbiterFeedbackViewSet(viewsets.GenericViewSet):
     authentication_classes = [TokenAuthentication]

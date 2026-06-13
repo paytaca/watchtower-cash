@@ -46,6 +46,7 @@ urlpatterns = [
         ),
     ),
     path("peer/<int:pk>/", PeerViewSet.as_view({"get": "retrieve"})),
+    path("peer/<int:pk>/report/", PeerViewSet.as_view({"post": "report"})),
     path("peer/<str:wallet_hash>/", PeerViewSet.as_view({"get": "retrieve_by_wallet"})),
     path("arbiter/", ArbiterView.as_view(), name="arbiter-list-create-edit"),
     path("arbiter/<str:wallet_hash>/", ArbiterView.as_view(), name="arbiter-detail"),
