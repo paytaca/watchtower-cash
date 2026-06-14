@@ -292,12 +292,14 @@ class PeerViewSet(viewsets.GenericViewSet):
                 status=status.HTTP_403_FORBIDDEN
             )
 
+        cutoff = timezone.now() - timedelta(hours=24)
         if models.Report.objects.filter(
             reporter=reporter_peer,
-            reported_peer=reported_peer
+            reported_peer=reported_peer,
+            created_at__gte=cutoff
         ).exists():
             return Response(
-                {'error': 'You have already reported this user'},
+                {'error': 'You have already reported this user within the last 24 hours'},
                 status=status.HTTP_409_CONFLICT
             )
 

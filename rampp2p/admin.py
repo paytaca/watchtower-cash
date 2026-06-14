@@ -364,6 +364,14 @@ class SlackMessageLogAdmin(admin.ModelAdmin):
 
     delete_in_slack.short_description = "Delete selected messages in slack"
 
+@admin.register(Report)
+class ReportAdmin(admin.ModelAdmin):
+    list_display = ['id', 'reporter', 'reported_peer', 'reason', 'created_at']
+    list_filter = ['reason', 'created_at']
+    search_fields = ['reporter__name', 'reported_peer__name']
+    readonly_fields = ['reporter', 'reported_peer', 'reason', 'created_at']
+    date_hierarchy = 'created_at'
+
 admin.site.register(ImageUpload)
 admin.site.register(OrderPaymentAttachment)
 admin.site.register(ReservedName)
