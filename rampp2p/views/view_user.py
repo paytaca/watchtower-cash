@@ -270,12 +270,7 @@ class PeerViewSet(viewsets.GenericViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        try:
-            reported_peer = models.Peer.objects.get(pk=pk)
-        except models.Peer.DoesNotExist:
-            raise Http404
-
-        if reporter_peer.id == reported_peer.id:
+        if reporter_peer.id == int(pk):
             return Response(
                 {'error': 'You cannot report yourself'},
                 status=status.HTTP_400_BAD_REQUEST
@@ -284,7 +279,7 @@ class PeerViewSet(viewsets.GenericViewSet):
         has_trade = models.Order.objects.filter(
             Q(owner__id=reporter_peer.id) | Q(ad_snapshot__ad__owner__id=reporter_peer.id)
         ).filter(
-            Q(owner__id=reported_peer.id) | Q(ad_snapshot__ad__owner__id=reported_peer.id)
+            Q(owner__id=pk) | Q(ad_snapshot__ad__owner__id=pk)
         ).exists()
 
         if not has_trade:
@@ -296,11 +291,16 @@ class PeerViewSet(viewsets.GenericViewSet):
         cutoff = timezone.now() - timedelta(hours=24)
 
         with transaction.atomic():
+            try:
+                reported_peer = models.Peer.objects.select_for_update().get(pk=pk)
+            except models.Peer.DoesNotExist:
+                raise Http404
+
             if models.Report.objects.filter(
                 reporter=reporter_peer,
                 reported_peer=reported_peer,
                 created_at__gte=cutoff
-            ).select_for_update().exists():
+            ).exists():
                 return Response(
                     {'error': 'You have already reported this user within the last 24 hours'},
                     status=status.HTTP_409_CONFLICT
@@ -312,18 +312,17 @@ class PeerViewSet(viewsets.GenericViewSet):
                 reason=reason
             )
 
-        reported_peer.reported_at = timezone.now()
+            report_count = models.Report.objects.filter(
+                reported_peer=reported_peer
+            ).count()
 
-        report_count = models.Report.objects.filter(
-            reported_peer=reported_peer
-        ).count()
+            auto_disabled = False
+            if report_count >= 3:
+                reported_peer.is_disabled = True
+                auto_disabled = True
 
-        auto_disabled = False
-        if report_count >= 3:
-            reported_peer.is_disabled = True
-            auto_disabled = True
-
-        reported_peer.save()
+            reported_peer.reported_at = timezone.now()
+            reported_peer.save()
 
         report_word = "report" if report_count == 1 else "reports"
         if auto_disabled:
