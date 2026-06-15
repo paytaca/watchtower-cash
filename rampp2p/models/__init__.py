@@ -5,4 +5,5 @@ from .model_order import *
 from .model_currency import *
 from .model_payment import *
 from .model_misc import *
+from .model_report import *
 from .model_slackbot import *

@@ -26,6 +26,8 @@ class PeerProfileSerializer(serializers.ModelSerializer):
 class PeerSerializer(serializers.ModelSerializer):
     trade_count = serializers.SerializerMethodField()
     completion_rate = serializers.SerializerMethodField()
+    completed_trades = serializers.SerializerMethodField()
+    failed_trades = serializers.SerializerMethodField()
     rating = serializers.SerializerMethodField()
 
     class Meta:
@@ -37,22 +39,36 @@ class PeerSerializer(serializers.ModelSerializer):
             'public_key',
             'address',
             'is_disabled',
+            'reported_at',
             'trade_count',
             'completion_rate',
+            'completed_trades',
+            'failed_trades',
             'rating',
             'created_at',
             'is_online',
             'last_online_at'
         ]
 
-    def get_rating(self, obj: Peer):
-        return obj.average_rating()
-    
-    def get_trade_count(self, obj: Peer):
-        return obj.get_trade_count()
-    
-    def get_completion_rate(self, obj: Peer):
-        return obj.get_completion_rate()
+    def _get_stats(self, obj):
+        if not hasattr(obj, '_trade_stats'):
+            obj._trade_stats = obj.get_trade_stats()
+        return obj._trade_stats
+
+    def get_rating(self, obj):
+        return self._get_stats(obj)['rating']
+
+    def get_trade_count(self, obj):
+        return self._get_stats(obj)['trade_count']
+
+    def get_completion_rate(self, obj):
+        return self._get_stats(obj)['completion_rate']
+
+    def get_completed_trades(self, obj):
+        return self._get_stats(obj)['completed_trades']
+
+    def get_failed_trades(self, obj):
+        return self._get_stats(obj)['failed_trades']
 
 class PeerCreateSerializer(serializers.ModelSerializer):
     class Meta:

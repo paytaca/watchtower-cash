@@ -152,7 +152,7 @@ class Ad(models.Model):
             latest_status = models.Subquery(latest_status_subquery)
         )
 
-        return user_orders.filter(status__status=status).count()
+        return user_orders.filter(latest_status=status).count()
     
     def count_completed_orders(self):
         completed_statuses = ['RLS', 'CNCL', 'RFN']
@@ -164,7 +164,13 @@ class Ad(models.Model):
     
     def count_released_orders(self):
         return self.count_orders_by_status('RLS')
-    
+
+    def get_completed_trades_count(self):
+        return self.count_released_orders()
+
+    def get_failed_trades_count(self):
+        return self.count_completed_orders() - self.count_released_orders()
+
     def get_completion_rate(self):
         # completion_rate = released_count / (released_count + canceled_count + refunded_count)
         completed_count = self.count_completed_orders()

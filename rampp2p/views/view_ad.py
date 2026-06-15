@@ -9,6 +9,7 @@ from django.db.models import (
     Q,
     Count,
     F,
+    Value,
     ExpressionWrapper,
     DecimalField,
     Case,
@@ -57,6 +58,7 @@ class CashInAdViewSet(viewsets.GenericViewSet):
 
         queryset = models.Ad.objects.filter(
             Q(deleted_at__isnull=True)
+            & Q(owner__is_disabled=False)
             & Q(trade_type=trade_type)
             & Q(is_public=True)
             & Q(trade_amount__gt=0)
@@ -314,6 +316,7 @@ class CashInAdViewSet(viewsets.GenericViewSet):
         trade_type = models.TradeType.SELL
         queryset = models.Ad.objects.filter(
             Q(deleted_at__isnull=True)
+            & Q(owner__is_disabled=False)
             & Q(trade_type=trade_type)
             & Q(is_public=True)
             & (Q(trade_amount_sats__gte=1000) | Q(trade_amount_fiat__gt=0))
@@ -351,6 +354,8 @@ class CashInAdViewSet(viewsets.GenericViewSet):
 
         # Apply smart ordering if order_by=priority
         if order_by == "priority":
+            report_cutoff = timezone.now() - timedelta(hours=24)
+
             # Annotate owner's average rating for sorting (NULL ratings treated as 0)
             avg_rating_subq = (
                 models.OrderFeedback.objects.filter(to_peer=OuterRef("owner"))
@@ -360,7 +365,13 @@ class CashInAdViewSet(viewsets.GenericViewSet):
             )
             queryset = queryset.annotate(
                 owner_rating_raw=Subquery(avg_rating_subq),
-                owner_rating=Coalesce(Subquery(avg_rating_subq), 0.0),
+                owner_rating=Case(
+                    When(
+                        Q(owner__reported_at__gte=report_cutoff),
+                        then=Value(0.0)
+                    ),
+                    default=Coalesce(Subquery(avg_rating_subq), 0.0),
+                ),
             )
 
             # Annotate owner's trade count for sorting (NULL counts treated as 0)
@@ -369,13 +380,18 @@ class CashInAdViewSet(viewsets.GenericViewSet):
                     Q(ad_snapshot__ad__owner=OuterRef("owner"))
                     | Q(owner=OuterRef("owner"))
                 )
-                .values("ad_snapshot__ad__owner")
                 .annotate(cnt=Count("id"))
                 .values("cnt")[:1]
             )
             queryset = queryset.annotate(
                 owner_trade_count_raw=Subquery(trade_count_subq),
-                owner_trade_count=Coalesce(Subquery(trade_count_subq), 0),
+                owner_trade_count=Case(
+                    When(
+                        Q(owner__reported_at__gte=report_cutoff),
+                        then=Value(0)
+                    ),
+                    default=Coalesce(Subquery(trade_count_subq), 0),
+                ),
             )
 
             # prioritize ads with higher ratings and more trades, then best price and recently online
@@ -541,7 +557,10 @@ class AdViewSet(viewsets.GenericViewSet):
             serializer = serializers.AdSerializer(ad, context=context).data
             response_data = serializer
         else:
-            queryset = models.Ad.objects.filter(Q(deleted_at__isnull=True))
+            queryset = models.Ad.objects.filter(
+                Q(deleted_at__isnull=True)
+                & Q(owner__is_disabled=False)
+            )
             wallet_hash = request.headers.get("wallet_hash")
             owner_id = request.query_params.get("owner_id")
             currency = request.query_params.get("currency")
@@ -680,6 +699,8 @@ class AdViewSet(viewsets.GenericViewSet):
 
                 # Apply smart ordering if order_by=priority
                 if order_by == "priority":
+                    report_cutoff = timezone.now() - timedelta(hours=24)
+
                     # Annotate owner's average rating for sorting (NULL ratings treated as 0)
                     avg_rating_subq = (
                         models.OrderFeedback.objects.filter(to_peer=OuterRef("owner"))
@@ -689,7 +710,13 @@ class AdViewSet(viewsets.GenericViewSet):
                     )
                     queryset = queryset.annotate(
                         owner_rating_raw=Subquery(avg_rating_subq),
-                        owner_rating=Coalesce(Subquery(avg_rating_subq), 0.0),
+                        owner_rating=Case(
+                            When(
+                                Q(owner__reported_at__gte=report_cutoff),
+                                then=Value(0.0)
+                            ),
+                            default=Coalesce(Subquery(avg_rating_subq), 0.0),
+                        ),
                     )
 
                     # Annotate owner's trade count for sorting (NULL counts treated as 0)
@@ -698,13 +725,18 @@ class AdViewSet(viewsets.GenericViewSet):
                             Q(ad_snapshot__ad__owner=OuterRef("owner"))
                             | Q(owner=OuterRef("owner"))
                         )
-                        .values("ad_snapshot__ad__owner")
                         .annotate(cnt=Count("id"))
                         .values("cnt")[:1]
                     )
                     queryset = queryset.annotate(
                         owner_trade_count_raw=Subquery(trade_count_subq),
-                        owner_trade_count=Coalesce(Subquery(trade_count_subq), 0),
+                        owner_trade_count=Case(
+                            When(
+                                Q(owner__reported_at__gte=report_cutoff),
+                                then=Value(0)
+                            ),
+                            default=Coalesce(Subquery(trade_count_subq), 0),
+                        ),
                     )
 
                     # Prioritize by rating and trade count first, then by price
