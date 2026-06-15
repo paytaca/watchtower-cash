@@ -152,7 +152,7 @@ class Ad(models.Model):
             latest_status = models.Subquery(latest_status_subquery)
         )
 
-        return user_orders.filter(status__status=status).count()
+        return user_orders.filter(latest_status=status).count()
     
     def count_completed_orders(self):
         completed_statuses = ['RLS', 'CNCL', 'RFN']

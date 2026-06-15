@@ -105,7 +105,7 @@ class Peer(models.Model):
         stats = orders.aggregate(
             total=models.Count('id'),
             released=models.Count('id', filter=models.Q(latest_status='RLS')),
-            canceled=models.Count('id', filter=models.Q(latest_status='CNCL', latest_status_created_by=models.F('ad_snapshot__ad__owner__wallet_hash'))),
+            canceled=models.Count('id', filter=models.Q(latest_status='CNCL', latest_status_created_by=self.wallet_hash)),
             refunded=models.Count('id', filter=models.Q(latest_status='RFN')) - models.Count(
                 'id', filter=models.Q(latest_status='RFN', appeal__owner__wallet_hash=self.wallet_hash)
             ),

@@ -58,6 +58,7 @@ class CashInAdViewSet(viewsets.GenericViewSet):
 
         queryset = models.Ad.objects.filter(
             Q(deleted_at__isnull=True)
+            & Q(owner__is_disabled=False)
             & Q(trade_type=trade_type)
             & Q(is_public=True)
             & Q(trade_amount__gt=0)

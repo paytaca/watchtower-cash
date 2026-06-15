@@ -323,7 +323,6 @@ class PeerViewSet(viewsets.GenericViewSet):
         reported_peer.save()
 
         if auto_disabled:
-            report_word = "report" if report_count == 1 else "reports"
             MessageBase.send_message(
                 text=f'User *{reporter_peer.name}* reported *{reported_peer.name}* '
                      f'— *{reported_peer.name}* has been automatically disabled ({report_count} reports)'
