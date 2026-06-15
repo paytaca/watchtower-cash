@@ -380,7 +380,6 @@ class CashInAdViewSet(viewsets.GenericViewSet):
                     Q(ad_snapshot__ad__owner=OuterRef("owner"))
                     | Q(owner=OuterRef("owner"))
                 )
-                .values("ad_snapshot__ad__owner")
                 .annotate(cnt=Count("id"))
                 .values("cnt")[:1]
             )
@@ -726,7 +725,6 @@ class AdViewSet(viewsets.GenericViewSet):
                             Q(ad_snapshot__ad__owner=OuterRef("owner"))
                             | Q(owner=OuterRef("owner"))
                         )
-                        .values("ad_snapshot__ad__owner")
                         .annotate(cnt=Count("id"))
                         .values("cnt")[:1]
                     )

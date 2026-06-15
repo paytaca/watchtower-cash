@@ -6,6 +6,7 @@ from rest_framework.exceptions import AuthenticationFailed
 
 from django.core.exceptions import ValidationError
 from django.db.utils import IntegrityError
+from django.db import transaction
 from django.db.models import Q
 from django.http import Http404
 from django.utils import timezone
@@ -293,21 +294,23 @@ class PeerViewSet(viewsets.GenericViewSet):
             )
 
         cutoff = timezone.now() - timedelta(hours=24)
-        if models.Report.objects.filter(
-            reporter=reporter_peer,
-            reported_peer=reported_peer,
-            created_at__gte=cutoff
-        ).exists():
-            return Response(
-                {'error': 'You have already reported this user within the last 24 hours'},
-                status=status.HTTP_409_CONFLICT
-            )
 
-        models.Report.objects.create(
-            reporter=reporter_peer,
-            reported_peer=reported_peer,
-            reason=reason
-        )
+        with transaction.atomic():
+            if models.Report.objects.filter(
+                reporter=reporter_peer,
+                reported_peer=reported_peer,
+                created_at__gte=cutoff
+            ).select_for_update().exists():
+                return Response(
+                    {'error': 'You have already reported this user within the last 24 hours'},
+                    status=status.HTTP_409_CONFLICT
+                )
+
+            models.Report.objects.create(
+                reporter=reporter_peer,
+                reported_peer=reported_peer,
+                reason=reason
+            )
 
         reported_peer.reported_at = timezone.now()
 
@@ -322,13 +325,13 @@ class PeerViewSet(viewsets.GenericViewSet):
 
         reported_peer.save()
 
+        report_word = "report" if report_count == 1 else "reports"
         if auto_disabled:
             MessageBase.send_message(
                 text=f'User *{reporter_peer.name}* reported *{reported_peer.name}* '
-                     f'— *{reported_peer.name}* has been automatically disabled ({report_count} reports)'
+                     f'— *{reported_peer.name}* has been automatically disabled ({report_count} {report_word})'
             )
         else:
-            report_word = "report" if report_count == 1 else "reports"
             MessageBase.send_message(
                 text=f'User *{reporter_peer.name}* reported *{reported_peer.name}* '
                      f'({report_count} {report_word})'
