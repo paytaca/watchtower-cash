@@ -62,8 +62,7 @@ def check_unclaimed_gifts():
     for tx in spending_txs:
         spending_by_txid.setdefault(tx['txid'], []).append(tx)
 
-    gifts_to_update = []
-
+    gift_wallet_map = {}
     for gift in funded_gifts:
         funding = funding_by_address.get(gift.address)
         if not funding:
@@ -75,18 +74,42 @@ def check_unclaimed_gifts():
             if not wallet_hash:
                 continue
 
-            claim = Claim.objects.filter(
-                gift=gift,
-                wallet__wallet_hash=wallet_hash
-            ).order_by('-date_created').first()
+            key = (gift.id, wallet_hash)
+            if key not in gift_wallet_map:
+                gift_wallet_map[key] = (tx['tx_timestamp'], funding['spending_txid'], gift)
 
-            if claim:
-                gift.date_claimed = tx['tx_timestamp']
-                gift.claim_txid = funding['spending_txid']
-                gifts_to_update.append(gift)
-                claim.succeeded = True
-                claim.save()
-                break
+    if not gift_wallet_map:
+        return
+
+    gift_ids = [k[0] for k in gift_wallet_map]
+    wallet_hashes = [k[1] for k in gift_wallet_map]
+
+    all_claims = Claim.objects.filter(
+        gift_id__in=gift_ids,
+        wallet__wallet_hash__in=wallet_hashes
+    ).select_related('wallet').order_by('-date_created')
+
+    claim_map = {}
+    for claim in all_claims:
+        key = (claim.gift_id, claim.wallet.wallet_hash)
+        if key not in claim_map:
+            claim_map[key] = claim
+
+    gifts_to_update = []
+    claims_to_update = []
+
+    for (gift_id, wallet_hash), (tx_timestamp, spending_txid, gift) in gift_wallet_map.items():
+        claim = claim_map.get((gift_id, wallet_hash))
+        if not claim:
+            continue
+
+        gift.date_claimed = tx_timestamp
+        gift.claim_txid = spending_txid
+        gifts_to_update.append(gift)
+        claim.succeeded = True
+        claims_to_update.append(claim)
 
     if gifts_to_update:
         Gift.objects.bulk_update(gifts_to_update, ['date_claimed', 'claim_txid'])
+    if claims_to_update:
+        Claim.objects.bulk_update(claims_to_update, ['succeeded'])
