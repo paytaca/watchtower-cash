@@ -278,15 +278,18 @@ class OrderPaymentViewSet(viewsets.GenericViewSet):
                 self._validate_awaiting_payment(order)
 
                 buyer = None
+                seller = None
                 if order.ad_snapshot.trade_type == models.TradeType.SELL:
                     buyer = order.owner
+                    seller = order.ad_snapshot.ad.owner
                 else:
                     buyer = order.ad_snapshot.ad.owner
+                    seller = order.owner
                 if request.user.wallet_hash != buyer.wallet_hash:
                     raise ValidationError("Only the buyer can upload payment proof")
 
-                if payment_method.owner.wallet_hash != buyer.wallet_hash:
-                    raise ValidationError("Payment method does not belong to buyer")
+                if payment_method.owner.wallet_hash != seller.wallet_hash:
+                    raise ValidationError("Payment method does not belong to the seller")
 
                 order_payment, _ = models.OrderPayment.objects.get_or_create(
                     order=order,
