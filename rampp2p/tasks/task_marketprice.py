@@ -4,7 +4,6 @@ from celery import shared_task
 from django.utils import timezone
 
 from main.models import AssetPriceLog
-from main.utils.market_price import get_latest_bch_rates
 import rampp2p.models as models
 from rampp2p.utils.websocket import send_market_price
 
@@ -15,8 +14,9 @@ logger = logging.getLogger(__name__)
 def update_market_prices():
     """
     Updates the market prices for subscribed fiat currencies.
-    Reads from AssetPriceLog DB cache first (kept warm by fetch_latest_bch_fiat_prices).
-    Falls back to CoinGecko for any currencies missing from cache.
+    Reads from AssetPriceLog DB cache kept warm by fetch_latest_bch_fiat_prices.
+    Does NOT call CoinGecko directly — that is the sole responsibility of
+    fetch_latest_bch_fiat_prices (runs every 25s on wallet_history_2 queue).
     """
 
     try:
@@ -26,7 +26,7 @@ def update_market_prices():
             return
 
         now = timezone.now()
-        window = timedelta(seconds=60)
+        window = timedelta(seconds=180)
 
         price_logs = AssetPriceLog.objects.filter(
             currency__in=currencies,
@@ -42,17 +42,7 @@ def update_market_prices():
 
         missing = [c for c in currencies if c not in found]
         if missing:
-            logger.warning(
-                "DB cache miss for %d currencies: %s, falling back to CoinGecko",
-                len(missing), missing,
-            )
-            try:
-                bch_prices = get_latest_bch_rates(missing)
-                for currency, data in bch_prices.items():
-                    price_value, _, _ = data
-                    found[currency.upper()] = price_value
-            except Exception as e:
-                logger.error("CoinGecko fallback also failed for %s: %s", missing, e)
+            logger.warning("Cache miss for %d currencies: %s — skipping until next cycle", len(missing), missing)
 
         for currency, price_value in found.items():
             rate, _ = models.MarketPrice.objects.get_or_create(currency=currency)
