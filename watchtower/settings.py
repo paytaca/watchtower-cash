@@ -402,15 +402,15 @@ CELERY_BEAT_SCHEDULE = {
     "update_shift_status": {"task": "ramp.tasks.update_shift_status", "schedule": 60},
     "update_market_prices": {
         "task": "rampp2p.tasks.task_marketprice.update_market_prices",
-        "schedule": 15,  # run every 15 seconds
+        "schedule": 60,
     },
     "check_unfunded_gifts": {
         "task": "paytacagifts.tasks.check_unfunded_gifts",
-        "schedule": 5,
+        "schedule": 60,
     },
     "check_unclaimed_gifts": {
         "task": "paytacagifts.tasks.check_unclaimed_gifts",
-        "schedule": 7,
+        "schedule": 60,
     },
     "bulk_rebroadcast": {"task": "main.tasks.bulk_rebroadcast", "schedule": 30},
     "cancel_expired_orders": {
