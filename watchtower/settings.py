@@ -406,11 +406,11 @@ CELERY_BEAT_SCHEDULE = {
     },
     "check_unfunded_gifts": {
         "task": "paytacagifts.tasks.check_unfunded_gifts",
-        "schedule": 5,
+        "schedule": 60,
     },
     "check_unclaimed_gifts": {
         "task": "paytacagifts.tasks.check_unclaimed_gifts",
-        "schedule": 7,
+        "schedule": 60,
     },
     "bulk_rebroadcast": {"task": "main.tasks.bulk_rebroadcast", "schedule": 30},
     "cancel_expired_orders": {
