@@ -1,6 +1,7 @@
 import pickle
 import base64
 import json
+import re
 from django.db.models import (
     F, Value,
     Func,
@@ -305,6 +306,23 @@ class PosDeviceViewSet(
         return Response(serializer.data)
 
 
+POS_ID_MAX_DIGITS = 4
+MIN_POS_ADDRESS_INDEX = 10 ** POS_ID_MAX_DIGITS
+
+
+def get_posid_from_address(address):
+    '''Extract posid from address_path. POS addresses have index >= 10000.'''
+    if not address.address_path:
+        return None
+    match = re.match(r'0/(\d+)', address.address_path)
+    if not match:
+        return None
+    index = int(match.group(1))
+    if index < MIN_POS_ADDRESS_INDEX:
+        return None
+    return index % MIN_POS_ADDRESS_INDEX
+
+
 class MerchantViewSet(viewsets.ModelViewSet):
     http_method_names = ["get", "post", "head", "patch", "delete"]
 
@@ -392,12 +410,20 @@ class MerchantViewSet(viewsets.ModelViewSet):
         address = Address.objects.get(address=serializer.validated_data['address'])
         posid = serializer.validated_data.get('posid')
 
-        qs = PosDevice.objects.filter(wallet_hash=address.wallet.wallet_hash)
-        if posid is not None:
-            qs = qs.filter(posid=posid)
+        if posid is None:
+            posid = get_posid_from_address(address)
+            if posid is None:
+                return Response({})
 
-        pos_device = qs.order_by('-id').first()
-        if not pos_device or not pos_device.merchant:
+        try:
+            pos_device = PosDevice.objects.get(
+                wallet_hash=address.wallet.wallet_hash,
+                posid=posid
+            )
+        except PosDevice.DoesNotExist:
+            return Response({})
+
+        if not pos_device.merchant:
             return Response({})
 
         merchant = pos_device.merchant
@@ -405,7 +431,8 @@ class MerchantViewSet(viewsets.ModelViewSet):
         return Response({
             "merchant": {
                 "name": merchant.name,
-                "logo": logo_url
+                "logo": logo_url,
+                "verified": merchant.verified
             }
         })
 
