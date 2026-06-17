@@ -427,11 +427,18 @@ class MerchantViewSet(viewsets.ModelViewSet):
             return Response({})
 
         merchant = pos_device.merchant
-        logo_url = f'{settings.DOMAIN}{merchant.logo_60.url}' if merchant.logo_60 else None
+        logo = merchant.logo_60
+        logo_url = f'{settings.DOMAIN}{logo.url}' if logo else None
+        logo_data = None
+        if logo:
+            ext = logo.name.rsplit('.', 1)[-1].lower()
+            mime = 'image/jpeg' if ext in ('jpg', 'jpeg') else f'image/{ext}'
+            logo_data = f'data:{mime};base64,{base64.b64encode(logo.read()).decode()}'
         return Response({
             "merchant": {
                 "name": merchant.name,
                 "logo": logo_url,
+                "logo_data": logo_data,
                 "verified": merchant.verified
             }
         })
