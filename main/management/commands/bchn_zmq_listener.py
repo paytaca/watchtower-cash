@@ -44,7 +44,7 @@ class ZMQHandler():
                         'txid': txid,
                         'tx_hex': tx_hex
                     }
-                    publish_message('mempool', data, qos=1, message_type='mempool')
+                    publish_message('mempool', data, qos=1, message_type='mempool', retain=False)
                     LOGGER.info('New mempool tx pushed to MQTT: ' + txid)
 
                 if topic == "hashds":

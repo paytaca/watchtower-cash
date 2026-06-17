@@ -20,7 +20,7 @@ LOGGER = logging.getLogger(__name__)
 #     return mqtt_client
 
 
-def publish_message(topic, message, qos=1, message_type='transactions', timeout=5):
+def publish_message(topic, message, qos=1, message_type='transactions', timeout=5, retain=True):
     """Publish MQTT message with timeout handling to prevent blocking.
     
     Args:
@@ -29,6 +29,7 @@ def publish_message(topic, message, qos=1, message_type='transactions', timeout=
         qos: Quality of service level (default: 1)
         message_type: Type of message for client ID generation (default: 'transactions')
         timeout: Connection timeout in seconds (default: 5)
+        retain: Whether broker should retain the message (default: True)
     
     Returns:
         Result of mqtt_publish.single() or None if timeout/error occurs
@@ -40,7 +41,7 @@ def publish_message(topic, message, qos=1, message_type='transactions', timeout=
         hostname=settings.MQTT_HOST,
         port=settings.MQTT_PORT,
         keepalive=10,
-        retain=True
+        retain=retain
     )
 
     if settings.BCH_NETWORK == 'mainnet':

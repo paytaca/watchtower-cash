@@ -2,6 +2,7 @@ from django.core.management.base import BaseCommand
 import paho.mqtt.client as mqtt
 from django.conf import settings
 import json
+import socket
 import time
 import logging
 from json.decoder import JSONDecodeError
@@ -17,7 +18,7 @@ from main.utils.redis_address_manager import BCHAddressManager
 
 LOGGER = logging.getLogger(__name__)
 
-mqtt_client_id = f"watchtower-{settings.BCH_NETWORK}-mempool-listener"
+mqtt_client_id = f"watchtower-{settings.BCH_NETWORK}-mempool-listener-{socket.gethostname()}"
 if settings.BCH_NETWORK == 'mainnet':
     mqtt_client = mqtt.Client(transport='websockets', client_id=mqtt_client_id, clean_session=False)
     mqtt_client.tls_set()
@@ -29,9 +30,13 @@ else:
 def on_connect(client, userdata, flags, rc):
     LOGGER.info("Connected to MQTT broker with result code " + str(rc))
 
-    # Subscribing in on_connect() means that if we lose the connection and
-    # reconnect then subscriptions will be renewed.
-    client.subscribe("mempool")
+    # Only subscribe when there is no existing session (first connect).
+    # On reconnect with clean_session=False the broker resumes the session
+    # and preserved subscriptions, so re-subscribing would trigger unwanted
+    # retained message delivery.
+    session_present = flags.get('session present', 0)
+    if session_present == 0:
+        client.subscribe("mempool")
 
 
 def _addresses_subscribed(tx_hex):
@@ -77,13 +82,15 @@ def on_message(client, userdata, msg):
                 tx_hex = payload['tx_hex']
                 subscribed = _addresses_subscribed(tx_hex)
             if subscribed:
-                process_mempool_transaction_fast(txid, tx_hex, True)
+                process_mempool_transaction_fast.delay(txid, tx_hex, True)
             else:
                 process_mempool_transaction_throttled.apply_async(
                     (txid,)
                 )
     except JSONDecodeError:
         pass
+    except Exception:
+        LOGGER.exception(f"Unhandled error processing MQTT message")
 
 
 FIRST_RECONNECT_DELAY = 1
@@ -91,24 +98,9 @@ RECONNECT_RATE = 2
 MAX_RECONNECT_COUNT = 12
 MAX_RECONNECT_DELAY = 60
 
+
 def on_disconnect(client, userdata, rc):
     LOGGER.info(f"Disconnected with result code: {rc}")
-    reconnect_count, reconnect_delay = 0, FIRST_RECONNECT_DELAY
-    while reconnect_count < MAX_RECONNECT_COUNT:
-        LOGGER.info(f"Reconnecting in {reconnect_delay} seconds...")
-        time.sleep(reconnect_delay)
-
-        try:
-            client.reconnect()
-            LOGGER.info("Reconnected successfully!")
-            return
-        except Exception as err:
-            LOGGER.error(f"{err}. Reconnect failed. Retrying...")
-
-        reconnect_delay *= RECONNECT_RATE
-        reconnect_delay = min(reconnect_delay, MAX_RECONNECT_DELAY)
-        reconnect_count += 1
-    LOGGER.info(f"Reconnect failed after {reconnect_count} attempts. Exiting...")
 
 
 mqtt_client.on_connect = on_connect
