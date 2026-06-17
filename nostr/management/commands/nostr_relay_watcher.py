@@ -75,10 +75,6 @@ class Command(BaseCommand):
         logger.info(f"Connecting to {relay_url}")
         ws = websocket.create_connection(relay_url, timeout=5)
 
-        # Subscribe only to events created from this moment forward.
-        # This prevents the relay from replaying the full history of stored
-        # gift-wrap events every time we reconnect.
-        subscribe_since = int(time.time())
         sub_id = "watchtower-push"
         req = [
             "REQ",
@@ -86,11 +82,10 @@ class Command(BaseCommand):
             {
                 "kinds": SUBSCRIPTION_KINDS,
                 "#p": pubkeys,
-                "since": subscribe_since,
             },
         ]
         ws.send(json.dumps(req))
-        logger.info(f"Subscribed to {len(pubkeys)} pubkeys since {subscribe_since}")
+        logger.info(f"Subscribed to {len(pubkeys)} pubkeys (no since filter — dedup via Redis)")
 
         last_pubkey_refresh = time.time()
 
