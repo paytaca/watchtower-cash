@@ -383,23 +383,31 @@ class MerchantViewSet(viewsets.ModelViewSet):
         response = { 'index': index }
         return Response(response)
 
-    @swagger_auto_schema(method="post", request_body=MerchantVaultAddressSerializer, response={ 200: MerchantListSerializer })
+    @swagger_auto_schema(method="post", request_body=MerchantVaultAddressSerializer)
     @decorators.action(methods=["post"], detail=False)
     def vault_address(self, request, *args, **kwargs):
         serializer = MerchantVaultAddressSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         address = Address.objects.get(address=serializer.validated_data['address'])
-        try:
-            pos_device = PosDevice.objects.get(
-                wallet_hash=address.wallet.wallet_hash,
-                posid=serializer.validated_data['posid']
-            )
-        except:
+        posid = serializer.validated_data.get('posid')
+
+        qs = PosDevice.objects.filter(wallet_hash=address.wallet.wallet_hash)
+        if posid is not None:
+            qs = qs.filter(posid=posid)
+
+        pos_device = qs.order_by('-id').first()
+        if not pos_device or not pos_device.merchant:
             return Response({})
 
-        serializer = MerchantListSerializer(pos_device.merchant)
-        return Response(serializer.data)
+        merchant = pos_device.merchant
+        logo_url = f'{settings.DOMAIN}{merchant.logo_60.url}' if merchant.logo_60 else None
+        return Response({
+            "merchant": {
+                "name": merchant.name,
+                "logo": logo_url
+            }
+        })
 
     @decorators.action(methods=['get'], detail=False)
     def countries(self, request, *args, **kwargs):
