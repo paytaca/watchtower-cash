@@ -4,6 +4,7 @@ import logging
 import websocket
 from django.core.management.base import BaseCommand
 from django.db import connection
+from django.conf import settings
 from nostr.utils import send_nostr_push_notification
 from nostr.models import NostrPubkey
 
@@ -12,6 +13,8 @@ logger = logging.getLogger(__name__)
 RELAY_URL = "wss://relay.paytaca.com"
 SUBSCRIPTION_KINDS = [1059]
 PUBKEY_REFRESH_INTERVAL = 60  # seconds
+SEEN_EVENT_TTL = 60 * 60 * 24  # 24 hours — how long to remember processed event IDs
+RECONNECT_DELAY = 5  # seconds to wait before reconnecting
 
 
 class Command(BaseCommand):
@@ -37,7 +40,21 @@ class Command(BaseCommand):
                 break
             except Exception as e:
                 logger.error(f"Watcher crashed: {e}")
-                time.sleep(5)
+            # Always wait before reconnecting to avoid hammering the relay
+            # and replaying stored events in a tight loop
+            logger.info(f"Reconnecting in {RECONNECT_DELAY}s...")
+            time.sleep(RECONNECT_DELAY)
+
+    def _is_seen_event(self, redis_client, event_id):
+        """Return True if this event ID has already been processed.
+
+        Uses a Redis key with a 24-hour TTL so the seen-set doesn't grow forever.
+        Uses SETNX (set-if-not-exists) so the check and mark are atomic.
+        """
+        key = f"nostr_seen_event:{event_id}"
+        # SET key 1 EX ttl NX — returns True if key was set (first time seen)
+        result = redis_client.set(key, 1, ex=SEEN_EVENT_TTL, nx=True)
+        return result is None  # None means key already existed → already seen
 
     def run_watcher(self, relay_url):
         pubkeys = self.get_registered_pubkeys()
@@ -46,9 +63,18 @@ class Command(BaseCommand):
             time.sleep(PUBKEY_REFRESH_INTERVAL)
             return
 
+        # Obtain the shared Redis client configured in settings
+        redis_client = getattr(settings, "REDISKV", None)
+        if redis_client is None:
+            logger.warning("REDISKV not configured — event deduplication disabled")
+
         logger.info(f"Connecting to {relay_url}")
         ws = websocket.create_connection(relay_url, timeout=5)
 
+        # Subscribe only to events created from this moment forward.
+        # This prevents the relay from replaying the full history of stored
+        # gift-wrap events every time we reconnect.
+        subscribe_since = int(time.time())
         sub_id = "watchtower-push"
         req = [
             "REQ",
@@ -56,10 +82,11 @@ class Command(BaseCommand):
             {
                 "kinds": SUBSCRIPTION_KINDS,
                 "#p": pubkeys,
+                "since": subscribe_since,
             },
         ]
         ws.send(json.dumps(req))
-        logger.info(f"Subscribed to {len(pubkeys)} pubkeys")
+        logger.info(f"Subscribed to {len(pubkeys)} pubkeys since {subscribe_since}")
 
         last_pubkey_refresh = time.time()
 
@@ -92,17 +119,28 @@ class Command(BaseCommand):
                         continue
                     event_id = event.get("id", "unknown")
 
+                    # Deduplicate: skip events we have already processed.
+                    # This guards against relay re-delivery and reconnect replays.
+                    if redis_client is not None and self._is_seen_event(redis_client, event_id):
+                        logger.debug(f"Skipping already-seen event {event_id}")
+                        continue
+
                     # Skip events that should not trigger push notifications
                     event_tags = event.get("tags", [])
                     if any(isinstance(t, list) and len(t) >= 1 and t[0] == "nonotif" for t in event_tags):
                         continue
 
-                    for tag in event_tags:
-                        if isinstance(tag, list) and len(tag) >= 2 and tag[0] == "p":
-                            recipient_pubkey = tag[1]
-                            if recipient_pubkey in pubkeys:
-                                logger.info(f"Detected gift-wrap event {event_id} for pubkey {recipient_pubkey[:16]}... sending push")
-                                send_nostr_push_notification(recipient_pubkey)
+                    # Collect unique recipient pubkeys from all "p" tags to avoid
+                    # sending duplicate notifications when a pubkey appears more than once
+                    recipient_pubkeys = {
+                        tag[1]
+                        for tag in event_tags
+                        if isinstance(tag, list) and len(tag) >= 2 and tag[0] == "p" and tag[1] in pubkeys
+                    }
+
+                    for recipient_pubkey in recipient_pubkeys:
+                        logger.info(f"Detected gift-wrap event {event_id} for pubkey {recipient_pubkey[:16]}... sending push")
+                        send_nostr_push_notification(recipient_pubkey)
 
                 elif msg_type == "EOSE":
                     logger.info("End of stored events")
