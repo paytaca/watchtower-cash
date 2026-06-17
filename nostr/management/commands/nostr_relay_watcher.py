@@ -126,7 +126,10 @@ class Command(BaseCommand):
 
                     # Skip events that should not trigger push notifications
                     event_tags = event.get("tags", [])
-                    if any(isinstance(t, list) and len(t) >= 1 and t[0] == "nonotif" for t in event_tags):
+                    if any(
+                        isinstance(t, list) and len(t) >= 1 and t[0] in ("nonotif", "self")
+                        for t in event_tags
+                    ):
                         continue
 
                     # Collect unique recipient pubkeys from all "p" tags to avoid
