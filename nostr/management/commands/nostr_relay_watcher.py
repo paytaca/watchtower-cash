@@ -29,6 +29,10 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
+        if settings.BCH_NETWORK != 'mainnet':
+            logger.info(f"Nostr relay watcher is disabled on {settings.BCH_NETWORK}, exiting.")
+            return
+
         relay_url = options['relay']
         logger.info(f"Starting Nostr relay watcher for {relay_url}")
 
@@ -122,7 +126,7 @@ class Command(BaseCommand):
                     # Deduplicate: skip events we have already processed.
                     # This guards against relay re-delivery and reconnect replays.
                     if redis_client is not None and self._is_seen_event(redis_client, event_id):
-                        logger.debug(f"Skipping already-seen event {event_id}")
+                        logger.info(f"Skipping already-seen event {event_id}")
                         continue
 
                     # Skip events that should not trigger push notifications
