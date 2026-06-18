@@ -122,7 +122,9 @@ class Command(BaseCommand):
                         logger.info(f"Skipping already-seen event {event_id}")
                         continue
 
-                    # Skip events that should not trigger push notifications
+                    # Skip events that should not trigger push notifications.
+                    # nonotif/read-receipt tags are placed on the outer gift-wrap by the
+                    # sender so they are visible here without decrypting the inner event.
                     event_tags = event.get("tags", [])
                     if any(
                         isinstance(t, list) and len(t) >= 1 and t[0] in ("nonotif", "self")
@@ -131,11 +133,16 @@ class Command(BaseCommand):
                         continue
 
                     # Collect unique recipient pubkeys from all "p" tags to avoid
-                    # sending duplicate notifications when a pubkey appears more than once
+                    # sending duplicate notifications when a pubkey appears more than once.
+                    # Exclude self-sends (event pubkey == recipient).
+                    event_pubkey = event.get("pubkey", "")
                     recipient_pubkeys = {
                         tag[1]
                         for tag in event_tags
-                        if isinstance(tag, list) and len(tag) >= 2 and tag[0] == "p" and tag[1] in pubkeys
+                        if isinstance(tag, list) and len(tag) >= 2
+                        and tag[0] == "p"
+                        and tag[1] in pubkeys
+                        and tag[1] != event_pubkey
                     }
 
                     for recipient_pubkey in recipient_pubkeys:
