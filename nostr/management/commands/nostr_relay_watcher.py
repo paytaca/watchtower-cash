@@ -61,16 +61,16 @@ class Command(BaseCommand):
         return result is None  # None means key already existed → already seen
 
     def run_watcher(self, relay_url):
-        pubkeys = self.get_registered_pubkeys()
-        if not pubkeys:
-            logger.info("No registered pubkeys, waiting...")
-            time.sleep(PUBKEY_REFRESH_INTERVAL)
-            return
-
         # Obtain the shared Redis client configured in settings
         redis_client = getattr(settings, "REDISKV", None)
         if redis_client is None:
             logger.warning("REDISKV not configured — event deduplication disabled")
+
+        pubkeys = set(self.get_registered_pubkeys())
+        if not pubkeys:
+            logger.info("No registered pubkeys, waiting...")
+            time.sleep(PUBKEY_REFRESH_INTERVAL)
+            return
 
         logger.info(f"Connecting to {relay_url}")
         ws = websocket.create_connection(
@@ -84,25 +84,18 @@ class Command(BaseCommand):
         req = [
             "REQ",
             sub_id,
-            {
-                "kinds": SUBSCRIPTION_KINDS,
-                "#p": pubkeys,
-            },
+            {"kinds": SUBSCRIPTION_KINDS},
         ]
         ws.send(json.dumps(req))
-        logger.info(f"Subscribed to {len(pubkeys)} pubkeys (no since filter — dedup via Redis)")
+        logger.info("Subscribed to all kind-1059 events (pubkey filtering done client-side)")
 
         last_pubkey_refresh = time.time()
 
         while True:
             try:
-                # Check if we need to refresh the pubkey list
+                # Refresh the registered pubkey set periodically
                 if time.time() - last_pubkey_refresh > PUBKEY_REFRESH_INTERVAL:
-                    new_pubkeys = self.get_registered_pubkeys()
-                    if set(new_pubkeys) != set(pubkeys):
-                        logger.info("Pubkey list changed, reconnecting...")
-                        ws.close()
-                        return
+                    pubkeys = set(self.get_registered_pubkeys())
                     last_pubkey_refresh = time.time()
 
                 # Receive with timeout so we can refresh pubkeys periodically
