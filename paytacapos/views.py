@@ -311,10 +311,11 @@ MIN_POS_ADDRESS_INDEX = 10 ** POS_ID_MAX_DIGITS
 
 
 def get_posid_from_address(address):
-    '''Extract posid from address_path. POS addresses have index >= 10000.'''
+    '''Extract posid from address_path. POS addresses have index >= 10000.
+    Address path format: <change>/<index> where change is 0 (receiving) or 1 (change).'''
     if not address.address_path:
         return None
-    match = re.match(r'0/(\d+)', address.address_path)
+    match = re.match(r'[01]/(\d+)', address.address_path)
     if not match:
         return None
     index = int(match.group(1))
@@ -401,13 +402,17 @@ class MerchantViewSet(viewsets.ModelViewSet):
         response = { 'index': index }
         return Response(response)
 
-    @swagger_auto_schema(method="post", request_body=MerchantVaultAddressSerializer)
+    @swagger_auto_schema(method="post", request_body=MerchantVaultAddressSerializer, responses={ 200: MerchantVaultAddressResponseSerializer })
     @decorators.action(methods=["post"], detail=False)
     def vault_address(self, request, *args, **kwargs):
         serializer = MerchantVaultAddressSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        address = Address.objects.get(address=serializer.validated_data['address'])
+        try:
+            address = Address.objects.get(address=serializer.validated_data['address'])
+        except Address.DoesNotExist:
+            return Response({})
+
         posid = serializer.validated_data.get('posid')
 
         if posid is None:
@@ -427,21 +432,25 @@ class MerchantViewSet(viewsets.ModelViewSet):
             return Response({})
 
         merchant = pos_device.merchant
+        response_data = MerchantVaultAddressResponseSerializer(merchant).data
+
         logo = merchant.logo_60
-        logo_url = f'{settings.DOMAIN}{logo.url}' if logo else None
-        logo_data = None
         if logo:
-            ext = logo.name.rsplit('.', 1)[-1].lower()
-            mime = 'image/jpeg' if ext in ('jpg', 'jpeg') else f'image/{ext}'
-            logo_data = f'data:{mime};base64,{base64.b64encode(logo.read()).decode()}'
-        return Response({
-            "merchant": {
-                "name": merchant.name,
-                "logo": logo_url,
-                "logo_data": logo_data,
-                "verified": merchant.verified
-            }
-        })
+            try:
+                ext = logo.name.rsplit('.', 1)[-1].lower()
+                if ext in ('jpg', 'jpeg'):
+                    mime = 'image/jpeg'
+                elif ext == 'svg':
+                    mime = 'image/svg+xml'
+                else:
+                    mime = f'image/{ext}'
+                logo.seek(0)
+                if logo.size < 512 * 1024:
+                    response_data['logo_data'] = f'data:{mime};base64,{base64.b64encode(logo.read()).decode()}'
+            except Exception:
+                pass
+
+        return Response(response_data)
 
     @decorators.action(methods=['get'], detail=False)
     def countries(self, request, *args, **kwargs):

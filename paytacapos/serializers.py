@@ -990,6 +990,13 @@ class MerchantVaultAddressSerializer(serializers.Serializer):
     posid = serializers.IntegerField(required=False)
 
 
+class MerchantVaultAddressResponseSerializer(MerchantListSerializer):
+    logo_data = serializers.CharField(read_only=True, required=False)
+
+    class Meta(MerchantListSerializer.Meta):
+        fields = MerchantListSerializer.Meta.fields + ['logo_data']
+
+
 class LatestPosIdSerializer(serializers.Serializer):
     wallet_hash = serializers.CharField()
 
