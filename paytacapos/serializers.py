@@ -721,7 +721,8 @@ class MerchantListSerializer(serializers.ModelSerializer):
             "last_update",
             "branch_count",
             "pos_device_count",
-            "nfc_enabled"
+            "nfc_enabled",
+            "verified"
         ]
 
     def get_receiving_address(self, obj):
@@ -987,7 +988,14 @@ class WalletLatestMerchantIndexResponseSerializer(serializers.Serializer):
 
 class MerchantVaultAddressSerializer(serializers.Serializer):
     address = serializers.CharField()
-    posid = serializers.IntegerField()
+    posid = serializers.IntegerField(required=False)
+
+
+class MerchantVaultAddressResponseSerializer(MerchantListSerializer):
+    logo_data = serializers.CharField(read_only=True, required=False)
+
+    class Meta(MerchantListSerializer.Meta):
+        fields = MerchantListSerializer.Meta.fields + ['logo_data']
 
 
 class LatestPosIdSerializer(serializers.Serializer):
