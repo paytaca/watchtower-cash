@@ -73,7 +73,12 @@ class Command(BaseCommand):
             logger.warning("REDISKV not configured — event deduplication disabled")
 
         logger.info(f"Connecting to {relay_url}")
-        ws = websocket.create_connection(relay_url, timeout=5)
+        ws = websocket.create_connection(
+            relay_url,
+            timeout=5,
+            ping_interval=30,
+            ping_timeout=10,
+        )
 
         sub_id = "watchtower-push"
         req = [
