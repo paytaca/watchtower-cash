@@ -435,7 +435,7 @@ class MerchantViewSet(viewsets.ModelViewSet):
         response_data = MerchantVaultAddressResponseSerializer(merchant).data
 
         logo = merchant.logo_60
-        if logo:
+        if logo and logo.size < 512 * 1024:
             try:
                 ext = logo.name.rsplit('.', 1)[-1].lower()
                 if ext in ('jpg', 'jpeg'):
@@ -445,10 +445,12 @@ class MerchantViewSet(viewsets.ModelViewSet):
                 else:
                     mime = f'image/{ext}'
                 logo.seek(0)
-                if logo.size < 512 * 1024:
-                    response_data['logo_data'] = f'data:{mime};base64,{base64.b64encode(logo.read()).decode()}'
+                response_data['logo_data'] = f'data:{mime};base64,{base64.b64encode(logo.read()).decode()}'
             except Exception:
-                pass
+                logger.exception("Failed to encode merchant logo for vault_address")
+                response_data['logo_data'] = None
+        else:
+            response_data['logo_data'] = None
 
         return Response(response_data)
 
