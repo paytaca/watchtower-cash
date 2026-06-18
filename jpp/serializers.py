@@ -199,7 +199,6 @@ class InvoiceSerializer(serializers.ModelSerializer):
             "payment_url",
             "network",
             "currency",
-            "required_fee_per_byte",
             "memo",
             "time",
             "expires",

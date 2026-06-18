@@ -10,7 +10,7 @@ class Invoice(models.Model):
     URL_TYPE_BITPAY = "bitpay"
 
     uuid = models.UUIDField(default=uuid.uuid4, unique=True, db_index=True, editable=False)
-    required_fee_per_byte = models.FloatField(default=1.1)
+    required_fee_per_byte = models.FloatField(default=1.0)
     memo = models.TextField(null=True, blank=True)
     time = models.DateTimeField(auto_now_add=True)
     expires = models.DateTimeField()
@@ -58,7 +58,6 @@ class Invoice(models.Model):
                     "currency": "BCH",
                     "network": self.network,
                     "estimatedAmount": 315200,
-                    "requiredFeeRate": self.required_fee_per_byte,
                     "decimals": 8,
                     # "minerFee": 0,
                     # "selected": False,
@@ -85,7 +84,6 @@ class Invoice(models.Model):
             "instructions": [
                 {
                     "type": "transaction",
-                    "requiredFeeRate": self.required_fee_per_byte,
                     "outputs": outputs,
                 }
             ]
