@@ -721,7 +721,8 @@ class MerchantListSerializer(serializers.ModelSerializer):
             "last_update",
             "branch_count",
             "pos_device_count",
-            "nfc_enabled"
+            "nfc_enabled",
+            "verified"
         ]
 
     def get_receiving_address(self, obj):
