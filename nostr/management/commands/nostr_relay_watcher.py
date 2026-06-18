@@ -61,43 +61,41 @@ class Command(BaseCommand):
         return result is None  # None means key already existed → already seen
 
     def run_watcher(self, relay_url):
-        pubkeys = self.get_registered_pubkeys()
-        if not pubkeys:
-            logger.info("No registered pubkeys, waiting...")
-            time.sleep(PUBKEY_REFRESH_INTERVAL)
-            return
-
         # Obtain the shared Redis client configured in settings
         redis_client = getattr(settings, "REDISKV", None)
         if redis_client is None:
             logger.warning("REDISKV not configured — event deduplication disabled")
 
+        pubkeys = set(self.get_registered_pubkeys())
+        if not pubkeys:
+            logger.info("No registered pubkeys, waiting...")
+            time.sleep(PUBKEY_REFRESH_INTERVAL)
+            return
+
         logger.info(f"Connecting to {relay_url}")
-        ws = websocket.create_connection(relay_url, timeout=5)
+        ws = websocket.create_connection(
+            relay_url,
+            timeout=5,
+            ping_interval=30,
+            ping_timeout=10,
+        )
 
         sub_id = "watchtower-push"
         req = [
             "REQ",
             sub_id,
-            {
-                "kinds": SUBSCRIPTION_KINDS,
-                "#p": pubkeys,
-            },
+            {"kinds": SUBSCRIPTION_KINDS},
         ]
         ws.send(json.dumps(req))
-        logger.info(f"Subscribed to {len(pubkeys)} pubkeys (no since filter — dedup via Redis)")
+        logger.info("Subscribed to all kind-1059 events (pubkey filtering done client-side)")
 
         last_pubkey_refresh = time.time()
 
         while True:
             try:
-                # Check if we need to refresh the pubkey list
+                # Refresh the registered pubkey set periodically
                 if time.time() - last_pubkey_refresh > PUBKEY_REFRESH_INTERVAL:
-                    new_pubkeys = self.get_registered_pubkeys()
-                    if set(new_pubkeys) != set(pubkeys):
-                        logger.info("Pubkey list changed, reconnecting...")
-                        ws.close()
-                        return
+                    pubkeys = set(self.get_registered_pubkeys())
                     last_pubkey_refresh = time.time()
 
                 # Receive with timeout so we can refresh pubkeys periodically
@@ -124,7 +122,9 @@ class Command(BaseCommand):
                         logger.info(f"Skipping already-seen event {event_id}")
                         continue
 
-                    # Skip events that should not trigger push notifications
+                    # Skip events that should not trigger push notifications.
+                    # nonotif/read-receipt tags are placed on the outer gift-wrap by the
+                    # sender so they are visible here without decrypting the inner event.
                     event_tags = event.get("tags", [])
                     if any(
                         isinstance(t, list) and len(t) >= 1 and t[0] in ("nonotif", "self")
@@ -133,11 +133,16 @@ class Command(BaseCommand):
                         continue
 
                     # Collect unique recipient pubkeys from all "p" tags to avoid
-                    # sending duplicate notifications when a pubkey appears more than once
+                    # sending duplicate notifications when a pubkey appears more than once.
+                    # Exclude self-sends (event pubkey == recipient).
+                    event_pubkey = event.get("pubkey", "")
                     recipient_pubkeys = {
                         tag[1]
                         for tag in event_tags
-                        if isinstance(tag, list) and len(tag) >= 2 and tag[0] == "p" and tag[1] in pubkeys
+                        if isinstance(tag, list) and len(tag) >= 2
+                        and tag[0] == "p"
+                        and tag[1] in pubkeys
+                        and tag[1] != event_pubkey
                     }
 
                     for recipient_pubkey in recipient_pubkeys:
