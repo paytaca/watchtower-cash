@@ -177,6 +177,24 @@
                         {% endif %}
                     </div>
                     {% endif %}
+
+                    <div class="form-row" style="margin-top: 15px; padding: 10px; background-color: #fff3e0; border-left: 4px solid #ff9800;">
+                        <strong>Input Age Analysis (Threshold: {{ assessment.age_threshold_days }} days)</strong>
+                        <div class="help" style="margin-top: 5px; color: #666;">
+                            Inputs beyond the threshold use current market price for fiat conversion instead of historical price.
+                        </div>
+                        <div class="form-row" style="margin-top: 10px;">
+                            <strong>Within Threshold:</strong> {{ assessment.new_input_count }} input(s) — {{ assessment.new_input_total|floatformat:2 }} {{ assessment.currency }} (historical price)
+                        </div>
+                        <div class="form-row">
+                            <strong>Beyond Threshold:</strong> {{ assessment.old_input_count }} input(s) — {{ assessment.old_input_total_current|floatformat:2 }} {{ assessment.currency }} (current price)
+                            {% if assessment.old_input_total_historical != assessment.old_input_total_current %}
+                                <div class="help" style="color: #666;">
+                                    Historical value was {{ assessment.old_input_total_historical|floatformat:2 }} {{ assessment.currency }}
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
                 </div>
             </div>
             {% endif %}
@@ -189,17 +207,35 @@
                         <tr>
                             <th>TXID</th>
                             <th>Value (sats)</th>
-                            <th>Price ({{ tx_data.currency }})</th>
-                            <th>Amount ({{ tx_data.currency }})</th>
+                            <th>Age (days)</th>
+                            <th>Status</th>
+                            <th>Historical Price</th>
+                            <th>Historical Amount</th>
+                            <th>Current Price</th>
+                            <th>Current Amount</th>
+                            <th>Amount Used</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for vin in tx_data.inputs %}
-                        <tr>
+                        <tr class="{% if vin.is_old %}old-input{% endif %}">
                             <td>{{ vin.txid|truncatechars:20 }}</td>
                             <td>{{ vin.value }}</td>
-                            <td>{% if vin.price %}{{ vin.price }}{% else %}N/A{% endif %}</td>
-                            <td>{% if vin.amount %}{{ vin.amount }}{% else %}N/A{% endif %}</td>
+                            <td>{% if vin.age_days is not None %}{{ vin.age_days }}{% else %}N/A{% endif %}</td>
+                            <td>
+                                {% if vin.is_old %}
+                                    <span style="color: #e65100; font-weight: bold;">Beyond threshold</span>
+                                {% elif vin.age_days is not None %}
+                                    <span style="color: #2e7d32;">Within threshold</span>
+                                {% else %}
+                                    <span style="color: #999;">Unknown</span>
+                                {% endif %}
+                            </td>
+                            <td>{% if vin.historical_price %}{{ vin.historical_price }}{% else %}N/A{% endif %}</td>
+                            <td>{% if vin.historical_amount %}{{ vin.historical_amount }}{% else %}N/A{% endif %}</td>
+                            <td>{% if vin.current_price %}{{ vin.current_price }}{% else %}—{% endif %}</td>
+                            <td>{% if vin.current_amount %}{{ vin.current_amount }}{% else %}—{% endif %}</td>
+                            <td><strong>{% if vin.amount %}{{ vin.amount }}{% else %}N/A{% endif %}</strong></td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -300,6 +336,10 @@
         border: none;
         border-top: 1px solid #ccc;
         margin: 15px 0;
+    }
+
+    tr.old-input {
+        background-color: #fff3e0;
     }
 </style>
 {% endblock content %}

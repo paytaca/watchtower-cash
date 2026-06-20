@@ -79,6 +79,13 @@ class TxFiatAmountsForm(forms.Form):
         help_text="Enter the currency code (e.g., PHP, USD)",
         required=True
     )
+    age_threshold_days = forms.IntegerField(
+        label="Age Threshold (Days)",
+        initial=30,
+        min_value=1,
+        help_text="Input transactions older than this many days from the cashout date use current price for fiat conversion",
+        required=True
+    )
 
 
 class ClearMarketPricesForm(forms.Form):
@@ -240,9 +247,10 @@ class TransactionAdmin(DynamicRawIDMixin, admin.ModelAdmin):
             if form.is_valid():
                 txid = form.cleaned_data['txid'].strip()
                 currency = form.cleaned_data['currency'].strip().upper()
+                age_threshold_days = form.cleaned_data['age_threshold_days']
                 
                 try:
-                    tx_data = get_tx_with_fiat_amounts(txid, currency=currency)
+                    tx_data = get_tx_with_fiat_amounts(txid, currency=currency, age_threshold_days=age_threshold_days)
                     
                     # Calculate gain/loss assessment for cashout
                     if tx_data and tx_data.get('outputs') and len(tx_data['outputs']) > 0:
@@ -301,6 +309,26 @@ class TransactionAdmin(DynamicRawIDMixin, admin.ModelAdmin):
                                 # Total after reimbursement = cashout + reimbursement
                                 total_after_reimbursement = float(cashout_amount) + reimbursement_amount
                             
+                            # Calculate age breakdown of inputs
+                            inputs = tx_data.get('inputs', [])
+                            old_input_count = 0
+                            old_input_total_current = Decimal('0')
+                            old_input_total_historical = Decimal('0')
+                            new_input_count = 0
+                            new_input_total = Decimal('0')
+                            
+                            for vin in inputs:
+                                vin_amount = Decimal(str(vin.get('amount') or 0))
+                                if vin.get('is_old'):
+                                    old_input_count += 1
+                                    old_input_total_current += vin_amount
+                                    historical_amt = vin.get('historical_amount')
+                                    if historical_amt:
+                                        old_input_total_historical += Decimal(str(historical_amt))
+                                else:
+                                    new_input_count += 1
+                                    new_input_total += vin_amount
+                            
                             # For display purposes, use total gain/loss
                             gain_loss = float(total_gain_loss)
                             
@@ -320,6 +348,12 @@ class TransactionAdmin(DynamicRawIDMixin, admin.ModelAdmin):
                                 'reimbursement_amount': reimbursement_amount,
                                 'total_after_reimbursement': total_after_reimbursement,
                                 'cashout_gain_loss': float(cashout_gain_loss),  # Cashout's portion of gain/loss
+                                'age_threshold_days': age_threshold_days,
+                                'old_input_count': old_input_count,
+                                'old_input_total_current': float(old_input_total_current),
+                                'old_input_total_historical': float(old_input_total_historical),
+                                'new_input_count': new_input_count,
+                                'new_input_total': float(new_input_total),
                             }
                         
                 except Exception as e:
