@@ -91,6 +91,16 @@
             </div>
             {% endif %}
             
+            {% if wallet_data.latest_address_pair %}
+            <div class="form-row" style="margin-top: 15px; padding: 10px; background-color: #fff3e0; border-left: 4px solid #ff9800; border-radius: 4px;">
+                <strong>Latest Address Pair (index {{ wallet_data.latest_address_pair.index }}):</strong>
+                <div style="margin-top: 8px; font-family: monospace; font-size: 0.9em;">
+                    <div><strong>Receiving:</strong> {{ wallet_data.latest_address_pair.receiving }}</div>
+                    <div><strong>Change:</strong> {{ wallet_data.latest_address_pair.change }}</div>
+                </div>
+            </div>
+            {% endif %}
+            
             {% if wallet_data.wallet_type == 'bch' %}
             <div class="module" style="margin-top: 20px;">
                 <h3>BCH Balance</h3>
@@ -106,6 +116,11 @@
                     <div style="margin-top: 10px; color: #666; font-size: 0.9em;">
                         UTXO Count: {{ wallet_data.bch_utxo_count }}
                     </div>
+                    {% if wallet_data.cashtoken_locked_bch %}
+                    <div style="margin-top: 10px; color: #9c27b0; font-size: 0.9em;">
+                        BCH locked in CashToken UTXOs: {{ wallet_data.cashtoken_locked_bch|floatformat:8 }} BCH
+                    </div>
+                    {% endif %}
                 </div>
             </div>
             

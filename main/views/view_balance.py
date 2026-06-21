@@ -57,16 +57,20 @@ def _get_ct_balance(query, multiple_tokens=False):
     return _get_slp_balance(query, multiple_tokens)
 
 
-def _get_bch_balance(query, include_token_sats=False):
+def _get_bch_balance(query, include_token_sats=False, exclude_dust=True):
     # Exclude dust amounts as they're likely to be SLP transactions
     # TODO: Needs another more sure way to exclude SLP transactions
     dust = 546 # / (10 ** 8)
     if include_token_sats:
-        query = query & Q(value__gt=dust)
+        if exclude_dust:
+            query = query & Q(value__gt=dust)
         # Use select_related to optimize the query
         qs = Transaction.objects.filter(query).select_related('address', 'token')
     else:
-        query = query & Q(value__gt=dust) & Q(token__name__iexact='bch')
+        if exclude_dust:
+            query = query & Q(value__gt=dust) & Q(token__name__iexact='bch')
+        else:
+            query = query & Q(token__name__iexact='bch')
         # Use select_related to optimize the token join
         qs = Transaction.objects.filter(query).select_related('address', 'token')
     
@@ -312,7 +316,7 @@ class Balance(APIView):
                     if cached_data:
                         data = json.loads(cached_data)
                     else:
-                        qs_balance, qs_count = _get_bch_balance(query)
+                        qs_balance, qs_count = _get_bch_balance(query, exclude_dust=False)
                         bch_balance = qs_balance['balance'] or 0
                         bch_balance = bch_balance / (10 ** 8)
 
@@ -406,7 +410,7 @@ class SpendableBalance(APIView):
                 return Response({ 'detail': 'Invalid wallet type' }, status=400)
 
             query = Q(wallet=wallet) & Q(spent=False)
-            qs_balance, qs_count = _get_bch_balance(query)
+            qs_balance, qs_count = _get_bch_balance(query, exclude_dust=False)
 
         qs_balance = qs_balance['balance'] or 0
         bch_balance = qs_balance / (10 ** 8)

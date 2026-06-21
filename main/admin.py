@@ -598,9 +598,34 @@ class WalletAdmin(DynamicRawIDMixin, admin.ModelAdmin):
                             'last_utxo_scan_succeeded': wallet.last_utxo_scan_succeeded,
                         }
                         
+                        # Get latest subscribed address pair
+                        from django.db.models import Max
+                        addresses = Address.objects.filter(wallet=wallet).values_list('address_path', flat=True)
+                        max_index = None
+                        for addr_path in addresses:
+                            if addr_path and '/' in addr_path:
+                                try:
+                                    _, idx = addr_path.split('/')
+                                    idx = int(idx)
+                                    if max_index is None or idx > max_index:
+                                        max_index = idx
+                                except (ValueError, IndexError):
+                                    continue
+                        
+                        if max_index is not None:
+                            receiving_path = f'0/{max_index}'
+                            change_path = f'1/{max_index}'
+                            receiving_addr = Address.objects.filter(wallet=wallet, address_path=receiving_path).first()
+                            change_addr = Address.objects.filter(wallet=wallet, address_path=change_path).first()
+                            wallet_data['latest_address_pair'] = {
+                                'index': max_index,
+                                'receiving': receiving_addr.address if receiving_addr else None,
+                                'change': change_addr.address if change_addr else None,
+                            }
+                        
                         # Get BCH balance
                         if wallet.wallet_type == 'bch':
-                            query = Q(wallet=wallet) & Q(spent=False)
+                            query = Q(wallet=wallet) & Q(spent=False) & Q(token__name__iexact='bch')
                             qs_balance = Transaction.objects.filter(query).aggregate(
                                 balance=Coalesce(Sum('value'), 0)
                             )
@@ -647,6 +672,13 @@ class WalletAdmin(DynamicRawIDMixin, admin.ModelAdmin):
                                 })
                             
                             wallet_data['token_balances'] = token_balances
+                            
+                            # Sum BCH locked in CashToken UTXOs (diagnostic)
+                            cashtoken_bch_query = Q(wallet=wallet) & Q(spent=False) & Q(cashtoken_ft__isnull=False)
+                            cashtoken_bch_balance = Transaction.objects.filter(cashtoken_bch_query).aggregate(
+                                total=Coalesce(Sum('value'), 0)
+                            )['total'] or 0
+                            wallet_data['cashtoken_locked_bch'] = round(cashtoken_bch_balance / (10 ** 8), 8)
                         
                         # Get wallet history
                         history = WalletHistory.objects.filter(wallet=wallet).exclude(amount=0).order_by(
