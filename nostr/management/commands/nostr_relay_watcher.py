@@ -15,6 +15,7 @@ SUBSCRIPTION_KINDS = [1059]
 PUBKEY_REFRESH_INTERVAL = 60  # seconds
 SEEN_EVENT_TTL = 60 * 60 * 24  # 24 hours — how long to remember processed event IDs
 RECONNECT_DELAY = 5  # seconds to wait before reconnecting
+EOSE_TIMEOUT = 30  # seconds to wait for EOSE before processing events anyway
 
 
 class Command(BaseCommand):
@@ -90,6 +91,8 @@ class Command(BaseCommand):
         logger.info("Subscribed to all kind-1059 events (pubkey filtering done client-side)")
 
         last_pubkey_refresh = time.time()
+        has_seen_eose = False
+        connected_at = time.time()
 
         while True:
             try:
@@ -111,10 +114,18 @@ class Command(BaseCommand):
                 msg_type = msg[0]
 
                 if msg_type == "EVENT" and len(msg) >= 3:
+                    # Skip all stored events replayed before EOSE, with a
+                    # fallback: if EOSE hasn't arrived within EOSE_TIMEOUT
+                    # seconds, start processing anyway.
+                    if not has_seen_eose and time.time() - connected_at < EOSE_TIMEOUT:
+                        continue
+
                     event = msg[2]
                     if not isinstance(event, dict):
                         continue
-                    event_id = event.get("id", "unknown")
+                    event_id = event.get("id")
+                    if not event_id:
+                        continue
 
                     # Deduplicate: skip events we have already processed.
                     # This guards against relay re-delivery and reconnect replays.
@@ -150,7 +161,8 @@ class Command(BaseCommand):
                         send_nostr_push_notification(recipient_pubkey)
 
                 elif msg_type == "EOSE":
-                    logger.info("End of stored events")
+                    logger.info("End of stored events — now processing live events")
+                    has_seen_eose = True
 
                 elif msg_type == "CLOSED":
                     reason = msg[2] if len(msg) >= 3 else "unknown"
