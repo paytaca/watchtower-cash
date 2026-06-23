@@ -3,6 +3,7 @@ from django.db.models import Q
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.settings import api_settings
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 
@@ -17,6 +18,7 @@ class AddressInfoView(APIView):
 
     authentication_classes = [
         ApiTokenAuthentication,
+        *api_settings.DEFAULT_AUTHENTICATION_CLASSES,
     ]
 
     @swagger_auto_schema(

@@ -271,7 +271,9 @@ class SendPushNotificationSerializer(serializers.Serializer):
                 results = [self._serialize_json_or_str(_result) for _result in result],
             )
         elif result is not None:
-            return dict(success=True, result=_serialize_json_or_str(result))
+            return dict(success=True, result=self._serialize_json_or_str(result))
+        else:
+            return dict(success=True)
 
     def _serialize_json_or_str(self, json_data):
         try:
