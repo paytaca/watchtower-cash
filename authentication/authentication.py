@@ -2,6 +2,7 @@
 
 import hashlib
 
+from django.core.exceptions import ValidationError
 from rest_framework.authentication import BaseAuthentication
 from rest_framework.exceptions import AuthenticationFailed
 
@@ -17,7 +18,11 @@ class ApiTokenAuthentication(BaseAuthentication):
         if not token_uuid:
             return None
 
-        api_token = ApiToken.objects.filter(uuid=token_uuid).first()
+        try:
+            api_token = ApiToken.objects.filter(uuid=token_uuid).first()
+        except (ValidationError, ValueError):
+            return None
+
         if api_token:
             request.api_token = api_token
         return None
