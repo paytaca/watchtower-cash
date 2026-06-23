@@ -8,10 +8,16 @@ from drf_yasg import openapi
 
 from main.models import Address, Transaction
 from main.serializers import AddressInfoSerializer
+from authentication.models import ApiTokenScopes
+from authentication.authentication import ApiTokenAuthentication
 from notifications.models import DeviceWallet
 
 class AddressInfoView(APIView):
     serializer_class = AddressInfoSerializer
+
+    authentication_classes = [
+        ApiTokenAuthentication,
+    ]
 
     @swagger_auto_schema(
         responses={200: AddressInfoSerializer},
@@ -55,7 +61,7 @@ class AddressInfoView(APIView):
             wallet_hash_bytes = bytes.fromhex(address_obj.wallet.wallet_hash)
             wallet_digest = sha224(wallet_hash_bytes).digest().hex()
 
-        serializer = self.serializer_class(dict(
+        data = dict(
             address=address_obj.address,
             token_address=address_obj.token_address,
             wallet_digest=wallet_digest,
@@ -63,7 +69,12 @@ class AddressInfoView(APIView):
             address_path=address_obj.address_path,
             wallet_index=address_obj.wallet_index,
             has_subscribed_push_notifications=has_subscribed_push_notifications,
-        ))
+        )
+
+        if ApiTokenScopes.ADDRESS_INFO in ApiTokenAuthentication.get_scopes_from_request(request):
+            data["wallet_hash"] = wallet_hash
+
+        serializer = self.serializer_class(data)
         return Response(serializer.data)
 
 

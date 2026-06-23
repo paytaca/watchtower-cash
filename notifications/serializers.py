@@ -1,3 +1,4 @@
+import json
 from django.db.models import Q
 from django.utils import timezone
 from django.db import transaction
@@ -5,6 +6,7 @@ from rest_framework import serializers
 from push_notifications.models import GCMDevice, APNSDevice
 
 from .models import DeviceWallet
+from notifications.utils.send import send_push_notification_to_wallet_hashes
 
 
 class DeviceWalletSerializer(serializers.ModelSerializer):
@@ -226,3 +228,58 @@ class DeviceUnsubscribeSerializer(serializers.Serializer):
             )
 
         return device_wallets_data
+
+class SendPushNotificationResultSerializer(serializers.Serializer):
+    success = serializers.BooleanField(read_only=True)
+    results = serializers.ListSerializer(child=serializers.DictField(), read_only=True)
+    error = serializers.CharField(read_only=True)
+
+
+class SendPushNotificationSerializer(serializers.Serializer):
+    wallet_hashes = serializers.ListField(child=serializers.CharField(), write_only=True)
+    message = serializers.CharField(write_only=True)
+    title = serializers.CharField(required=False, allow_null=True, write_only=True)
+    application_id = serializers.CharField(write_only=True)
+    type = serializers.CharField(write_only=True)
+    extra_kwargs = serializers.DictField(default=dict, write_only=True)
+
+    gcm = SendPushNotificationResultSerializer(read_only=True)
+    apns = SendPushNotificationResultSerializer(read_only=True)
+
+    def create(self, validated_data):
+        gcm_result, apns_result = send_push_notification_to_wallet_hashes(
+            validated_data["wallet_hashes"],
+            validated_data["message"],
+            title = validated_data.get("title"),
+            extra = dict(
+                type=validated_data["type"],
+                **validated_data["extra_kwargs"],
+            )
+        )
+
+        return {
+            "gcm": self._parse_result(gcm_result),
+            "apns": self._parse_result(apns_result),
+        }
+
+    def _parse_result(self, result):
+        if isinstance(result, Exception):
+            return dict(success=False, error= str(result))
+        elif isinstance(result, list):
+            return dict(
+                success = True,
+                results = [self._serialize_json_or_str(_result) for _result in result],
+            )
+        elif result is not None:
+            return dict(success=True, result=_serialize_json_or_str(result))
+
+    def _serialize_json_or_str(self, json_data):
+        try:
+            return json.loads(json.dumps(json_data))
+        except json.JSONDecodeError:
+            return str(json_data)
+
+
+    def save(self):
+        validated_data = self.validated_data
+        return self.create(validated_data)

@@ -69,8 +69,8 @@ def parse_bcmr_to_info(data, is_nft=False, category=None, capability=None):
 
     fallback_name = f'CT-{category[:4]}' if category else 'CashToken'
 
+    type_metadata = data.get('type_metadata', {})
     if is_nft:
-        type_metadata = data.get('type_metadata', {})
         name = type_metadata.get('name') or data.get('name') or fallback_name
         symbol = data.get('token', {}).get('symbol', '')
         description = type_metadata.get('description') or data.get('description', '')

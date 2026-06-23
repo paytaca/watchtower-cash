@@ -16,4 +16,22 @@ class AuthTokenAdmin(admin.ModelAdmin):
 
     mark_as_expired.short_description = "Mark as expired"
 
+
+class ApiTokenAdmin(admin.ModelAdmin):
+    list_display = [
+        "uuid",
+        "name",
+        "scopes",
+    ]
+
+    list_filter = [
+        "scopes",
+    ]
+
+    readonly_fields = [
+        "uuid",
+    ]
+
+
 admin.site.register(AuthToken, AuthTokenAdmin)
+admin.site.register(ApiToken, ApiTokenAdmin)
