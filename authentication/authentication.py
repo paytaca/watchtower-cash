@@ -19,7 +19,7 @@ class ApiTokenAuthentication(BaseAuthentication):
             return None
 
         try:
-            api_token = ApiToken.objects.filter(uuid=token_uuid).first()
+            api_token = ApiToken.objects.filter(uuid=token_uuid, is_active=True).first()
         except (ValidationError, ValueError):
             return None
 

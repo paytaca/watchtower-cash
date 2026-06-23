@@ -56,4 +56,10 @@ class ApiToken(models.Model):
     scopes = ArrayField(
         base_field=models.CharField(max_length=30),
         blank=True,
+        default=list,
     )
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.uuid.hex} : {self.name}"

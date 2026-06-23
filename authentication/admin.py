@@ -22,10 +22,7 @@ class ApiTokenAdmin(admin.ModelAdmin):
         "uuid",
         "name",
         "scopes",
-    ]
-
-    list_filter = [
-        "scopes",
+        "created_at",
     ]
 
     readonly_fields = [

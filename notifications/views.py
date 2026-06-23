@@ -113,7 +113,10 @@ class SendPushNotificationView(APIView):
         )
     ]
 
-    @swagger_auto_schema(request_body=SendPushNotificationSerializer)
+    @swagger_auto_schema(
+        request_body=SendPushNotificationSerializer,
+        responses = { 200: SendPushNotificationSerializer },
+    )
     def post(self, request, *args, **kwargs):
         """
             Sends push notification to paytaca app
