@@ -239,7 +239,6 @@ class SendPushNotificationSerializer(serializers.Serializer):
     wallet_hashes = serializers.ListField(child=serializers.CharField(), write_only=True)
     message = serializers.CharField(write_only=True)
     title = serializers.CharField(required=False, allow_null=True, write_only=True)
-    application_id = serializers.CharField(write_only=True)
     type = serializers.CharField(write_only=True)
     extra_kwargs = serializers.DictField(default=dict, write_only=True)
 
@@ -278,7 +277,7 @@ class SendPushNotificationSerializer(serializers.Serializer):
     def _serialize_json_or_str(self, json_data):
         try:
             return json.loads(json.dumps(json_data))
-        except json.JSONDecodeError:
+        except (json.JSONDecodeError, TypeError, ValueError):
             return str(json_data)
 
 
