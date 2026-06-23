@@ -220,7 +220,7 @@ class Address(PostgresModel):
         null=True,
         blank=True
     )
-    address_path = models.CharField(max_length=10, db_index=True)
+    address_path = models.CharField(max_length=15, db_index=True)
     advance_subscription = models.BooleanField(default=False, db_index=True)
     date_created = models.DateTimeField(default=timezone.now)
 
