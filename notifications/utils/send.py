@@ -1,9 +1,12 @@
+import logging
 from firebase_admin import messaging
 from django.db.models import OuterRef, Exists
 from push_notifications.models import GCMDevice, APNSDevice
 from notifications.models import DeviceWallet
 
 from .send_response import parse_gcm_response
+
+LOGGER = logging.getLogger("django")
 
 ANDROID_NOTIF_KWARGS = [
     # part of messaging.AndroidNotification kwargs
@@ -174,7 +177,7 @@ def send_push_notification_to_wallet_hashes(wallet_hash_list, message, **kwargs)
                 gcm_send_response.append(_gcm_send_response)
 
     except Exception as exception:
-        logger.exception(f"GCM send failed: {exception}")
+        LOGGER.exception(f"GCM send failed: {exception}")
         gcm_send_response = exception
 
     try:
@@ -195,7 +198,7 @@ def send_push_notification_to_wallet_hashes(wallet_hash_list, message, **kwargs)
             apns_send_response += _apns_send_response
 
     except Exception as exception:
-        logger.exception(f"APNS send failed: {exception}")
+        LOGGER.exception(f"APNS send failed: {exception}")
         apns_send_response = exception
 
     return (

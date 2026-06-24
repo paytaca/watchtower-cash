@@ -6,7 +6,11 @@ from .serializers import (
     DeviceSubscriptionSerializer,
     DeviceUnsubscribeSerializer,
     DeviceWalletSerializer,
+    SendPushNotificationSerializer,
 )
+from authentication.models import ApiTokenScopes
+from authentication.authentication import ApiTokenAuthentication
+from authentication.permissions import HasApiTokenScopePermission
 
     
 # Create your views here.
@@ -92,3 +96,32 @@ class TestPushNotificationView(APIView):
                 'success': False,
                 'error': str(e),
             }, status=500)
+
+
+class SendPushNotificationView(APIView):
+    serializer_class = SendPushNotificationSerializer
+
+    authentication_classes = [
+        ApiTokenAuthentication,
+    ]
+
+    permission_classes = [
+        HasApiTokenScopePermission(
+            name="PushNotifApiTokenScope",
+            scopes=[ApiTokenScopes.PUSH_NOTIF],
+            match_all=True,
+        )
+    ]
+
+    @swagger_auto_schema(
+        request_body=SendPushNotificationSerializer,
+        responses = { 200: SendPushNotificationSerializer },
+    )
+    def post(self, request, *args, **kwargs):
+        """
+            Sends push notification to paytaca app
+        """
+        serializer = self.serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        result = serializer.save()
+        return Response(result)

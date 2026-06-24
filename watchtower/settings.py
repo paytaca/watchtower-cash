@@ -436,6 +436,7 @@ from corsheaders.defaults import default_headers
 
 CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_HEADERS = list(default_headers) + [
+    "x-api-key",
     "x-paypro-version",
     "x-paytaca-app-version",
     "paytaca-app-version",
@@ -486,7 +487,17 @@ SIMPLE_JWT = {
     "SLIDING_TOKEN_LIFETIME_LATE_USER": timedelta(days=30),
 }
 
-SWAGGER_SETTINGS = {"SECURITY_SETTINGS": {}, "SECURITY_DEFINITIONS": {}}
+SWAGGER_SETTINGS = {
+    "SECURITY_SETTINGS": {},
+    "SECURITY_DEFINITIONS": {
+        "X-Api-Key": {
+            "type": "apiKey",
+            "name": "X-Api-Key",
+            "in": "header",
+            "description": "Enter your API key in this field.",
+        }
+    }
+}
 
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 

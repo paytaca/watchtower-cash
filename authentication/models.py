@@ -1,5 +1,7 @@
+import uuid
 from django.db import models
 from django.utils import timezone
+from django.contrib.postgres.fields import ArrayField
 
 from django.utils.crypto import get_random_string
 from cryptography.fernet import Fernet
@@ -41,3 +43,23 @@ class AuthToken(models.Model):
     
     def __str__(self):
         return str(self.id)
+
+
+class ApiTokenScopes(models.TextChoices):
+    PUSH_NOTIF = "push-notification"
+    ADDRESS_INFO = "address-info"
+
+
+class ApiToken(models.Model):
+    uuid = models.UUIDField(default=uuid.uuid4, unique=True, db_index=True, editable=False)
+    name = models.CharField(max_length=50)
+    scopes = ArrayField(
+        base_field=models.CharField(max_length=30),
+        blank=True,
+        default=list,
+    )
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.uuid.hex} : {self.name}"
