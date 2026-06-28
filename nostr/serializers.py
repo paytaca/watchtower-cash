@@ -30,6 +30,21 @@ class PubkeyRegisterSerializer(serializers.Serializer):
         return nostr_pubkey
 
 
+class PubkeyLastOnlineSerializer(serializers.Serializer):
+    pubkeys = serializers.ListField(
+        child=serializers.CharField(max_length=64),
+        allow_empty=False,
+    )
+
+    def validate_pubkeys(self, value):
+        for pubkey in value:
+            if not re.match(r'^[0-9a-fA-F]{64}$', pubkey):
+                raise serializers.ValidationError(
+                    f"'{pubkey}' is not a valid 64-character hex string."
+                )
+        return [p.lower() for p in value]
+
+
 class PubkeyUnregisterSerializer(serializers.Serializer):
     pubkey = serializers.CharField(max_length=64)
 

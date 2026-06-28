@@ -2,6 +2,7 @@ import json
 import time
 import logging
 import websocket
+from django.utils import timezone
 from django.core.management.base import BaseCommand
 from django.db import connection
 from django.conf import settings
@@ -158,6 +159,7 @@ class Command(BaseCommand):
 
                     for recipient_pubkey in recipient_pubkeys:
                         logger.info(f"Detected gift-wrap event {event_id} for pubkey {recipient_pubkey[:16]}... sending push")
+                        NostrPubkey.objects.filter(pubkey_hex=recipient_pubkey).update(last_active=timezone.now())
                         send_nostr_push_notification(recipient_pubkey)
 
                 elif msg_type == "EOSE":
