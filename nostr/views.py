@@ -45,12 +45,20 @@ class PubkeyUnregisterView(APIView):
 
 
 class PubkeyLastOnlineView(APIView):
+    """Return the latest online timestamp for each requested pubkey.
+
+    This endpoint is intentionally public — last-online status is meant to be
+    accessible by any client (e.g., chat UIs that display online indicators).
+    The data returned is non-sensitive: it only indicates whether a pubkey has
+    been recently active (registered, received a Nostr message, or polled the
+    watchtower).
+    """
     permission_classes = []
     serializer_class = PubkeyLastOnlineSerializer
 
     @swagger_auto_schema(
         request_body=PubkeyLastOnlineSerializer,
-        responses={200: "Dict of pubkey_hex → ISO timestamp or null"},
+        responses={200: PubkeyLastOnlineSerializer},
     )
     def post(self, request, *args, **kwargs):
         serializer = self.serializer_class(data=request.data)

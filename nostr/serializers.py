@@ -30,10 +30,14 @@ class PubkeyRegisterSerializer(serializers.Serializer):
         return nostr_pubkey
 
 
+MAX_PUBKEYS = 500
+
+
 class PubkeyLastOnlineSerializer(serializers.Serializer):
     pubkeys = serializers.ListField(
         child=serializers.CharField(max_length=64),
         allow_empty=False,
+        max_length=MAX_PUBKEYS,
     )
 
     def validate_pubkeys(self, value):
