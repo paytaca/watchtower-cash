@@ -52,11 +52,11 @@ class PubkeyLastOnlineViewTestCase(TestCase):
             version=1,
             last_balance_check=None,
         )
-        NostrPubkey.objects.create(
+        np = NostrPubkey.objects.create(
             pubkey_hex=VALID_HEX,
             wallet_hash=wallet.wallet_hash,
-            last_active=now,
         )
+        NostrPubkey.objects.filter(pk=np.pk).update(last_active=now)
 
         response = self.client.post(
             self.url,
@@ -75,11 +75,11 @@ class PubkeyLastOnlineViewTestCase(TestCase):
             version=1,
             last_balance_check=now,
         )
-        NostrPubkey.objects.create(
+        np = NostrPubkey.objects.create(
             pubkey_hex=VALID_HEX,
             wallet_hash=wallet.wallet_hash,
-            last_active=None,
         )
+        NostrPubkey.objects.filter(pk=np.pk).update(last_active=None)
 
         response = self.client.post(
             self.url,
@@ -100,11 +100,11 @@ class PubkeyLastOnlineViewTestCase(TestCase):
             version=1,
             last_balance_check=earlier,
         )
-        NostrPubkey.objects.create(
+        np = NostrPubkey.objects.create(
             pubkey_hex=VALID_HEX,
             wallet_hash=wallet.wallet_hash,
-            last_active=later,
         )
+        NostrPubkey.objects.filter(pk=np.pk).update(last_active=later)
 
         response = self.client.post(
             self.url,
@@ -162,14 +162,16 @@ class PubkeyLastOnlineViewTestCase(TestCase):
             version=1,
             last_balance_check=now,
         )
-        NostrPubkey.objects.create(
+        np1 = NostrPubkey.objects.create(
             pubkey_hex=VALID_HEX,
             wallet_hash=w1.wallet_hash,
         )
-        NostrPubkey.objects.create(
+        NostrPubkey.objects.filter(pk=np1.pk).update(last_active=None)
+        np2 = NostrPubkey.objects.create(
             pubkey_hex=VALID_HEX,
             wallet_hash=w2.wallet_hash,
         )
+        NostrPubkey.objects.filter(pk=np2.pk).update(last_active=None)
 
         response = self.client.post(
             self.url,
@@ -210,11 +212,11 @@ class PubkeyLastOnlineViewTestCase(TestCase):
             version=1,
             last_balance_check=None,
         )
-        NostrPubkey.objects.create(
+        np = NostrPubkey.objects.create(
             pubkey_hex=VALID_HEX,
             wallet_hash=wallet.wallet_hash,
-            last_active=None,
         )
+        NostrPubkey.objects.filter(pk=np.pk).update(last_active=None)
 
         response = self.client.post(
             self.url,
