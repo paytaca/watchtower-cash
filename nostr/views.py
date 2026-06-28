@@ -93,7 +93,7 @@ class PubkeyLastOnlineView(APIView):
             for entry in mapping.get(pubkey, []):
                 if entry['last_active']:
                     timestamps.append(entry['last_active'])
-                if entry['wallet_hash'] in wallets and wallets[entry['wallet_hash']]:
+                if wallets.get(entry['wallet_hash']):
                     timestamps.append(wallets[entry['wallet_hash']])
 
             max_ts = max(timestamps).isoformat().replace('+00:00', 'Z') if timestamps else None

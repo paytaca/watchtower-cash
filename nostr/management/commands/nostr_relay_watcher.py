@@ -159,8 +159,11 @@ class Command(BaseCommand):
 
                     for recipient_pubkey in recipient_pubkeys:
                         logger.info(f"Detected gift-wrap event {event_id} for pubkey {recipient_pubkey[:16]}... sending push")
-                        NostrPubkey.objects.filter(pubkey_hex=recipient_pubkey).update(last_active=timezone.now())
                         send_nostr_push_notification(recipient_pubkey)
+
+                    NostrPubkey.objects.filter(
+                        pubkey_hex__in=recipient_pubkeys,
+                    ).update(last_active=timezone.now())
 
                 elif msg_type == "EOSE":
                     logger.info("End of stored events — now processing live events")
