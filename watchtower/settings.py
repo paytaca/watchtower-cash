@@ -118,6 +118,10 @@ AUTHENTICATION_BACKENDS = [
     "django.contrib.auth.backends.ModelBackend",
 ]
 
+BITCOINCASH_OAUTH = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(hours=6),
+}
+
 ROOT_URLCONF = "watchtower.urls"
 
 TEMPLATES = [

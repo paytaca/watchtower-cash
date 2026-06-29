@@ -2,6 +2,7 @@ from django.utils import timezone
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
 from drf_yasg.utils import swagger_auto_schema
 from .serializers import (
     PubkeyRegisterSerializer,
@@ -49,14 +50,9 @@ class PubkeyUnregisterView(APIView):
 
 class PubkeyLastOnlineView(APIView):
     """Return the latest online timestamp for each requested pubkey.
-
-    This endpoint is intentionally public — last-online status is meant to be
-    accessible by any client (e.g., chat UIs that display online indicators).
-    The data returned is non-sensitive: it only indicates whether a pubkey has
-    been recently active (registered, received a Nostr message, or polled the
-    watchtower).
     """
-    permission_classes = []
+    authentication_classes = [BitcoinCashOAuthAuthentication]
+    permission_classes = [IsAuthenticated]
     serializer_class = PubkeyLastOnlineSerializer
 
     @swagger_auto_schema(
