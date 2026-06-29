@@ -26,6 +26,11 @@ class NostrUpdatesConsumer(WebsocketConsumer):
         from .models import NostrPubkey
         from main.utils.cache import set_last_active
 
+        logger.info(
+            f'_update_last_active: looking up wallet_hash='
+            f'{self.wallet_hash[:16]}...'
+        )
+
         np = NostrPubkey.objects.filter(
             wallet_hash=self.wallet_hash,
         ).values('pubkey_hex').first()
@@ -36,6 +41,15 @@ class NostrUpdatesConsumer(WebsocketConsumer):
                 last_active=now,
             )
             set_last_active(np['pubkey_hex'], now)
+            logger.info(
+                f'_update_last_active: updated for pubkey '
+                f'{np["pubkey_hex"][:16]}..., ts={now.isoformat()}'
+            )
+        else:
+            logger.warning(
+                f'_update_last_active: no NostrPubkey found for wallet_hash '
+                f'{self.wallet_hash[:16]}... — nothing updated'
+            )
 
     def connect(self):
         self.wallet_hash = self.scope['url_route']['kwargs']['wallet_hash']
