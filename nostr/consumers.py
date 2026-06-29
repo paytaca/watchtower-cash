@@ -11,15 +11,14 @@ logger = logging.getLogger(__name__)
 class NostrUpdatesConsumer(WebsocketConsumer):
     """General-purpose WebSocket for nostr-related real-time events.
 
-    When a message is received from a sender, each recipient gets a
-    ``last_active`` event pushed to their WebSocket with the **sender's**
-    pubkey so their client can show the sender as active.
+    Requires Bearer-token authentication (via ``Authorization`` header or
+    ``?token=`` query param) set up by ``BearerTokenAuthMiddleware``.
 
-    The client connects as ``ws/nostr/updates/<wallet_hash>/``.
+    When a message is received from a sender, each recipient gets a
+    ``last_active`` event pushed to their WebSocket.
 
     SECURITY: This consumer only accepts ``{"type": "heartbeat"}``
-    messages. All other inbound payloads are rejected to prevent relaying
-    fake updates.
+    messages. All other inbound payloads are rejected.
     """
 
     def _update_last_active(self):
@@ -40,9 +39,23 @@ class NostrUpdatesConsumer(WebsocketConsumer):
 
     def connect(self):
         self.wallet_hash = self.scope['url_route']['kwargs']['wallet_hash']
+
+        # Enforce authentication — BearerTokenAuthMiddleware must have set user
+        user = self.scope.get('user')
+        if user is None or getattr(user, 'is_anonymous', True):
+            logger.warning(
+                f'Nostr WS rejected unauthenticated connection for wallet '
+                f'{self.wallet_hash[:16]}...'
+            )
+            self.close(code=4001)
+            return
+
         self.room_group_name = f'nostr_updates_{self.wallet_hash}'
 
-        logger.info(f'Nostr WS connected for wallet {self.wallet_hash[:16]}...')
+        logger.info(
+            f'Nostr WS connected for wallet {self.wallet_hash[:16]}... '
+            f'(user {getattr(user, "user_id", "?")})'
+        )
 
         async_to_sync(self.channel_layer.group_add)(
             self.room_group_name,
@@ -62,20 +75,18 @@ class NostrUpdatesConsumer(WebsocketConsumer):
 
     def receive_json(self, content):
         if content != {"type": "heartbeat"}:
-            logger.warning(f'Nostr WS rejected non-heartbeat from {self.wallet_hash[:16]}...: {content}')
+            logger.warning(
+                f'Nostr WS rejected non-heartbeat from '
+                f'{self.wallet_hash[:16]}...: {content}'
+            )
             self.close(code=4001)
             return
         self._update_last_active()
 
     def last_active_update(self, event):
-        """Send a last-active timestamp update to the client.
-
-        The ``pubkey_hex`` in the event is the sender (the person whose
-        activity changed), not the owner of this WebSocket room.
-        """
+        """Send a last-active timestamp update to the client."""
         self.send(text_data=json.dumps({
             'type': 'last_active',
             'pubkey_hex': event['pubkey_hex'],
             'timestamp': event['timestamp'],
         }))
-

@@ -18,7 +18,10 @@ Three new server-side pieces are available for real-time and cached "last active
 
 ```javascript
 const walletHash = '0a98ed0bbfef02789a6582fc78d4bb22233167f9f16688517ab42041246fc3a5';
-const wsUrl = `wss://watchtower.cash/ws/nostr/updates/${walletHash}/`;
+const accessToken = '<bearer_token_from_oauth>';
+
+// Pass token as query parameter (browser WebSockets can't set custom headers)
+const wsUrl = `wss://watchtower.cash/ws/nostr/updates/${walletHash}/?token=${accessToken}`;
 
 const ws = new WebSocket(wsUrl);
 

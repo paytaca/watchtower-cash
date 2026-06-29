@@ -22,18 +22,21 @@ import rampp2p.routing
 import stablehedge.routing
 import jpp.routing
 import nostr.routing
+from nostr.middleware import BearerTokenAuthMiddleware
 
 application = ProtocolTypeRouter({
   "http": django_asgi_app,
   "websocket": AllowedHostsOriginValidator(
     AuthMiddlewareStack(
-        URLRouter(
-          anyhedge.routing.websocket_urlpatterns +
-          main.routing.websocket_urlpatterns +
-          rampp2p.routing.websocket_urlpatterns +
-          stablehedge.routing.websocket_urlpatterns +
-          jpp.routing.websocket_urlpatterns +
-          nostr.routing.websocket_urlpatterns
+        BearerTokenAuthMiddleware(
+            URLRouter(
+              anyhedge.routing.websocket_urlpatterns +
+              main.routing.websocket_urlpatterns +
+              rampp2p.routing.websocket_urlpatterns +
+              stablehedge.routing.websocket_urlpatterns +
+              jpp.routing.websocket_urlpatterns +
+              nostr.routing.websocket_urlpatterns
+            )
         )
     )
   )
