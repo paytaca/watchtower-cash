@@ -1,8 +1,13 @@
+import logging
+
 from django.utils import timezone
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
+
+
+logger = logging.getLogger(__name__)
 from drf_yasg.utils import swagger_auto_schema
 from .serializers import (
     PubkeyRegisterSerializer,
@@ -100,7 +105,7 @@ class PubkeyTouchView(APIView):
     to each recipient's WebSocket room so their green dot lights up.
     """
     authentication_classes = [BitcoinCashOAuthAuthentication]
-    permission_classes = []
+    permission_classes = [IsAuthenticated]
     serializer_class = PubkeyTouchSerializer
 
     @swagger_auto_schema(

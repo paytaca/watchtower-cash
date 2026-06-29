@@ -147,10 +147,13 @@ Use this to populate the chat list when the app opens, or every minute in backgr
 ### Request
 
 ```javascript
-async function queryLastActive(pubkeys) {
+async function queryLastActive(pubkeys, accessToken) {
   const res = await fetch('https://watchtower.cash/api/nostr/last-active/', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${accessToken}`,
+    },
     body: JSON.stringify({ pubkeys }),
   });
 

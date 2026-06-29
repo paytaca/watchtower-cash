@@ -10,8 +10,8 @@ logger = logging.getLogger(__name__)
 class BearerTokenAuthMiddleware:
     """Channels middleware that authenticates WebSocket connections via Bearer token.
 
-    Reads the ``Authorization`` header from the HTTP upgrade handshake first,
-    then falls back to a ``?token=`` query parameter. If a valid token is
+    Reads the ``?token=`` query parameter from the HTTP upgrade handshake first,
+    then falls back to the ``Authorization`` header. If a valid token is
     found, ``scope['user']`` is set to a ``BitcoinCashUser`` — the same object
     type returned by ``BitcoinCashOAuthAuthentication`` in REST views.
 

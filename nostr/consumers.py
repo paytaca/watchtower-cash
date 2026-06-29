@@ -1,4 +1,4 @@
-from channels.generic.websocket import WebsocketConsumer
+from channels.generic.websocket import JsonWebsocketConsumer
 from asgiref.sync import async_to_sync
 from django.utils import timezone
 import json
@@ -8,7 +8,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-class NostrUpdatesConsumer(WebsocketConsumer):
+class NostrUpdatesConsumer(JsonWebsocketConsumer):
     """General-purpose WebSocket for nostr-related real-time events.
 
     Requires Bearer-token authentication (via ``Authorization`` header or
