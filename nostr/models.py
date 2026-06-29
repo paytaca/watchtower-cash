@@ -13,5 +13,5 @@ class NostrPubkey(models.Model):
 
     class Meta:
         indexes = [
-            models.Index(fields=['pubkey_hex', 'wallet_hash']),
+            models.Index(fields=['pubkey_hex', 'wallet_hash', 'last_active']),
         ]
