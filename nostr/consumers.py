@@ -66,6 +66,10 @@ class NostrUpdatesConsumer(WebsocketConsumer):
         self._update_last_active()
 
     def disconnect(self, close_code):
+        # room_group_name may not exist if connect() rejected the connection early
+        if not hasattr(self, 'room_group_name'):
+            return
+
         logger.info(f'Nostr WS disconnected for wallet {self.wallet_hash[:16]}...')
 
         async_to_sync(self.channel_layer.group_discard)(
@@ -85,6 +89,11 @@ class NostrUpdatesConsumer(WebsocketConsumer):
 
     def last_active_update(self, event):
         """Send a last-active timestamp update to the client."""
+        logger.info(
+            f'Nostr WS received last_active_update for wallet '
+            f'{self.wallet_hash[:16]}...: pubkey={event.get("pubkey_hex", "")[:16]}... '
+            f'ts={event.get("timestamp")}'
+        )
         self.send(text_data=json.dumps({
             'type': 'last_active',
             'pubkey_hex': event['pubkey_hex'],

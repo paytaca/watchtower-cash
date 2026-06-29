@@ -145,6 +145,11 @@ class PubkeyTouchView(APIView):
                 wallet_hash = room_map.get(recipient_pubkey)
                 if wallet_hash:
                     send_last_active_update(wallet_hash, sender_pubkey, now)
+                else:
+                    logger.info(
+                        f'Touch: recipient {recipient_pubkey[:16]}... not found '
+                        f'in NostrPubkey — skipping WS push'
+                    )
 
         return Response({"status": "ok"}, status=status.HTTP_200_OK)
 
