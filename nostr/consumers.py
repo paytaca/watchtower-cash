@@ -64,6 +64,30 @@ class NostrUpdatesConsumer(JsonWebsocketConsumer):
             self.close(code=4001)
             return
 
+        # Verify that the authenticated user owns this wallet_hash
+        bitcoincash_address = getattr(user, 'bitcoincash_address', None)
+        if not bitcoincash_address:
+            logger.warning(
+                f'Nostr WS rejected connection for wallet '
+                f'{self.wallet_hash[:16]}... — user has no bitcoincash_address'
+            )
+            self.close(code=4001)
+            return
+
+        from main.models import Address
+        owns_wallet = Address.objects.filter(
+            address=bitcoincash_address,
+            wallet__wallet_hash=self.wallet_hash,
+        ).exists()
+        if not owns_wallet:
+            logger.warning(
+                f'Nostr WS rejected connection for wallet '
+                f'{self.wallet_hash[:16]}... — user {user.user_id[:16]}... '
+                f'does not own this wallet'
+            )
+            self.close(code=4001)
+            return
+
         self.room_group_name = f'nostr_updates_{self.wallet_hash}'
 
         logger.info(
