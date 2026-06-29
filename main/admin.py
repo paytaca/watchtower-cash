@@ -510,10 +510,17 @@ class WalletAdmin(DynamicRawIDMixin, admin.ModelAdmin):
                 wallet_hash = form.cleaned_data['wallet_hash'].strip()
                 
                 try:
-                    from main.utils.cache import clear_wallet_balance_cache, clear_wallet_history_cache
+                    from main.utils.cache import clear_wallet_balance_cache, clear_wallet_history_cache, clear_last_active
+                    from nostr.models import NostrPubkey
                     from django.conf import settings
                     
                     cache = settings.REDISKV
+                    
+                    # Find associated nostr pubkey to clear last_active cache
+                    np_record = NostrPubkey.objects.filter(
+                        wallet_hash=wallet_hash
+                    ).values('pubkey_hex').first()
+                    pubkey_hex = np_record['pubkey_hex'] if np_record else None
                     
                     # Count caches before clearing
                     bch_balance_key = f'wallet:balance:bch:{wallet_hash}'
@@ -523,11 +530,14 @@ class WalletAdmin(DynamicRawIDMixin, admin.ModelAdmin):
                     bch_balance_exists = cache.exists(bch_balance_key)
                     token_balance_count = len(token_balance_keys) if token_balance_keys else 0
                     history_count = len(history_keys) if history_keys else 0
-                    total_cache_count = (1 if bch_balance_exists else 0) + token_balance_count + history_count
+                    last_active_count = 1 if pubkey_hex and cache.exists(f'last_active:{pubkey_hex}') else 0
+                    total_cache_count = (1 if bch_balance_exists else 0) + token_balance_count + history_count + last_active_count
                     
                     # Clear all caches
                     clear_wallet_balance_cache(wallet_hash, token_categories=None)
                     clear_wallet_history_cache(wallet_hash, asset_key=None)
+                    if pubkey_hex:
+                        clear_last_active(pubkey_hex)
                     
                     # Verify caches were cleared
                     bch_balance_exists_after = cache.exists(bch_balance_key)
@@ -544,6 +554,7 @@ class WalletAdmin(DynamicRawIDMixin, admin.ModelAdmin):
                         'bch_balance_cleared': bch_balance_exists,
                         'token_balance_count': token_balance_count,
                         'history_count': history_count,
+                        'last_active_cleared': last_active_count > 0,
                         'total_cleared': total_cache_count,
                         'bch_balance_remaining': bch_balance_exists_after,
                         'token_balance_remaining': token_balance_count_after,

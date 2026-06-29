@@ -1,6 +1,8 @@
 from django.utils import timezone
 from rest_framework import serializers
 from .models import NostrPubkey
+from main.utils.cache import set_last_active
+from nostr.utils.websocket import send_last_active_update
 
 
 import re
@@ -19,14 +21,18 @@ class PubkeyRegisterSerializer(serializers.Serializer):
         pubkey = validated_data['pubkey']
         wallet_hash = validated_data['wallet_hash']
 
+        now = timezone.now()
         nostr_pubkey, _ = NostrPubkey.objects.update_or_create(
             wallet_hash=wallet_hash,
             defaults={
                 'pubkey_hex': pubkey,
-                'last_active': timezone.now(),
+                'last_active': now,
             },
         )
 
+        set_last_active(pubkey, now)
+        send_last_active_update(wallet_hash, pubkey, now)
+        
         return nostr_pubkey
 
 
@@ -41,6 +47,27 @@ class PubkeyLastOnlineSerializer(serializers.Serializer):
     )
 
     def validate_pubkeys(self, value):
+        for pubkey in value:
+            if not re.match(r'^[0-9a-fA-F]{64}$', pubkey):
+                raise serializers.ValidationError(
+                    f"'{pubkey}' is not a valid 64-character hex string."
+                )
+        return [p.lower() for p in value]
+
+
+class PubkeyTouchSerializer(serializers.Serializer):
+    pubkey = serializers.CharField(max_length=64)
+    recipients = serializers.ListField(
+        child=serializers.CharField(max_length=64),
+        allow_empty=True,
+    )
+
+    def validate_pubkey(self, value):
+        if not re.match(r'^[0-9a-fA-F]{64}$', value):
+            raise serializers.ValidationError("pubkey must be a 64-character hex string.")
+        return value.lower()
+
+    def validate_recipients(self, value):
         for pubkey in value:
             if not re.match(r'^[0-9a-fA-F]{64}$', pubkey):
                 raise serializers.ValidationError(

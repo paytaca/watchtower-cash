@@ -9,6 +9,7 @@ from django.conf import settings
 from nostr.utils import send_nostr_push_notification
 from nostr.models import NostrPubkey
 
+
 logger = logging.getLogger(__name__)
 
 RELAY_URL = "wss://relay.paytaca.com"
@@ -157,9 +158,14 @@ class Command(BaseCommand):
                         and tag[1] != event_pubkey
                     }
 
-                    NostrPubkey.objects.filter(
-                        pubkey_hex__in=recipient_pubkeys,
-                    ).update(last_active=timezone.now())
+                    now = timezone.now()
+
+                    # Update recipients' last_active — receiving a message
+                    # means they were online at this point.
+                    if recipient_pubkeys:
+                        NostrPubkey.objects.filter(
+                            pubkey_hex__in=recipient_pubkeys,
+                        ).update(last_active=now)
 
                     for recipient_pubkey in recipient_pubkeys:
                         logger.info(f"Detected gift-wrap event {event_id} for pubkey {recipient_pubkey[:16]}... sending push")

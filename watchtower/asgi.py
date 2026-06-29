@@ -21,6 +21,7 @@ import anyhedge.routing
 import rampp2p.routing
 import stablehedge.routing
 import jpp.routing
+import nostr.routing
 
 application = ProtocolTypeRouter({
   "http": django_asgi_app,
@@ -31,7 +32,8 @@ application = ProtocolTypeRouter({
           main.routing.websocket_urlpatterns +
           rampp2p.routing.websocket_urlpatterns +
           stablehedge.routing.websocket_urlpatterns +
-          jpp.routing.websocket_urlpatterns
+          jpp.routing.websocket_urlpatterns +
+          nostr.routing.websocket_urlpatterns
         )
     )
   )

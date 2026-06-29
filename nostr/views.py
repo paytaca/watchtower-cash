@@ -1,3 +1,4 @@
+from django.utils import timezone
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -6,10 +7,12 @@ from .serializers import (
     PubkeyRegisterSerializer,
     PubkeyUnregisterSerializer,
     PubkeyLastOnlineSerializer,
+    PubkeyTouchSerializer,
 )
 from .authentication import BitcoinCashOAuthAuthentication
 from .models import NostrPubkey
-from main.models import Wallet
+from main.utils.cache import get_last_active, set_last_active
+from nostr.utils.websocket import send_last_active_update
 
 
 class PubkeyRegisterView(APIView):
@@ -65,41 +68,85 @@ class PubkeyLastOnlineView(APIView):
         serializer.is_valid(raise_exception=True)
         pubkeys = serializer.validated_data['pubkeys']
 
-        np_records = list(NostrPubkey.objects.filter(
-            pubkey_hex__in=pubkeys,
-        ).values('pubkey_hex', 'wallet_hash', 'last_active'))
-
-        mapping = {}
-        for np in np_records:
-            mapping.setdefault(np['pubkey_hex'], []).append({
-                'wallet_hash': np['wallet_hash'],
-                'last_active': np['last_active'],
-            })
-
-        all_wallet_hashes = list(set(
-            wh['wallet_hash']
-            for whs in mapping.values()
-            for wh in whs
-        ))
-
-        wallets = {
-            w.wallet_hash: w.last_balance_check
-            for w in Wallet.objects.filter(wallet_hash__in=all_wallet_hashes)
-        }
-
         result = {}
-        for pubkey in pubkeys:
-            timestamps = []
-            for entry in mapping.get(pubkey, []):
-                if entry['last_active']:
-                    timestamps.append(entry['last_active'])
-                if wallets.get(entry['wallet_hash']):
-                    timestamps.append(wallets[entry['wallet_hash']])
+        uncached_pubkeys = []
 
-            max_ts = max(timestamps).isoformat().replace('+00:00', 'Z') if timestamps else None
-            result[pubkey] = max_ts
+        for pubkey in pubkeys:
+            cached = get_last_active(pubkey)
+            if cached is not None:
+                result[pubkey] = cached
+            else:
+                uncached_pubkeys.append(pubkey)
+
+        if uncached_pubkeys:
+            np_records = {
+                np['pubkey_hex']: np['last_active']
+                for np in NostrPubkey.objects.filter(
+                    pubkey_hex__in=uncached_pubkeys,
+                ).values('pubkey_hex', 'last_active')
+            }
+
+            for pubkey in uncached_pubkeys:
+                last_active = np_records.get(pubkey)
+                max_ts = last_active.isoformat().replace('+00:00', 'Z') if last_active else None
+                result[pubkey] = max_ts
+
+                if max_ts is not None:
+                    set_last_active(pubkey, max_ts)
 
         return Response(result, status=status.HTTP_200_OK)
+
+
+class PubkeyTouchView(APIView):
+    """Touch endpoint — the sender calls this right after sending a message.
+
+    Updates the sender's ``last_active`` and pushes a real-time notification
+    to each recipient's WebSocket room so their green dot lights up.
+    """
+    authentication_classes = [BitcoinCashOAuthAuthentication]
+    permission_classes = []
+    serializer_class = PubkeyTouchSerializer
+
+    @swagger_auto_schema(
+        request_body=PubkeyTouchSerializer,
+        responses={200: "ok"},
+    )
+    def post(self, request, *args, **kwargs):
+        serializer = self.serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        sender_pubkey = serializer.validated_data['pubkey']
+        recipients = serializer.validated_data['recipients']
+
+        try:
+            np_sender = NostrPubkey.objects.only('wallet_hash').get(
+                pubkey_hex=sender_pubkey,
+            )
+        except NostrPubkey.DoesNotExist:
+            return Response(
+                {"error": "Sender pubkey not registered"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        now = timezone.now()
+
+        NostrPubkey.objects.filter(pubkey_hex=sender_pubkey).update(last_active=now)
+        set_last_active(sender_pubkey, now)
+
+        if recipients:
+            room_map = {
+                np['pubkey_hex']: np['wallet_hash']
+                for np in NostrPubkey.objects.filter(
+                    pubkey_hex__in=recipients,
+                ).values('pubkey_hex', 'wallet_hash')
+            }
+
+            for recipient_pubkey in recipients:
+                wallet_hash = room_map.get(recipient_pubkey)
+                if wallet_hash:
+                    send_last_active_update(wallet_hash, sender_pubkey, now)
+
+        return Response({"status": "ok"}, status=status.HTTP_200_OK)
 
 
 class PubkeyCheckView(APIView):
