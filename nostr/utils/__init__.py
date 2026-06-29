@@ -1,7 +1,7 @@
 import logging
 from django.core.cache import cache
 from notifications.utils.send import send_push_notification_to_wallet_hashes
-from .models import NostrPubkey
+from ..models import NostrPubkey
 
 logger = logging.getLogger(__name__)
 THROTTLE_SECONDS = 30

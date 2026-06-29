@@ -1,4 +1,5 @@
 import base64
+import datetime
 import pickle
 import math
 
@@ -383,3 +384,42 @@ def clear_wallet_history_cache_for_txid(wallet_hash, txid):
         for page, page_size in pages_to_clear:
             cache_key = f'wallet:history:{wallet_hash}:all:{page}:{page_size}'
             cache.delete(cache_key)
+
+
+LAST_ACTIVE_TTL = 60 * 60 * 24  # 24 hours
+
+
+def set_last_active(pubkey_hex, timestamp):
+    """Cache the last active timestamp for a pubkey hex with a 24-hour TTL.
+
+    Updates the cached value in place; does nothing if pubkey_hex is empty.
+    Accepts a datetime (converted to ISO format) or a pre-formatted string.
+    """
+    if not pubkey_hex:
+        return
+    cache = settings.REDISKV
+    cache_key = f'last_active:{pubkey_hex}'
+    if isinstance(timestamp, datetime.datetime):
+        timestamp = timestamp.isoformat().replace('+00:00', 'Z')
+    cache.set(cache_key, str(timestamp), ex=LAST_ACTIVE_TTL)
+
+
+def get_last_active(pubkey_hex):
+    """Return the cached last-active ISO timestamp for a pubkey, or None."""
+    if not pubkey_hex:
+        return None
+    cache = settings.REDISKV
+    cache_key = f'last_active:{pubkey_hex}'
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached.decode('utf-8') if isinstance(cached, bytes) else str(cached)
+    return None
+
+
+def clear_last_active(pubkey_hex):
+    """Remove the last-active cache entry for a pubkey hex."""
+    if not pubkey_hex:
+        return
+    cache = settings.REDISKV
+    cache_key = f'last_active:{pubkey_hex}'
+    cache.delete(cache_key)

@@ -19,6 +19,7 @@ from main.utils.tx_fee import (
     satoshi_to_bch
 )
 
+
 import logging
 import json
 from django.core.exceptions import ObjectDoesNotExist
@@ -376,7 +377,7 @@ class Balance(APIView):
 
             # Update last_balance_check timestamp
             wallet.last_balance_check = timezone.now()
-            wallet.save()
+            wallet.save(update_fields=['last_balance_check'])
 
         return Response(data=data, status=status.HTTP_200_OK)
 

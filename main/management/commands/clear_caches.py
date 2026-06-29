@@ -17,3 +17,8 @@ class Command(BaseCommand):
         history_cache_keys = cache.keys(f'wallet:history:*')
         if history_cache_keys:
             cache.delete(*history_cache_keys)
+
+        # delete last active caches
+        last_active_keys = cache.keys(f'last_active:*')
+        if last_active_keys:
+            cache.delete(*last_active_keys)
