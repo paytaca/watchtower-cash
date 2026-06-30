@@ -1,4 +1,5 @@
 from django.db import models
+from django.contrib.postgres.fields import JSONField
 
 
 class NostrPubkey(models.Model):
@@ -16,3 +17,40 @@ class NostrPubkey(models.Model):
         indexes = [
             models.Index(fields=['pubkey_hex', 'wallet_hash', 'last_active']),
         ]
+
+
+class NostrRoom(models.Model):
+    """Stores room metadata for a wallet's chat room list."""
+    room_id = models.CharField(max_length=128)
+    wallet_hash = models.CharField(max_length=70, db_index=True)
+    type = models.CharField(max_length=10)
+    name = models.CharField(max_length=255)
+    members = JSONField(default=list)
+    subject = models.TextField(null=True, blank=True)
+    avatar = models.URLField(null=True, blank=True)
+    created_at = models.DateTimeField()
+    updated_at = models.DateTimeField()
+    archived = models.BooleanField(default=False)
+
+    class Meta:
+        unique_together = ('wallet_hash', 'room_id')
+
+
+class NostrBlockedContact(models.Model):
+    """A pubkey that the wallet has blocked from chat."""
+    wallet_hash = models.CharField(max_length=70, db_index=True)
+    pub_key_hex = models.CharField(max_length=64)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('wallet_hash', 'pub_key_hex')
+
+
+class NostrBlockedGroup(models.Model):
+    """A room that the wallet has blocked."""
+    wallet_hash = models.CharField(max_length=70, db_index=True)
+    room_id = models.CharField(max_length=128)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('wallet_hash', 'room_id')

@@ -15,9 +15,16 @@ from .serializers import (
     PubkeyLastOnlineSerializer,
     PubkeyTouchSerializer,
     ShowActiveStatusSerializer,
+    WalletHashSerializer,
+    RoomSerializer,
+    RoomCreateSerializer,
+    RoomUpdateSerializer,
+    RoomBatchSyncSerializer,
+    BlockContactSerializer,
+    BlockGroupSerializer,
 )
 from .authentication import BitcoinCashOAuthAuthentication
-from .models import NostrPubkey
+from .models import NostrPubkey, NostrRoom, NostrBlockedContact, NostrBlockedGroup
 from main.utils.cache import get_last_active, set_last_active
 from nostr.utils.websocket import send_last_active_update
 
@@ -234,3 +241,281 @@ class ShowActiveStatusView(APIView):
             "status": "updated",
             "show_active_status": show_active_status,
         }, status=status.HTTP_200_OK)
+
+
+class NostrRoomListView(APIView):
+    """List rooms for a wallet or create a new room."""
+    authentication_classes = [BitcoinCashOAuthAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        wallet_hash = request.query_params.get('wallet_hash')
+        if not wallet_hash:
+            return Response(
+                {"error": "wallet_hash query parameter is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        from .utils.auth import verify_wallet_ownership
+        ok, reason = verify_wallet_ownership(request.user, wallet_hash)
+        if not ok:
+            return Response({"error": reason}, status=status.HTTP_403_FORBIDDEN)
+
+        rooms = NostrRoom.objects.filter(wallet_hash=wallet_hash).order_by('-updated_at')
+        serializer = RoomSerializer(rooms, many=True)
+        return Response({"rooms": serializer.data})
+
+    def post(self, request, *args, **kwargs):
+        serializer = RoomCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        wallet_hash = serializer.validated_data['wallet_hash']
+        room_data = serializer.validated_data['room']
+
+        from .utils.auth import verify_wallet_ownership
+        ok, reason = verify_wallet_ownership(request.user, wallet_hash)
+        if not ok:
+            return Response({"error": reason}, status=status.HTTP_403_FORBIDDEN)
+
+        NostrRoom.objects.update_or_create(
+            wallet_hash=wallet_hash,
+            room_id=room_data['room_id'],
+            defaults={
+                'type': room_data['type'],
+                'name': room_data['name'],
+                'members': room_data['members'],
+                'subject': room_data.get('subject'),
+                'avatar': room_data.get('avatar'),
+                'created_at': room_data['created_at'],
+                'updated_at': room_data['updated_at'],
+                'archived': room_data.get('archived', False),
+            },
+        )
+        return Response({"status": "created"}, status=status.HTTP_201_CREATED)
+
+
+class NostrRoomDetailView(APIView):
+    """Update or delete a specific room."""
+    authentication_classes = [BitcoinCashOAuthAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, room_id, *args, **kwargs):
+        serializer = RoomUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        wallet_hash = serializer.validated_data['wallet_hash']
+
+        from .utils.auth import verify_wallet_ownership
+        ok, reason = verify_wallet_ownership(request.user, wallet_hash)
+        if not ok:
+            return Response({"error": reason}, status=status.HTTP_403_FORBIDDEN)
+
+        room = NostrRoom.objects.filter(
+            wallet_hash=wallet_hash, room_id=room_id,
+        ).first()
+        if not room:
+            return Response(
+                {"error": "Room not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        update_fields = {}
+        for field in ('name', 'subject', 'archived'):
+            if field in serializer.validated_data:
+                update_fields[field] = serializer.validated_data[field]
+        update_fields['updated_at'] = timezone.now()
+
+        NostrRoom.objects.filter(
+            wallet_hash=wallet_hash, room_id=room_id,
+        ).update(**update_fields)
+
+        return Response({"status": "updated"})
+
+    def delete(self, request, room_id, *args, **kwargs):
+        serializer = WalletHashSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        wallet_hash = serializer.validated_data['wallet_hash']
+
+        from .utils.auth import verify_wallet_ownership
+        ok, reason = verify_wallet_ownership(request.user, wallet_hash)
+        if not ok:
+            return Response({"error": reason}, status=status.HTTP_403_FORBIDDEN)
+
+        deleted = NostrRoom.objects.filter(
+            wallet_hash=wallet_hash, room_id=room_id,
+        ).delete()[0]
+
+        if not deleted:
+            return Response(
+                {"error": "Room not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return Response({"status": "deleted"})
+
+
+class NostrRoomBatchSyncView(APIView):
+    """Bulk upsert rooms for a wallet."""
+    authentication_classes = [BitcoinCashOAuthAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        serializer = RoomBatchSyncSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        wallet_hash = serializer.validated_data['wallet_hash']
+        rooms = serializer.validated_data['rooms']
+
+        from .utils.auth import verify_wallet_ownership
+        ok, reason = verify_wallet_ownership(request.user, wallet_hash)
+        if not ok:
+            return Response({"error": reason}, status=status.HTTP_403_FORBIDDEN)
+
+        synced = []
+        for room_data in rooms:
+            NostrRoom.objects.update_or_create(
+                wallet_hash=wallet_hash,
+                room_id=room_data['room_id'],
+                defaults={
+                    'type': room_data['type'],
+                    'name': room_data['name'],
+                    'members': room_data['members'],
+                    'subject': room_data.get('subject'),
+                    'avatar': room_data.get('avatar'),
+                    'created_at': room_data['created_at'],
+                    'updated_at': room_data['updated_at'],
+                    'archived': room_data.get('archived', False),
+                },
+            )
+            synced.append(room_data['room_id'])
+
+        return Response({
+            "status": "synced",
+            "rooms": synced,
+        })
+
+
+class NostrBlockListView(APIView):
+    """List blocked contacts and groups for a wallet."""
+    authentication_classes = [BitcoinCashOAuthAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        wallet_hash = request.query_params.get('wallet_hash')
+        if not wallet_hash:
+            return Response(
+                {"error": "wallet_hash query parameter is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        from .utils.auth import verify_wallet_ownership
+        ok, reason = verify_wallet_ownership(request.user, wallet_hash)
+        if not ok:
+            return Response({"error": reason}, status=status.HTTP_403_FORBIDDEN)
+
+        blocked_contacts = list(
+            NostrBlockedContact.objects.filter(
+                wallet_hash=wallet_hash,
+            ).values_list('pub_key_hex', flat=True)
+        )
+        blocked_groups = list(
+            NostrBlockedGroup.objects.filter(
+                wallet_hash=wallet_hash,
+            ).values_list('room_id', flat=True)
+        )
+        return Response({
+            "blocked_contacts": blocked_contacts,
+            "blocked_groups": blocked_groups,
+        })
+
+
+class NostrBlockContactView(APIView):
+    """Block or unblock a contact."""
+    authentication_classes = [BitcoinCashOAuthAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        serializer = BlockContactSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        wallet_hash = serializer.validated_data['wallet_hash']
+        pub_key_hex = serializer.validated_data['pub_key_hex']
+
+        from .utils.auth import verify_wallet_ownership
+        ok, reason = verify_wallet_ownership(request.user, wallet_hash)
+        if not ok:
+            return Response({"error": reason}, status=status.HTTP_403_FORBIDDEN)
+
+        NostrBlockedContact.objects.get_or_create(
+            wallet_hash=wallet_hash,
+            pub_key_hex=pub_key_hex,
+        )
+        return Response({"status": "blocked"})
+
+    def delete(self, request, pub_key_hex, *args, **kwargs):
+        serializer = WalletHashSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        wallet_hash = serializer.validated_data['wallet_hash']
+
+        from .utils.auth import verify_wallet_ownership
+        ok, reason = verify_wallet_ownership(request.user, wallet_hash)
+        if not ok:
+            return Response({"error": reason}, status=status.HTTP_403_FORBIDDEN)
+
+        deleted = NostrBlockedContact.objects.filter(
+            wallet_hash=wallet_hash,
+            pub_key_hex=pub_key_hex,
+        ).delete()[0]
+
+        if not deleted:
+            return Response(
+                {"error": "Contact not found in blocked list"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return Response({"status": "unblocked"})
+
+
+class NostrBlockGroupView(APIView):
+    """Block or unblock a group."""
+    authentication_classes = [BitcoinCashOAuthAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        serializer = BlockGroupSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        wallet_hash = serializer.validated_data['wallet_hash']
+        room_id = serializer.validated_data['room_id']
+
+        from .utils.auth import verify_wallet_ownership
+        ok, reason = verify_wallet_ownership(request.user, wallet_hash)
+        if not ok:
+            return Response({"error": reason}, status=status.HTTP_403_FORBIDDEN)
+
+        NostrBlockedGroup.objects.get_or_create(
+            wallet_hash=wallet_hash,
+            room_id=room_id,
+        )
+        return Response({"status": "blocked"})
+
+    def delete(self, request, room_id, *args, **kwargs):
+        serializer = WalletHashSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        wallet_hash = serializer.validated_data['wallet_hash']
+
+        from .utils.auth import verify_wallet_ownership
+        ok, reason = verify_wallet_ownership(request.user, wallet_hash)
+        if not ok:
+            return Response({"error": reason}, status=status.HTTP_403_FORBIDDEN)
+
+        deleted = NostrBlockedGroup.objects.filter(
+            wallet_hash=wallet_hash,
+            room_id=room_id,
+        ).delete()[0]
+
+        if not deleted:
+            return Response(
+                {"error": "Group not found in blocked list"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return Response({"status": "unblocked"})

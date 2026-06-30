@@ -1,6 +1,6 @@
 from django.utils import timezone
 from rest_framework import serializers
-from .models import NostrPubkey
+from .models import NostrPubkey, NostrRoom, NostrBlockedContact, NostrBlockedGroup
 from main.utils.cache import set_last_active
 from nostr.utils.websocket import send_last_active_update
 
@@ -97,3 +97,50 @@ class PubkeyUnregisterSerializer(serializers.Serializer):
 
         deleted = NostrPubkey.objects.filter(pubkey_hex=pubkey).delete()
         return deleted[0] or 0
+
+
+class WalletHashSerializer(serializers.Serializer):
+    wallet_hash = serializers.CharField(max_length=70)
+
+
+class RoomSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = NostrRoom
+        fields = ('room_id', 'type', 'name', 'members', 'subject',
+                  'avatar', 'created_at', 'updated_at', 'archived')
+
+
+class RoomCreateSerializer(serializers.Serializer):
+    wallet_hash = serializers.CharField(max_length=70)
+    room = RoomSerializer()
+
+
+class RoomUpdateSerializer(serializers.Serializer):
+    wallet_hash = serializers.CharField(max_length=70)
+    name = serializers.CharField(max_length=255, required=False)
+    subject = serializers.CharField(allow_null=True, required=False)
+    archived = serializers.BooleanField(required=False)
+
+
+class RoomDeleteSerializer(serializers.Serializer):
+    wallet_hash = serializers.CharField(max_length=70)
+
+
+class RoomBatchSyncSerializer(serializers.Serializer):
+    wallet_hash = serializers.CharField(max_length=70)
+    rooms = RoomSerializer(many=True)
+
+
+class BlockContactSerializer(serializers.Serializer):
+    wallet_hash = serializers.CharField(max_length=70)
+    pub_key_hex = serializers.CharField(max_length=64)
+
+    def validate_pub_key_hex(self, value):
+        if not re.match(r'^[0-9a-fA-F]{64}$', value):
+            raise serializers.ValidationError("pub_key_hex must be a 64-character hex string.")
+        return value.lower()
+
+
+class BlockGroupSerializer(serializers.Serializer):
+    wallet_hash = serializers.CharField(max_length=70)
+    room_id = serializers.CharField(max_length=128)
