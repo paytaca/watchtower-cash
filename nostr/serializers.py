@@ -123,10 +123,6 @@ class RoomUpdateSerializer(serializers.Serializer):
     archived = serializers.BooleanField(required=False)
 
 
-class RoomDeleteSerializer(serializers.Serializer):
-    wallet_hash = serializers.CharField(max_length=70)
-
-
 class RoomBatchSyncSerializer(serializers.Serializer):
     wallet_hash = serializers.CharField(max_length=70)
     rooms = RoomSerializer(many=True)

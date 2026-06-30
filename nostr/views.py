@@ -1,6 +1,7 @@
 import logging
 
 from django.utils import timezone
+from django.db import transaction
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -154,7 +155,7 @@ class PubkeyTouchView(APIView):
         recipients = serializer.validated_data['recipients']
 
         try:
-            np_sender = NostrPubkey.objects.only('wallet_hash').get(
+            np_sender = NostrPubkey.objects.only('wallet_hash', 'show_active_status').get(
                 pubkey_hex=sender_pubkey,
             )
         except NostrPubkey.DoesNotExist:
@@ -295,6 +296,7 @@ class NostrRoomListView(APIView):
                 'avatar': room_data.get('avatar'),
                 'created_at': room_data['created_at'],
                 'updated_at': room_data['updated_at'],
+                'last_message_timestamp': room_data.get('last_message_timestamp'),
                 'archived': room_data.get('archived', False),
             },
         )
@@ -379,22 +381,24 @@ class NostrRoomBatchSyncView(APIView):
             return Response({"error": reason}, status=status.HTTP_403_FORBIDDEN)
 
         synced = []
-        for room_data in rooms:
-            NostrRoom.objects.update_or_create(
-                wallet_hash=wallet_hash,
-                room_id=room_data['room_id'],
-                defaults={
-                    'type': room_data['type'],
-                    'name': room_data['name'],
-                    'members': room_data['members'],
-                    'subject': room_data.get('subject'),
-                    'avatar': room_data.get('avatar'),
-                    'created_at': room_data['created_at'],
-                    'updated_at': room_data['updated_at'],
-                    'archived': room_data.get('archived', False),
-                },
-            )
-            synced.append(room_data['room_id'])
+        with transaction.atomic():
+            for room_data in rooms:
+                NostrRoom.objects.update_or_create(
+                    wallet_hash=wallet_hash,
+                    room_id=room_data['room_id'],
+                    defaults={
+                        'type': room_data['type'],
+                        'name': room_data['name'],
+                        'members': room_data['members'],
+                        'subject': room_data.get('subject'),
+                        'avatar': room_data.get('avatar'),
+                        'created_at': room_data['created_at'],
+                        'updated_at': room_data['updated_at'],
+                        'last_message_timestamp': room_data.get('last_message_timestamp'),
+                        'archived': room_data.get('archived', False),
+                    },
+                )
+                synced.append(room_data['room_id'])
 
         return Response({
             "status": "synced",

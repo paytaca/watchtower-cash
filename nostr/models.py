@@ -36,6 +36,9 @@ class NostrRoom(models.Model):
     class Meta:
         unique_together = ('wallet_hash', 'room_id')
 
+    def __str__(self):
+        return f"[{self.type}] {self.name} ({self.room_id[:16]}...)"
+
 
 class NostrBlockedContact(models.Model):
     """A pubkey that the wallet has blocked from chat."""
@@ -46,6 +49,9 @@ class NostrBlockedContact(models.Model):
     class Meta:
         unique_together = ('wallet_hash', 'pub_key_hex')
 
+    def __str__(self):
+        return f"Blocked {self.pub_key_hex[:16]}... ({self.wallet_hash[:16]}...)"
+
 
 class NostrBlockedGroup(models.Model):
     """A room that the wallet has blocked."""
@@ -55,3 +61,6 @@ class NostrBlockedGroup(models.Model):
 
     class Meta:
         unique_together = ('wallet_hash', 'room_id')
+
+    def __str__(self):
+        return f"Blocked room {self.room_id[:16]}... ({self.wallet_hash[:16]}...)"
