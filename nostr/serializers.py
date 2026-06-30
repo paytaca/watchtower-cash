@@ -21,18 +21,19 @@ class PubkeyRegisterSerializer(serializers.Serializer):
         pubkey = validated_data['pubkey']
         wallet_hash = validated_data['wallet_hash']
 
-        now = timezone.now()
         nostr_pubkey, _ = NostrPubkey.objects.update_or_create(
             wallet_hash=wallet_hash,
             defaults={
                 'pubkey_hex': pubkey,
-                'last_active': now,
             },
         )
 
-        set_last_active(pubkey, now)
-        send_last_active_update(wallet_hash, pubkey, now)
-        
+        if nostr_pubkey.show_active_status:
+            now = timezone.now()
+            NostrPubkey.objects.filter(pk=nostr_pubkey.pk).update(last_active=now)
+            set_last_active(pubkey, now)
+            send_last_active_update(wallet_hash, pubkey, now)
+
         return nostr_pubkey
 
 
@@ -75,6 +76,11 @@ class PubkeyTouchSerializer(serializers.Serializer):
                     f"'{pubkey}' is not a valid 64-character hex string."
                 )
         return [p.lower() for p in value]
+
+
+class ShowActiveStatusSerializer(serializers.Serializer):
+    wallet_hash = serializers.CharField(max_length=70)
+    show_active_status = serializers.BooleanField(required=True)
 
 
 class PubkeyUnregisterSerializer(serializers.Serializer):

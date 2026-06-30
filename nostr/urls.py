@@ -6,6 +6,7 @@ from .views import (
     PubkeyCheckView,
     PubkeyLastOnlineView,
     PubkeyTouchView,
+    ShowActiveStatusView,
 )
 
 router = routers.DefaultRouter()
@@ -16,4 +17,5 @@ urlpatterns = router.urls + [
     path("check/<str:pubkey_hex>/", PubkeyCheckView.as_view(), name='nostr-check'),
     path("last-active/", PubkeyLastOnlineView.as_view(), name='nostr-last-active'),
     path("touch/", PubkeyTouchView.as_view(), name='nostr-touch'),
+    path("active-status/", ShowActiveStatusView.as_view(), name='nostr-active-status'),
 ]

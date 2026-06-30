@@ -14,6 +14,7 @@ from .serializers import (
     PubkeyUnregisterSerializer,
     PubkeyLastOnlineSerializer,
     PubkeyTouchSerializer,
+    ShowActiveStatusSerializer,
 )
 from .authentication import BitcoinCashOAuthAuthentication
 from .models import NostrPubkey
@@ -69,10 +70,35 @@ class PubkeyLastOnlineView(APIView):
         serializer.is_valid(raise_exception=True)
         pubkeys = serializer.validated_data['pubkeys']
 
+        # Check if the requester has opted out of seeing others' status.
+        from main.models import Address
+        user_address = getattr(request.user, 'bitcoincash_address', None)
+        if user_address:
+            wallet_hashes = Address.objects.filter(
+                address=user_address,
+            ).values_list('wallet__wallet_hash', flat=True)
+            requester_blocked = NostrPubkey.objects.filter(
+                wallet_hash__in=wallet_hashes,
+                show_active_status=False,
+            ).exists()
+            if requester_blocked:
+                return Response({pk: None for pk in pubkeys})
+
+        status_map = {
+            np['pubkey_hex']: np['show_active_status']
+            for np in NostrPubkey.objects.filter(
+                pubkey_hex__in=pubkeys,
+            ).values('pubkey_hex', 'show_active_status')
+        }
+
         result = {}
         uncached_pubkeys = []
 
         for pubkey in pubkeys:
+            show = status_map.get(pubkey)
+            if show is False:
+                result[pubkey] = None
+                continue
             cached = get_last_active(pubkey)
             if cached is not None:
                 result[pubkey] = cached
@@ -136,8 +162,9 @@ class PubkeyTouchView(APIView):
 
         now = timezone.now()
 
-        NostrPubkey.objects.filter(pubkey_hex=sender_pubkey).update(last_active=now)
-        set_last_active(sender_pubkey, now)
+        if np_sender.show_active_status:
+            NostrPubkey.objects.filter(pk=np_sender.pk).update(last_active=now)
+            set_last_active(sender_pubkey, now)
 
         if recipients:
             room_map = {
@@ -169,4 +196,41 @@ class PubkeyCheckView(APIView):
         return Response({
             "pubkey_hex": pubkey_hex,
             "registered": is_registered,
+        }, status=status.HTTP_200_OK)
+
+
+class ShowActiveStatusView(APIView):
+    """Toggle whether the user's active status is visible to others."""
+    authentication_classes = [BitcoinCashOAuthAuthentication]
+    permission_classes = [IsAuthenticated]
+    serializer_class = ShowActiveStatusSerializer
+
+    @swagger_auto_schema(
+        request_body=ShowActiveStatusSerializer,
+        responses={200: "updated"},
+    )
+    def post(self, request, *args, **kwargs):
+        serializer = self.serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        wallet_hash = serializer.validated_data['wallet_hash']
+        show_active_status = serializer.validated_data['show_active_status']
+
+        from .utils.auth import verify_wallet_ownership
+        ok, reason = verify_wallet_ownership(request.user, wallet_hash)
+        if not ok:
+            return Response({"error": reason}, status=status.HTTP_403_FORBIDDEN)
+
+        updated = NostrPubkey.objects.filter(wallet_hash=wallet_hash).update(
+            show_active_status=show_active_status,
+        )
+        if not updated:
+            return Response(
+                {"error": "NostrPubkey not found for this wallet_hash"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        return Response({
+            "status": "updated",
+            "show_active_status": show_active_status,
         }, status=status.HTTP_200_OK)

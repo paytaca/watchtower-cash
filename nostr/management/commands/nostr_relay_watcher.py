@@ -165,6 +165,7 @@ class Command(BaseCommand):
                     if recipient_pubkeys:
                         NostrPubkey.objects.filter(
                             pubkey_hex__in=recipient_pubkeys,
+                            show_active_status=True,
                         ).update(last_active=now)
 
                     for recipient_pubkey in recipient_pubkeys:

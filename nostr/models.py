@@ -10,6 +10,7 @@ class NostrPubkey(models.Model):
     wallet_hash = models.CharField(max_length=70, db_index=True, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
     last_active = models.DateTimeField(null=True, blank=True)
+    show_active_status = models.BooleanField(default=True, db_index=True)
 
     class Meta:
         indexes = [
