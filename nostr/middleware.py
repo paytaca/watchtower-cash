@@ -52,7 +52,7 @@ class BearerTokenAuthMiddleware:
         query_string = scope.get('query_string', b'').decode()
         params = parse_qs(query_string)
         tokens = params.get('token', [])
-        if tokens:
+        if tokens and tokens[0].strip():
             return tokens[0].strip()
 
         # 2. Fall back to Authorization header
