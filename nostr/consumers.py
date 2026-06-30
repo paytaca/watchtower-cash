@@ -135,6 +135,16 @@ class NostrUpdatesConsumer(JsonWebsocketConsumer):
             )
             self.close(code=4001)
             return
+
+        from .models import NostrPubkey
+        if not NostrPubkey.objects.filter(wallet_hash=self.wallet_hash).exists():
+            logger.warning(
+                f'Nostr WS closing — NostrPubkey for wallet '
+                f'{self.wallet_hash[:16]}... was unregistered'
+            )
+            self.close(code=4001)
+            return
+
         self._update_last_active()
 
     def last_active_update(self, event):
