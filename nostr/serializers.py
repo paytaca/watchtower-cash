@@ -107,7 +107,8 @@ class RoomSerializer(serializers.ModelSerializer):
     class Meta:
         model = NostrRoom
         fields = ('room_id', 'type', 'name', 'members', 'subject',
-                  'avatar', 'created_at', 'updated_at', 'archived')
+                  'avatar', 'created_at', 'updated_at',
+                  'last_message_timestamp', 'archived')
 
 
 class RoomCreateSerializer(serializers.Serializer):

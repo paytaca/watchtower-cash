@@ -30,6 +30,7 @@ class NostrRoom(models.Model):
     avatar = models.URLField(null=True, blank=True)
     created_at = models.DateTimeField()
     updated_at = models.DateTimeField()
+    last_message_timestamp = models.DateTimeField(null=True, blank=True)
     archived = models.BooleanField(default=False)
 
     class Meta:

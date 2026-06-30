@@ -260,7 +260,14 @@ class NostrRoomListView(APIView):
         if not ok:
             return Response({"error": reason}, status=status.HTTP_403_FORBIDDEN)
 
-        rooms = NostrRoom.objects.filter(wallet_hash=wallet_hash).order_by('-updated_at')
+        from django.db.models import Case, When, Value, BooleanField
+        rooms = NostrRoom.objects.filter(wallet_hash=wallet_hash).annotate(
+            has_msg=Case(
+                When(last_message_timestamp__isnull=False, then=Value(True)),
+                default=Value(False),
+                output_field=BooleanField(),
+            )
+        ).order_by('-has_msg', '-last_message_timestamp')
         serializer = RoomSerializer(rooms, many=True)
         return Response({"rooms": serializer.data})
 

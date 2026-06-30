@@ -7,7 +7,7 @@ from django.core.management.base import BaseCommand
 from django.db import connection
 from django.conf import settings
 from nostr.utils import send_nostr_push_notification
-from nostr.models import NostrPubkey
+from nostr.models import NostrPubkey, NostrRoom
 
 
 logger = logging.getLogger(__name__)
@@ -171,6 +171,26 @@ class Command(BaseCommand):
                     for recipient_pubkey in recipient_pubkeys:
                         logger.info(f"Detected gift-wrap event {event_id} for pubkey {recipient_pubkey[:16]}... sending push")
                         send_nostr_push_notification(recipient_pubkey)
+
+                    # Update last_message_timestamp for rooms that both the
+                    # sender and recipient belong to.
+                    recipient_wallet_map = {
+                        np['pubkey_hex']: np['wallet_hash']
+                        for np in NostrPubkey.objects.filter(
+                            pubkey_hex__in=recipient_pubkeys,
+                        ).values('pubkey_hex', 'wallet_hash')
+                    }
+                    for recipient_pubkey, wallet_hash in recipient_wallet_map.items():
+                        updated = NostrRoom.objects.filter(
+                            wallet_hash=wallet_hash,
+                            members__contains=[event_pubkey, recipient_pubkey],
+                        ).update(last_message_timestamp=now)
+                        if updated:
+                            logger.info(
+                                f"Updated last_message_timestamp for pubkey "
+                                f"{recipient_pubkey[:16]}... wallet "
+                                f"{wallet_hash[:16]}... ({updated} room(s))"
+                            )
 
                 elif msg_type == "EOSE":
                     logger.info("End of stored events — now processing live events")
