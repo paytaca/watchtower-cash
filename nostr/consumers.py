@@ -88,6 +88,18 @@ class NostrUpdatesConsumer(JsonWebsocketConsumer):
             self.close(code=4001)
             return
 
+        from .models import NostrPubkey
+        has_pubkey = NostrPubkey.objects.filter(
+            wallet_hash=self.wallet_hash,
+        ).exists()
+        if not has_pubkey:
+            logger.warning(
+                f'Nostr WS rejected connection for wallet '
+                f'{self.wallet_hash[:16]}... — no NostrPubkey record'
+            )
+            self.close(code=4001)
+            return
+
         self.room_group_name = f'nostr_updates_{self.wallet_hash}'
 
         logger.info(
