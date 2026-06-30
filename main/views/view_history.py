@@ -373,6 +373,7 @@ class WalletHistoryView(APIView):
             and not return_all
             and not start_date
             and not end_date
+            and not exclude_fields
         )
 
         if wallet.version > 1:
@@ -995,6 +996,7 @@ class WalletHistoryView(APIView):
             and not attribute
             and not start_date
             and not end_date
+            and not exclude_fields
         )
 
         if wallet.version > 1:
