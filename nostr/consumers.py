@@ -64,38 +64,12 @@ class NostrUpdatesConsumer(JsonWebsocketConsumer):
             self.close(code=4001)
             return
 
-        # Verify that the authenticated user owns this wallet_hash
-        bitcoincash_address = getattr(user, 'bitcoincash_address', None)
-        if not bitcoincash_address:
+        from .utils.auth import verify_wallet_ownership
+        ok, reason = verify_wallet_ownership(user, self.wallet_hash)
+        if not ok:
             logger.warning(
                 f'Nostr WS rejected connection for wallet '
-                f'{self.wallet_hash[:16]}... — user has no bitcoincash_address'
-            )
-            self.close(code=4001)
-            return
-
-        from main.models import Address
-        owns_wallet = Address.objects.filter(
-            address=bitcoincash_address,
-            wallet__wallet_hash=self.wallet_hash,
-        ).exists()
-        if not owns_wallet:
-            logger.warning(
-                f'Nostr WS rejected connection for wallet '
-                f'{self.wallet_hash[:16]}... — user {user.user_id[:16]}... '
-                f'does not own this wallet'
-            )
-            self.close(code=4001)
-            return
-
-        from .models import NostrPubkey
-        has_pubkey = NostrPubkey.objects.filter(
-            wallet_hash=self.wallet_hash,
-        ).exists()
-        if not has_pubkey:
-            logger.warning(
-                f'Nostr WS rejected connection for wallet '
-                f'{self.wallet_hash[:16]}... — no NostrPubkey record'
+                f'{self.wallet_hash[:16]}... — {reason}'
             )
             self.close(code=4001)
             return
@@ -136,11 +110,13 @@ class NostrUpdatesConsumer(JsonWebsocketConsumer):
             self.close(code=4001)
             return
 
-        from .models import NostrPubkey
-        if not NostrPubkey.objects.filter(wallet_hash=self.wallet_hash).exists():
+        user = self.scope.get('user')
+        from .utils.auth import verify_wallet_ownership
+        ok, reason = verify_wallet_ownership(user, self.wallet_hash)
+        if not ok:
             logger.warning(
-                f'Nostr WS closing — NostrPubkey for wallet '
-                f'{self.wallet_hash[:16]}... was unregistered'
+                f'Nostr WS closing heartbeat for wallet '
+                f'{self.wallet_hash[:16]}... — {reason}'
             )
             self.close(code=4001)
             return

@@ -129,6 +129,11 @@ class PubkeyTouchView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        from .utils.auth import verify_wallet_ownership
+        ok, reason = verify_wallet_ownership(request.user, np_sender.wallet_hash)
+        if not ok:
+            return Response({"error": reason}, status=status.HTTP_403_FORBIDDEN)
+
         now = timezone.now()
 
         NostrPubkey.objects.filter(pubkey_hex=sender_pubkey).update(last_active=now)
