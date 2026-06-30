@@ -33,9 +33,16 @@ class NostrUpdatesConsumer(JsonWebsocketConsumer):
 
         np = NostrPubkey.objects.filter(
             wallet_hash=self.wallet_hash,
-        ).values('pubkey_hex').first()
+        ).values('pubkey_hex', 'show_active_status').first()
 
         if np:
+            if not np['show_active_status']:
+                logger.info(
+                    f'_update_last_active: skipping — show_active_status is '
+                    f'False for wallet {self.wallet_hash[:16]}...'
+                )
+                return
+
             now = timezone.now()
             NostrPubkey.objects.filter(wallet_hash=self.wallet_hash).update(
                 last_active=now,
@@ -125,6 +132,16 @@ class NostrUpdatesConsumer(JsonWebsocketConsumer):
 
     def last_active_update(self, event):
         """Send a last-active timestamp update to the client."""
+        from .models import NostrPubkey
+
+        # If the connected user has opted out, don't forward updates.
+        can_see = NostrPubkey.objects.filter(
+            wallet_hash=self.wallet_hash,
+            show_active_status=True,
+        ).exists()
+        if not can_see:
+            return
+
         logger.info(
             f'Nostr WS received last_active_update for wallet '
             f'{self.wallet_hash[:16]}...: pubkey={event.get("pubkey_hex", "")[:16]}... '

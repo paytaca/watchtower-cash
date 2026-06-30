@@ -14,7 +14,35 @@ def send_last_active_update(wallet_hash, pubkey_hex, timestamp):
     The WebSocket group is keyed by wallet_hash so that any client watching
     that wallet receives real-time notifications when the nostr pubkey's
     last-active timestamp changes.
+
+    Skips the push if the sender's ``show_active_status`` is False (they're
+    invisible) or if the recipient's ``show_active_status`` is False (they
+    can't see others' status).
     """
+    from nostr.models import NostrPubkey
+
+    sender_visible = NostrPubkey.objects.filter(
+        pubkey_hex=pubkey_hex,
+        show_active_status=True,
+    ).exists()
+    if not sender_visible:
+        logger.info(
+            f'Skipping WS push — sender pubkey {pubkey_hex[:16]}... '
+            f'has show_active_status=False or not found'
+        )
+        return
+
+    recipient_can_see = NostrPubkey.objects.filter(
+        wallet_hash=wallet_hash,
+        show_active_status=True,
+    ).exists()
+    if not recipient_can_see:
+        logger.info(
+            f'Skipping WS push — recipient wallet {wallet_hash[:16]}... '
+            f'has show_active_status=False or not found'
+        )
+        return
+
     channel_layer = get_channel_layer()
     if channel_layer is None:
         logger.warning(
