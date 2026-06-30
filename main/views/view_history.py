@@ -286,6 +286,13 @@ class WalletHistoryView(APIView):
                 required=False,
                 description="Filter transactions until this date (YYYY-MM-DD)",
             ),
+            openapi.Parameter(
+                name="exclude",
+                type=openapi.TYPE_STRING,
+                in_=openapi.IN_QUERY,
+                required=False,
+                description="Comma-separated field names to exclude from each record (e.g. senders,recipients)",
+            ),
         ],
     )
     def get(self, request, *args, **kwargs):
@@ -311,6 +318,8 @@ class WalletHistoryView(APIView):
         token_type = request.query_params.get("token_type", None)
         start_date = request.query_params.get("start_date", None)
         end_date = request.query_params.get("end_date", None)
+        exclude_raw = request.query_params.get("exclude", "")
+        exclude_fields = {f.strip() for f in exclude_raw.split(",") if f.strip()}
 
         is_cashtoken_nft = False
         if index and txid:
@@ -349,6 +358,7 @@ class WalletHistoryView(APIView):
                 include_attrs,
                 start_date,
                 end_date,
+                exclude_fields,
             )
 
         cache_key = None
@@ -932,6 +942,12 @@ class WalletHistoryView(APIView):
                         else:
                             item["fiat_amounts"] = None
 
+            if exclude_fields:
+                history = [
+                    {k: v for k, v in item.items() if k not in exclude_fields}
+                    for item in history
+                ]
+
             if wallet.version == 1:
                 return Response(data=history, status=status.HTTP_200_OK)
             else:
@@ -964,6 +980,7 @@ class WalletHistoryView(APIView):
         include_attrs,
         start_date=None,
         end_date=None,
+        exclude_fields=None,
     ):
         """
         Get combined history for BCH and all tokens.
@@ -1227,6 +1244,13 @@ class WalletHistoryView(APIView):
                 item["fiat_amounts"] = wallet_history_obj.fiat_amounts
             else:
                 item["fiat_amounts"] = None
+
+        # Apply field exclusion before pagination
+        if exclude_fields:
+            history = [
+                {k: v for k, v in item.items() if k not in exclude_fields}
+                for item in history
+            ]
 
         # Paginate
         pages = Paginator(history, page_size)
