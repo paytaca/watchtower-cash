@@ -60,6 +60,7 @@ class PubkeyTouchSerializer(serializers.Serializer):
     recipients = serializers.ListField(
         child=serializers.CharField(max_length=64),
         allow_empty=True,
+        max_length=MAX_PUBKEYS,
     )
 
     def validate_pubkey(self, value):

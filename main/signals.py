@@ -12,7 +12,6 @@ from main.utils.logging import log_signal_activity
 from main.models import (
     BlockHeight,
     Transaction,
-    Wallet,
     WalletPreferences,
     TransactionMetaAttribute,
     WalletHistory,
@@ -235,38 +234,3 @@ def wallet_history_post_save(sender, instance=None, created=False, **kwargs):
             
             # Clear cache for the specific asset, or all if asset_key is None
             clear_wallet_history_cache(instance.wallet.wallet_hash, asset_key)
-
-
-@receiver(post_save, sender=Wallet)
-def update_nostr_last_active_on_balance_check(sender, instance, **kwargs):
-    """Keep NostrPubkey.last_active in sync when Wallet.last_balance_check changes.
-
-    This ensures the API endpoint, WebSocket, and caches only ever need to
-    read ``NostrPubkey.last_active`` — it always reflects the latest activity
-    from both Nostr events and wallet balance polls.
-    """
-    if not instance.last_balance_check:
-        return
-
-    update_fields = kwargs.get('update_fields')
-    if update_fields is not None and 'last_balance_check' not in update_fields:
-        return
-
-    from nostr.models import NostrPubkey
-    from main.utils.cache import set_last_active
-    from nostr.utils.websocket import send_last_active_update
-
-    np_data = NostrPubkey.objects.filter(
-        wallet_hash=instance.wallet_hash,
-    ).values('pubkey_hex').first()
-
-    if np_data:
-        NostrPubkey.objects.filter(wallet_hash=instance.wallet_hash).update(
-            last_active=instance.last_balance_check,
-        )
-        set_last_active(np_data['pubkey_hex'], instance.last_balance_check)
-        send_last_active_update(
-            instance.wallet_hash,
-            np_data['pubkey_hex'],
-            instance.last_balance_check,
-        )

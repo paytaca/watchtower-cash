@@ -8,3 +8,4 @@ websocket_urlpatterns = [
         consumers.NostrUpdatesConsumer.as_asgi(),
     ),
 ]
+

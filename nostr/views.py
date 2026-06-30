@@ -1,7 +1,13 @@
+import logging
+
 from django.utils import timezone
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
+
+
+logger = logging.getLogger(__name__)
 from drf_yasg.utils import swagger_auto_schema
 from .serializers import (
     PubkeyRegisterSerializer,
@@ -49,14 +55,9 @@ class PubkeyUnregisterView(APIView):
 
 class PubkeyLastOnlineView(APIView):
     """Return the latest online timestamp for each requested pubkey.
-
-    This endpoint is intentionally public — last-online status is meant to be
-    accessible by any client (e.g., chat UIs that display online indicators).
-    The data returned is non-sensitive: it only indicates whether a pubkey has
-    been recently active (registered, received a Nostr message, or polled the
-    watchtower).
     """
-    permission_classes = []
+    authentication_classes = [BitcoinCashOAuthAuthentication]
+    permission_classes = [IsAuthenticated]
     serializer_class = PubkeyLastOnlineSerializer
 
     @swagger_auto_schema(
@@ -104,7 +105,7 @@ class PubkeyTouchView(APIView):
     to each recipient's WebSocket room so their green dot lights up.
     """
     authentication_classes = [BitcoinCashOAuthAuthentication]
-    permission_classes = []
+    permission_classes = [IsAuthenticated]
     serializer_class = PubkeyTouchSerializer
 
     @swagger_auto_schema(
@@ -128,6 +129,11 @@ class PubkeyTouchView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        from .utils.auth import verify_wallet_ownership
+        ok, reason = verify_wallet_ownership(request.user, np_sender.wallet_hash)
+        if not ok:
+            return Response({"error": reason}, status=status.HTTP_403_FORBIDDEN)
+
         now = timezone.now()
 
         NostrPubkey.objects.filter(pubkey_hex=sender_pubkey).update(last_active=now)
@@ -145,6 +151,11 @@ class PubkeyTouchView(APIView):
                 wallet_hash = room_map.get(recipient_pubkey)
                 if wallet_hash:
                     send_last_active_update(wallet_hash, sender_pubkey, now)
+                else:
+                    logger.info(
+                        f'Touch: recipient {recipient_pubkey[:16]}... not found '
+                        f'in NostrPubkey — skipping WS push'
+                    )
 
         return Response({"status": "ok"}, status=status.HTTP_200_OK)
 

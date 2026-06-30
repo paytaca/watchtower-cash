@@ -46,3 +46,4 @@ def send_last_active_update(wallet_hash, pubkey_hex, timestamp):
             f'Failed to send last_active WS update for wallet '
             f'{wallet_hash}: {e}'
         )
+
