@@ -142,6 +142,11 @@ class BlockContactSerializer(serializers.Serializer):
         return value.lower()
 
 
+class RoomTouchSerializer(serializers.Serializer):
+    wallet_hash = serializers.CharField(max_length=70)
+    timestamp = serializers.DateTimeField(required=False)
+
+
 class BlockGroupSerializer(serializers.Serializer):
     wallet_hash = serializers.CharField(max_length=70)
     room_id = serializers.CharField(max_length=128)

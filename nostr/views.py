@@ -20,6 +20,7 @@ from .serializers import (
     RoomCreateSerializer,
     RoomUpdateSerializer,
     RoomBatchSyncSerializer,
+    RoomTouchSerializer,
     BlockContactSerializer,
     BlockGroupSerializer,
 )
@@ -399,6 +400,39 @@ class NostrRoomBatchSyncView(APIView):
             "status": "synced",
             "rooms": synced,
         })
+
+
+class NostrRoomTouchView(APIView):
+    """Update the last_message_timestamp for a room.
+
+    Called by the client after it decrypts a message and knows the room.
+    """
+    authentication_classes = [BitcoinCashOAuthAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, room_id, *args, **kwargs):
+        serializer = RoomTouchSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        wallet_hash = serializer.validated_data['wallet_hash']
+        timestamp = serializer.validated_data.get('timestamp', timezone.now())
+
+        from .utils.auth import verify_wallet_ownership
+        ok, reason = verify_wallet_ownership(request.user, wallet_hash)
+        if not ok:
+            return Response({"error": reason}, status=status.HTTP_403_FORBIDDEN)
+
+        updated = NostrRoom.objects.filter(
+            wallet_hash=wallet_hash,
+            room_id=room_id,
+        ).update(last_message_timestamp=timestamp)
+
+        if not updated:
+            return Response(
+                {"error": "Room not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return Response({"status": "updated"})
 
 
 class NostrBlockListView(APIView):
