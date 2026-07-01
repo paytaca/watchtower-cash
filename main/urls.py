@@ -87,6 +87,11 @@ main_urls += [
     ),
     re_path(r"^status/$", views.StatusView.as_view(), name="api-status"),
     re_path(
+        r"^reports/growth/$",
+        views.GrowthReportView.as_view(),
+        name="growth-report",
+    ),
+    re_path(
         r"^task/(?P<task_id>[\w+:-]+)/$",
         views.TaskStatusView.as_view(),
         name="task-status",
