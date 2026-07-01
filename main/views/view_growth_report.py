@@ -2,13 +2,13 @@ from datetime import datetime, time, timedelta
 
 import pytz
 from django.db.models import (
+    DecimalField,
     ExpressionWrapper,
     F,
-    FloatField,
+    Max,
     Q,
     Sum,
 )
-from django.db.models.functions import Coalesce
 from django.utils import timezone
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
@@ -25,7 +25,7 @@ def _parse_date(date_str):
             return datetime.strptime(date_str, "%Y-%m-%d").date()
         except (ValueError, TypeError):
             return None
-    return timezone.now().astimezone(pytz.utc).date()
+    return timezone.now().date()
 
 
 def _day_bounds(report_date):
@@ -46,6 +46,18 @@ class GrowthReportView(APIView):
 
     Only BCH wallets (wallet_type='bch') and BCH transactions
     (token.name='bch') are considered; SLP and smartBCH are excluded.
+
+    Transaction counts (total/incoming/outgoing) use distinct txids.
+    Record counts (total/incoming/outgoing) count individual
+    WalletHistory rows, which may be higher since a single txid can
+    produce multiple records (e.g. incoming + outgoing for two
+    Paytaca wallets in the same on-chain transaction).
+
+    Volume metrics sum across all records; records with NULL
+    usd_price are silently excluded from USD volume sums.
+
+    Fee aggregation is per-distinct-txid (using Max) to avoid
+    double-counting when multiple rows share the same txid.
     """
 
     @swagger_auto_schema(
@@ -119,32 +131,46 @@ class GrowthReportView(APIView):
 
         # ── Transaction metrics (WalletHistory) ─────────────────────
         # Use tx_timestamp (on-chain time) with date_created fallback.
-        wh_qs = (
-            WalletHistory.objects
-            .filter(
-                wallet__wallet_type="bch",
-                wallet__project=project,
-                token__name__iexact="bch",
-            )
-            .annotate(
-                effective_timestamp=Coalesce("tx_timestamp", "date_created"),
-            )
-            .filter(
-                effective_timestamp__gte=day_start,
-                effective_timestamp__lt=day_end,
+        # The Q-OR form lets the planner use indexes on tx_timestamp
+        # and date_created directly, unlike an annotated Coalesce.
+        wh_qs = WalletHistory.objects.filter(
+            wallet__wallet_type="bch",
+            wallet__project=project,
+            token__name__iexact="bch",
+        ).filter(
+            Q(tx_timestamp__gte=day_start, tx_timestamp__lt=day_end)
+            | Q(
+                tx_timestamp__isnull=True,
+                date_created__gte=day_start,
+                date_created__lt=day_end,
             )
         )
 
+        # Distinct-txid counts (unique on-chain transactions)
         total_transactions = wh_qs.values("txid").distinct().count()
-        incoming_transactions = wh_qs.filter(
+        incoming_transactions = (
+            wh_qs.filter(record_type=WalletHistory.INCOMING)
+            .values("txid")
+            .distinct()
+            .count()
+        )
+        outgoing_transactions = (
+            wh_qs.filter(record_type=WalletHistory.OUTGOING)
+            .values("txid")
+            .distinct()
+            .count()
+        )
+
+        # Record counts (individual WalletHistory rows)
+        total_transaction_records = wh_qs.count()
+        incoming_transaction_records = wh_qs.filter(
             record_type=WalletHistory.INCOMING,
         ).count()
-        outgoing_transactions = wh_qs.filter(
+        outgoing_transaction_records = wh_qs.filter(
             record_type=WalletHistory.OUTGOING,
         ).count()
-        total_records = incoming_transactions + outgoing_transactions
 
-        # Volume aggregations
+        # Volume aggregations (sum across all records)
         volume_agg = wh_qs.aggregate(
             total_bch_volume=Sum("amount"),
             incoming_bch_volume=Sum(
@@ -155,18 +181,27 @@ class GrowthReportView(APIView):
                 "amount",
                 filter=Q(record_type=WalletHistory.OUTGOING),
             ),
-            total_tx_fees=Sum("tx_fee"),
         )
         total_bch_volume = volume_agg["total_bch_volume"] or 0
         incoming_bch_volume = volume_agg["incoming_bch_volume"] or 0
         outgoing_bch_volume = volume_agg["outgoing_bch_volume"] or 0
-        total_tx_fees = volume_agg["total_tx_fees"] or 0
 
-        # USD volume: amount * usd_price per record
+        # Fee: aggregate per txid first (Max, since fee is identical
+        # across rows for the same txid), then sum to avoid
+        # double-counting.
+        total_tx_fees = (
+            wh_qs.values("txid")
+            .annotate(fee=Max("tx_fee"))
+            .aggregate(total=Sum("fee"))["total"]
+            or 0
+        )
+
+        # USD volume: keep as Decimal (via DecimalField output) until
+        # the response dict to avoid premature float artifacts.
         usd_qs = wh_qs.annotate(
             usd_value=ExpressionWrapper(
                 F("amount") * F("usd_price"),
-                output_field=FloatField(),
+                output_field=DecimalField(max_digits=20, decimal_places=8),
             ),
         )
         usd_agg = usd_qs.aggregate(
@@ -180,9 +215,9 @@ class GrowthReportView(APIView):
                 filter=Q(record_type=WalletHistory.OUTGOING),
             ),
         )
-        total_usd_volume = float(usd_agg["total_usd_volume"] or 0)
-        incoming_usd_volume = float(usd_agg["incoming_usd_volume"] or 0)
-        outgoing_usd_volume = float(usd_agg["outgoing_usd_volume"] or 0)
+        total_usd_volume = usd_agg["total_usd_volume"] or 0
+        incoming_usd_volume = usd_agg["incoming_usd_volume"] or 0
+        outgoing_usd_volume = usd_agg["outgoing_usd_volume"] or 0
 
         # Active wallets via transactions
         active_wallets_via_tx = (
@@ -202,8 +237,14 @@ class GrowthReportView(APIView):
         )
 
         # ── Derived / engagement metrics ────────────────────────────
-        average_bch_tx_value = _safe_div(total_bch_volume, total_records)
-        average_usd_tx_value = _safe_div(total_usd_volume, total_records)
+        # Averages are per-record (volume / record count) since volume
+        # is a record-level sum.
+        average_bch_record_value = _safe_div(
+            total_bch_volume, total_transaction_records
+        )
+        average_usd_record_value = _safe_div(
+            total_usd_volume, total_transaction_records
+        )
         transactions_per_active_wallet = _safe_div(
             total_transactions, active_wallets_via_tx
         )
@@ -226,14 +267,19 @@ class GrowthReportView(APIView):
                 "total_transactions": total_transactions,
                 "incoming_transactions": incoming_transactions,
                 "outgoing_transactions": outgoing_transactions,
+                "total_transaction_records": total_transaction_records,
+                "incoming_transaction_records": incoming_transaction_records,
+                "outgoing_transaction_records": outgoing_transaction_records,
                 "total_bch_volume": round(total_bch_volume, 8),
                 "incoming_bch_volume": round(incoming_bch_volume, 8),
                 "outgoing_bch_volume": round(outgoing_bch_volume, 8),
-                "total_usd_volume": round(total_usd_volume, 2),
-                "incoming_usd_volume": round(incoming_usd_volume, 2),
-                "outgoing_usd_volume": round(outgoing_usd_volume, 2),
-                "average_bch_tx_value": average_bch_tx_value,
-                "average_usd_tx_value": round(average_usd_tx_value, 2),
+                "total_usd_volume": float(round(total_usd_volume, 2)),
+                "incoming_usd_volume": float(round(incoming_usd_volume, 2)),
+                "outgoing_usd_volume": float(round(outgoing_usd_volume, 2)),
+                "average_bch_record_value": average_bch_record_value,
+                "average_usd_record_value": float(
+                    round(average_usd_record_value, 2)
+                ),
                 "total_tx_fees": round(total_tx_fees, 8),
                 "active_sending_wallets": active_sending_wallets,
                 "active_receiving_wallets": active_receiving_wallets,
