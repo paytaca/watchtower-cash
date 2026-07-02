@@ -112,6 +112,21 @@ class ClearWalletCachesForm(forms.Form):
     )
 
 
+FIAT_CURRENCY_CHOICES = [
+    ('USD', 'USD - US Dollar'),
+    ('EUR', 'EUR - Euro'),
+    ('GBP', 'GBP - British Pound'),
+    ('JPY', 'JPY - Japanese Yen'),
+    ('AUD', 'AUD - Australian Dollar'),
+    ('CAD', 'CAD - Canadian Dollar'),
+    ('CHF', 'CHF - Swiss Franc'),
+    ('CNY', 'CNY - Chinese Yuan'),
+    ('HKD', 'HKD - Hong Kong Dollar'),
+    ('NZD', 'NZD - New Zealand Dollar'),
+    ('SGD', 'SGD - Singapore Dollar'),
+    ('PHP', 'PHP - Philippine Peso'),
+]
+
 class ViewWalletBalanceHistoryForm(forms.Form):
     wallet_hash = forms.CharField(
         label="Wallet Hash",
@@ -125,6 +140,13 @@ class ViewWalletBalanceHistoryForm(forms.Form):
         min_value=1,
         max_value=100,
         help_text="Number of recent history records to display (1-100)",
+        required=True
+    )
+    fiat_currency = forms.ChoiceField(
+        label="Fiat Currency",
+        choices=FIAT_CURRENCY_CHOICES,
+        initial='PHP',
+        help_text="Select fiat currency for conversion",
         required=True
     )
 
@@ -585,11 +607,13 @@ class WalletAdmin(DynamicRawIDMixin, admin.ModelAdmin):
             if form.is_valid():
                 wallet_hash = form.cleaned_data['wallet_hash'].strip()
                 history_limit = form.cleaned_data['history_limit']
+                fiat_currency = form.cleaned_data.get('fiat_currency', 'PHP')
                 
                 try:
                     from django.db.models import Q, Sum, F
                     from django.db.models.functions import Coalesce
                     from main.utils.tx_fee import get_tx_fee_sats, bch_to_satoshi, satoshi_to_bch
+                    from main.tasks import get_latest_bch_price
                     from django.conf import settings
                     import json
                     
@@ -607,6 +631,7 @@ class WalletAdmin(DynamicRawIDMixin, admin.ModelAdmin):
                             'date_created': wallet.date_created,
                             'last_balance_check': wallet.last_balance_check,
                             'last_utxo_scan_succeeded': wallet.last_utxo_scan_succeeded,
+                            'fiat_currency': fiat_currency,
                         }
                         
                         # Get latest subscribed address pair
@@ -650,6 +675,18 @@ class WalletAdmin(DynamicRawIDMixin, admin.ModelAdmin):
                             wallet_data['bch_balance'] = round(bch_balance, 8)
                             wallet_data['bch_spendable'] = round(spendable, 8)
                             wallet_data['bch_utxo_count'] = qs_count
+                            
+                            # Get current fiat price for balance conversion
+                            current_price_log = get_latest_bch_price(fiat_currency)
+                            if current_price_log:
+                                current_fiat_price = float(current_price_log.price_value)
+                                wallet_data['current_fiat_price'] = current_fiat_price
+                                wallet_data['bch_fiat_balance'] = round(bch_balance * current_fiat_price, 2)
+                                wallet_data['bch_fiat_spendable'] = round(spendable * current_fiat_price, 2)
+                            else:
+                                wallet_data['current_fiat_price'] = None
+                                wallet_data['bch_fiat_balance'] = None
+                                wallet_data['bch_fiat_spendable'] = None
                             
                             # Get token balances
                             token_balances = []
@@ -698,6 +735,13 @@ class WalletAdmin(DynamicRawIDMixin, admin.ModelAdmin):
                         
                         history_list = []
                         for record in history:
+                            # Get fiat price at time of transaction
+                            record_fiat_price = None
+                            if record.market_prices and record.market_prices.get(fiat_currency):
+                                record_fiat_price = record.market_prices[fiat_currency]
+                            elif fiat_currency == 'USD' and record.usd_price:
+                                record_fiat_price = float(record.usd_price)
+                            
                             history_list.append({
                                 'id': record.id,
                                 'txid': record.txid,
@@ -709,12 +753,14 @@ class WalletAdmin(DynamicRawIDMixin, admin.ModelAdmin):
                                 'token_name': record.token.name if record.token else None,
                                 'cashtoken_category': record.cashtoken_ft.category if record.cashtoken_ft else None,
                                 'usd_price': float(record.usd_price) if record.usd_price else None,
+                                'fiat_price': float(record_fiat_price) if record_fiat_price else None,
+                                'fiat_value': round(float(record_fiat_price) * record.amount, 2) if record_fiat_price else None,
                             })
                         
                         wallet_data['history'] = history_list
                         wallet_data['history_count'] = len(history_list)
                         wallet_data['total_history_count'] = WalletHistory.objects.filter(wallet=wallet).exclude(amount=0).count()
-                        wallet_data['has_usd_prices'] = any(record.get('usd_price') for record in history_list)
+                        wallet_data['has_fiat_prices'] = any(record.get('fiat_price') for record in history_list)
                         
                 except Exception as e:
                     error = str(e)

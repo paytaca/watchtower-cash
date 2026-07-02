@@ -116,6 +116,19 @@
                     <div style="margin-top: 10px; color: #666; font-size: 0.9em;">
                         UTXO Count: {{ wallet_data.bch_utxo_count }}
                     </div>
+                    {% if wallet_data.bch_fiat_balance is not None %}
+                    <div style="margin-top: 10px; font-size: 1em;">
+                        <strong>Fiat Value ({{ wallet_data.fiat_currency }}):</strong>
+                        <span style="color: #1976d2; font-weight: bold;">
+                            {{ wallet_data.fiat_currency }} {{ wallet_data.bch_fiat_balance|floatformat:2 }}
+                        </span>
+                        {% if wallet_data.bch_fiat_spendable is not None %}
+                        <span style="color: #666; font-size: 0.9em; margin-left: 5px;">
+                            (Spendable: {{ wallet_data.fiat_currency }} {{ wallet_data.bch_fiat_spendable|floatformat:2 }})
+                        </span>
+                        {% endif %}
+                    </div>
+                    {% endif %}
                     {% if wallet_data.cashtoken_locked_bch %}
                     <div style="margin-top: 10px; color: #9c27b0; font-size: 0.9em;">
                         BCH locked in CashToken UTXOs: {{ wallet_data.cashtoken_locked_bch|floatformat:8 }} BCH
@@ -165,6 +178,9 @@
                             {% if wallet_data.has_usd_prices %}
                             <th style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd; background-color: #f5f5f5;">USD Price</th>
                             {% endif %}
+                            {% if wallet_data.has_fiat_prices %}
+                            <th style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd; background-color: #f5f5f5;">{{ wallet_data.fiat_currency }} Value</th>
+                            {% endif %}
                         </tr>
                     </thead>
                     <tbody>
@@ -203,6 +219,15 @@
                             <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">
                                 {% if record.usd_price %}
                                     ${{ record.usd_price|floatformat:2 }}
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </td>
+                            {% endif %}
+                            {% if wallet_data.has_fiat_prices %}
+                            <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">
+                                {% if record.fiat_value is not None %}
+                                    {{ wallet_data.fiat_currency }} {{ record.fiat_value|floatformat:2 }}
                                 {% else %}
                                     -
                                 {% endif %}
