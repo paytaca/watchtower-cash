@@ -440,12 +440,3 @@ def set_typing_throttle(pubkey_hex, room_id):
     cache_key = f'typing:{pubkey_hex}:{room_id}'
     was_set = cache.set(cache_key, b'1', ex=TYPING_THROTTLE_TTL, nx=True)
     return bool(was_set)
-
-
-def is_typing_throttled(pubkey_hex, room_id):
-    """Return True if a typing throttle key currently exists."""
-    if not pubkey_hex or not room_id:
-        return False
-    cache = settings.REDISKV
-    cache_key = f'typing:{pubkey_hex}:{room_id}'
-    return cache.exists(cache_key) == 1
