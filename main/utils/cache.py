@@ -423,3 +423,29 @@ def clear_last_active(pubkey_hex):
     cache = settings.REDISKV
     cache_key = f'last_active:{pubkey_hex}'
     cache.delete(cache_key)
+
+
+TYPING_THROTTLE_TTL = 3  # seconds
+
+
+def set_typing_throttle(pubkey_hex, room_id):
+    """Set a short-lived throttle key so repeated typing bursts are coalesced.
+
+    Returns True if the key was newly set (i.e. this call was not throttled),
+    False if a throttle key already existed (caller should skip the broadcast).
+    """
+    if not pubkey_hex or not room_id:
+        return True
+    cache = settings.REDISKV
+    cache_key = f'typing:{pubkey_hex}:{room_id}'
+    was_set = cache.set(cache_key, b'1', ex=TYPING_THROTTLE_TTL, nx=True)
+    return bool(was_set)
+
+
+def is_typing_throttled(pubkey_hex, room_id):
+    """Return True if a typing throttle key currently exists."""
+    if not pubkey_hex or not room_id:
+        return False
+    cache = settings.REDISKV
+    cache_key = f'typing:{pubkey_hex}:{room_id}'
+    return cache.exists(cache_key) == 1
