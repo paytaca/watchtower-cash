@@ -17,8 +17,12 @@ class NostrUpdatesConsumer(JsonWebsocketConsumer):
     When a message is received from a sender, each recipient gets a
     ``last_active`` event pushed to their WebSocket.
 
-    SECURITY: This consumer only accepts ``{"type": "heartbeat"}``
-    messages. All other inbound payloads are rejected.
+    Accepted inbound message types:
+    - ``{"type": "heartbeat"}`` — refreshes the wallet's last-active.
+    - ``{"type": "typing", "room_id": ..., "recipients": [...]}`` —
+      broadcasts a typing indicator to each recipient.
+
+    All other inbound payloads are rejected with close code 4001.
     """
 
     def _update_last_active(self):
@@ -109,14 +113,21 @@ class NostrUpdatesConsumer(JsonWebsocketConsumer):
         )
 
     def receive_json(self, content):
-        if content != {"type": "heartbeat"}:
-            logger.warning(
-                f'Nostr WS rejected non-heartbeat from '
-                f'{self.wallet_hash[:16]}...: {content}'
-            )
-            self.close(code=4001)
-            return
+        msg_type = content.get('type') if isinstance(content, dict) else None
 
+        if msg_type == 'heartbeat':
+            return self._handle_heartbeat()
+
+        if msg_type == 'typing':
+            return self._handle_typing(content)
+
+        logger.warning(
+            f'Nostr WS rejected unknown message type from '
+            f'{self.wallet_hash[:16]}...: {content}'
+        )
+        self.close(code=4001)
+
+    def _handle_heartbeat(self):
         user = self.scope.get('user')
         from .utils.auth import verify_wallet_ownership
         ok, reason = verify_wallet_ownership(user, self.wallet_hash)
@@ -129,6 +140,129 @@ class NostrUpdatesConsumer(JsonWebsocketConsumer):
             return
 
         self._update_last_active()
+
+    def _handle_typing(self, content):
+        import re
+        from .models import NostrPubkey
+        from .utils.auth import verify_wallet_ownership
+        from main.utils.cache import set_typing_throttle
+        from .utils.websocket import send_typing_update
+
+        user = self.scope.get('user')
+        ok, reason = verify_wallet_ownership(user, self.wallet_hash)
+        if not ok:
+            logger.warning(
+                f'Nostr WS closing typing for wallet '
+                f'{self.wallet_hash[:16]}... — {reason}'
+            )
+            self.close(code=4001)
+            return
+
+        room_id = content.get('room_id')
+        recipients = content.get('recipients')
+
+        if not room_id or not isinstance(room_id, str):
+            logger.warning(
+                f'Nostr WS rejected typing — missing/invalid room_id from '
+                f'{self.wallet_hash[:16]}...'
+            )
+            self.close(code=4001)
+            return
+
+        if not recipients or not isinstance(recipients, list):
+            logger.warning(
+                f'Nostr WS rejected typing — missing/invalid recipients from '
+                f'{self.wallet_hash[:16]}...'
+            )
+            self.close(code=4001)
+            return
+
+        MAX_RECIPIENTS = 500
+        if len(recipients) > MAX_RECIPIENTS:
+            logger.warning(
+                f'Nostr WS rejected typing — too many recipients '
+                f'({len(recipients)}) from {self.wallet_hash[:16]}...'
+            )
+            self.close(code=4001)
+            return
+
+        for pk in recipients:
+            if not isinstance(pk, str) or not re.match(r'^[0-9a-fA-F]{64}$', pk):
+                logger.warning(
+                    f'Nostr WS rejected typing — invalid recipient pubkey '
+                    f'from {self.wallet_hash[:16]}...'
+                )
+                self.close(code=4001)
+                return
+
+        normalized_recipients = [pk.lower() for pk in recipients]
+
+        np = NostrPubkey.objects.filter(
+            wallet_hash=self.wallet_hash,
+        ).values('pubkey_hex', 'show_active_status').first()
+
+        if not np:
+            logger.warning(
+                f'Nostr WS typing — no NostrPubkey for wallet '
+                f'{self.wallet_hash[:16]}...'
+            )
+            return
+
+        if not np['show_active_status']:
+            logger.info(
+                f'Nostr WS typing — skipping, sender show_active_status=False '
+                f'for wallet {self.wallet_hash[:16]}...'
+            )
+            return
+
+        sender_pubkey = np['pubkey_hex']
+
+        if not set_typing_throttle(sender_pubkey, room_id):
+            logger.info(
+                f'Nostr WS typing — throttled for pubkey '
+                f'{sender_pubkey[:16]}... room {room_id[:16]}...'
+            )
+            return
+
+        room_map = {
+            np_recip['pubkey_hex']: np_recip['wallet_hash']
+            for np_recip in NostrPubkey.objects.filter(
+                pubkey_hex__in=normalized_recipients,
+            ).values('pubkey_hex', 'wallet_hash')
+        }
+
+        for recipient_pubkey in normalized_recipients:
+            recipient_wallet = room_map.get(recipient_pubkey)
+            if recipient_wallet:
+                send_typing_update(recipient_wallet, sender_pubkey, room_id)
+            else:
+                logger.info(
+                    f'Nostr WS typing — recipient {recipient_pubkey[:16]}... '
+                    f'not found — skipping WS push'
+                )
+
+    def typing_update(self, event):
+        """Forward a typing indicator to the connected client."""
+        from .models import NostrPubkey
+
+        can_see = NostrPubkey.objects.filter(
+            wallet_hash=self.wallet_hash,
+            show_active_status=True,
+        ).exists()
+        if not can_see:
+            return
+
+        logger.info(
+            f'Nostr WS received typing_update for wallet '
+            f'{self.wallet_hash[:16]}...: pubkey='
+            f'{event.get("pubkey_hex", "")[:16]}... '
+            f'room={event.get("room_id", "")[:16]}...'
+        )
+        self.send(text_data=json.dumps({
+            'type': 'typing',
+            'pubkey_hex': event['pubkey_hex'],
+            'room_id': event['room_id'],
+        }))
 
     def last_active_update(self, event):
         """Send a last-active timestamp update to the client."""
