@@ -101,7 +101,7 @@ def get_byte_count(
     total += p2sh_output_count * 44
 
     if isinstance(push_data, str):
-        total += get
+        total += get_data_byte_count(push_data)
     elif isinstance(push_data, list):
         for push_data_output in push_data:
             total += get_data_byte_count(push_data_output)
