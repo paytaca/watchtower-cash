@@ -836,14 +836,15 @@ class WalletHistory(PostgresModel):
             return None
         
         output_fiat_amounts = {}
-        for txn_broadcast in TransactionBroadcast.objects.filter(txid=self.txid):
+        txn_broadcast_qs = TransactionBroadcast.objects.filter(txid=self.txid).order_by("id")
+        for txn_broadcast in txn_broadcast_qs:
             if isinstance(txn_broadcast.output_fiat_amounts, dict):
                 output_fiat_amounts = {
                     **output_fiat_amounts,
                     **txn_broadcast.output_fiat_amounts,
                 }
 
-        if not output_fiat_amounts and not isinstance(output_fiat_amounts, dict):
+        if not output_fiat_amounts:
             return None
         
         fiat_amounts = {}
