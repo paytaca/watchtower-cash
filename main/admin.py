@@ -83,7 +83,7 @@ class TxFiatAmountsForm(forms.Form):
         label="Age Threshold (Days)",
         initial=30,
         min_value=1,
-        help_text="Input transactions older than this many days from the cashout date use current price for fiat conversion",
+        help_text="Inputs within the threshold are eligible for loss reimbursement on cashout.",
         required=True
     )
 
@@ -274,72 +274,78 @@ class TransactionAdmin(DynamicRawIDMixin, admin.ModelAdmin):
                         
                         # Calculate gain/loss only if we have valid input and output amounts
                         if total_input_amount > 0 and total_output_amount > 0 and cashout_amount is not None:
-                            # Total gain/loss in fiat terms: total_output_amount - total_input_amount
-                            total_gain_loss = total_output_amount - total_input_amount
+                            # Calculate age breakdown of inputs first
+                            inputs = tx_data.get('inputs', [])
+                            old_input_count = 0
+                            old_input_total = Decimal('0')
+                            old_input_total_current = Decimal('0')
+                            new_input_count = 0
+                            new_input_total = Decimal('0')
+                            new_input_total_current = Decimal('0')
+                            new_input_fiat_loss = Decimal('0')
                             
-                            # Calculate cashout's portion of the gain/loss
-                            # Percentage of total output that is cashout
-                            cashout_percentage_of_output = float(cashout_amount) / float(total_output_amount)
+                            for vin in inputs:
+                                vin_amount = Decimal(str(vin.get('amount') or 0))
+                                cur_amt = Decimal(str(vin.get('cashout_amount') or 0))
+                                if vin.get('is_old'):
+                                    old_input_count += 1
+                                    old_input_total += vin_amount
+                                    old_input_total_current += cur_amt
+                                else:
+                                    new_input_count += 1
+                                    new_input_total += vin_amount
+                                    new_input_total_current += cur_amt
+                                    fiat_gl = vin.get('fiat_gain_loss')
+                                    if fiat_gl is not None and fiat_gl < 0:
+                                        new_input_fiat_loss += abs(Decimal(str(fiat_gl)))
                             
-                            # Gain/loss for cashout = (cashout / total_output) * (total_output - total_input)
-                            cashout_gain_loss = cashout_percentage_of_output * float(total_gain_loss)
+                            # Cashout only consumed a fraction of each input.
+                            # The rest came back as change BCH (not cashed out).
+                            total_output_fiat = float(cashout_amount) + float(change_amount)
+                            cashout_ratio = float(cashout_amount) / total_output_fiat if total_output_fiat > 0 else 1.0
+                            cashout_cost_basis = float(total_input_amount) * cashout_ratio
                             
-                            # Overall percentage based on total gain/loss
+                            # Cashout P&L = fiat received - cost basis of cashed portion
+                            cashout_gain_loss = float(cashout_amount) - cashout_cost_basis
+                            
+                            # Overall economic outcome (informational)
+                            total_gain_loss = float(total_output_amount) - float(total_input_amount)
                             percentage = (float(total_gain_loss) / float(total_input_amount)) * 100
+                            
+                            # Gain/loss as percentage of cashout's own cost basis
+                            cashout_pnl_pct = (cashout_gain_loss / cashout_cost_basis) * 100 if cashout_cost_basis > 0 else 0.0
                             
                             # Calculate gain portion and charge (if gain)
                             gain_portion_of_cashout = None
                             gain_portion_percentage = None
                             charge_on_gain = None
                             if cashout_gain_loss > 0:
-                                # It's a gain - charge 10% on the gain
                                 gain_portion_of_cashout = cashout_gain_loss
                                 charge_on_gain = cashout_gain_loss * 0.10
                                 if cashout_amount > 0:
                                     gain_portion_percentage = (gain_portion_of_cashout / float(cashout_amount)) * 100
                             
-                            # Calculate loss and reimbursement (if loss)
+                            # Reimbursement: only cover the actual fiat loss on within-threshold inputs.
+                            # Beyond-threshold losses are the merchant's risk (they held too long).
+                            # The cashout ratio applies because only the cashed portion realizes the loss.
                             loss_percentage_over_inputs = None
                             reimbursement_amount = None
                             total_after_reimbursement = None
                             if cashout_gain_loss < 0:
-                                # It's a loss - this is the amount to cover
-                                loss_percentage_over_inputs = abs((cashout_gain_loss / float(total_input_amount)) * 100)
-                                reimbursement_amount = abs(cashout_gain_loss)
-                                # Total after reimbursement = cashout + reimbursement
+                                loss_amount = abs(cashout_gain_loss)
+                                loss_percentage_over_inputs = (loss_amount / float(total_input_amount)) * 100
+                                # Reimburse the actual fiat loss on within-threshold inputs, cashed portion only
+                                reimbursement_amount = float(new_input_fiat_loss) * cashout_ratio
                                 total_after_reimbursement = float(cashout_amount) + reimbursement_amount
-                            
-                            # Calculate age breakdown of inputs
-                            inputs = tx_data.get('inputs', [])
-                            old_input_count = 0
-                            old_input_total_current = Decimal('0')
-                            old_input_total_historical = Decimal('0')
-                            new_input_count = 0
-                            new_input_total = Decimal('0')
-                            
-                            for vin in inputs:
-                                vin_amount = Decimal(str(vin.get('amount') or 0))
-                                if vin.get('is_old'):
-                                    old_input_count += 1
-                                    old_input_total_current += vin_amount
-                                    historical_amt = vin.get('historical_amount')
-                                    if historical_amt:
-                                        old_input_total_historical += Decimal(str(historical_amt))
-                                else:
-                                    new_input_count += 1
-                                    new_input_total += vin_amount
-                            
-                            # For display purposes, use total gain/loss
-                            gain_loss = float(total_gain_loss)
                             
                             assessment = {
                                 'total_input_amount': float(total_input_amount),
                                 'cashout_amount': float(cashout_amount),
                                 'change_amount': float(change_amount),
                                 'net_received': float(net_received),
-                                'gain_loss': float(total_gain_loss),  # Total gain/loss for display
-                                'percentage': float(percentage),  # Percentage based on total gain/loss
-                                'is_gain': cashout_gain_loss >= 0,  # Based on cashout's portion
+                                'gain_loss': float(total_gain_loss),
+                                'percentage': float(percentage),
+                                'is_gain': cashout_gain_loss >= 0,
                                 'currency': currency,
                                 'gain_portion_of_cashout': gain_portion_of_cashout,
                                 'gain_portion_percentage': gain_portion_percentage,
@@ -347,13 +353,17 @@ class TransactionAdmin(DynamicRawIDMixin, admin.ModelAdmin):
                                 'loss_percentage_over_inputs': loss_percentage_over_inputs,
                                 'reimbursement_amount': reimbursement_amount,
                                 'total_after_reimbursement': total_after_reimbursement,
-                                'cashout_gain_loss': float(cashout_gain_loss),  # Cashout's portion of gain/loss
+                                'cashout_gain_loss': float(cashout_gain_loss),
+                                'cashout_cost_basis': float(cashout_cost_basis),
+                                'cashout_pnl_pct': float(cashout_pnl_pct),
+                                'new_input_fiat_loss': float(new_input_fiat_loss),
                                 'age_threshold_days': age_threshold_days,
                                 'old_input_count': old_input_count,
+                                'old_input_total': float(old_input_total),
                                 'old_input_total_current': float(old_input_total_current),
-                                'old_input_total_historical': float(old_input_total_historical),
                                 'new_input_count': new_input_count,
                                 'new_input_total': float(new_input_total),
+                                'new_input_total_current': float(new_input_total_current),
                             }
                         
                 except Exception as e:

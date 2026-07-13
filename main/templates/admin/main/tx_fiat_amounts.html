@@ -128,7 +128,9 @@
                             {{ assessment.cashout_gain_loss|floatformat:2 }} {{ assessment.currency }}
                         </span>
                         <div class="help" style="margin-top: 5px; color: #666;">
-                            Cashout's portion of the gain/loss. Calculated as: (Cashout Amount / Total Output Amount) × Total Gain/Loss.
+                            Cashout P&amp;L = Cashout proceeds (current) − Cashout's share of cost basis (historical).
+                            Cashout cost basis: {{ assessment.cashout_cost_basis|floatformat:2 }} {{ assessment.currency }} 
+                            ({{ assessment.cashout_pnl_pct|floatformat:2 }}% of cashout cost basis).
                         </div>
                     </div>
                     
@@ -160,7 +162,10 @@
                                 {{ assessment.reimbursement_amount|floatformat:2 }} {{ assessment.currency }}
                             </span>
                             <div class="help" style="margin-top: 5px; color: #666;">
-                                Amount to pay back to merchant to cover the cashout's portion of the loss. This is the cashout's proportional share of the total loss.
+                                Only the actual fiat loss on within-threshold inputs is covered.
+                                Beyond-threshold losses are the merchant's risk.
+                                Within-threshold fiat loss: {{ assessment.new_input_fiat_loss|floatformat:3 }} {{ assessment.currency }}
+                                × cashout ratio = {{ assessment.reimbursement_amount|floatformat:2 }} {{ assessment.currency }}.
                             </div>
                         </div>
                         
@@ -181,16 +186,23 @@
                     <div class="form-row" style="margin-top: 15px; padding: 10px; background-color: #fff3e0; border-left: 4px solid #ff9800;">
                         <strong>Input Age Analysis (Threshold: {{ assessment.age_threshold_days }} days)</strong>
                         <div class="help" style="margin-top: 5px; color: #666;">
-                            Inputs beyond the threshold use current market price for fiat conversion instead of historical price.
+                            Inputs valued at historical cost (what merchant originally received).
+                            Outputs valued at cashout price (cashout proceeds).
+                            Gain/loss = Cashout outputs − Input cost basis.
                         </div>
                         <div class="form-row" style="margin-top: 10px;">
-                            <strong>Within Threshold:</strong> {{ assessment.new_input_count }} input(s) — {{ assessment.new_input_total|floatformat:2 }} {{ assessment.currency }} (historical price)
+                            <strong>Within Threshold:</strong> {{ assessment.new_input_count }} input(s) — {{ assessment.new_input_total|floatformat:2 }} {{ assessment.currency }} (historical cost)
+                            {% if assessment.new_input_total_current %}
+                                <div class="help" style="color: #666;">
+                                    Value at cashout: {{ assessment.new_input_total_current|floatformat:2 }} {{ assessment.currency }}
+                                </div>
+                            {% endif %}
                         </div>
                         <div class="form-row">
-                            <strong>Beyond Threshold:</strong> {{ assessment.old_input_count }} input(s) — {{ assessment.old_input_total_current|floatformat:2 }} {{ assessment.currency }} (current price)
-                            {% if assessment.old_input_total_historical != assessment.old_input_total_current %}
+                            <strong>Beyond Threshold:</strong> {{ assessment.old_input_count }} input(s) — {{ assessment.old_input_total|floatformat:2 }} {{ assessment.currency }} (historical cost)
+                            {% if assessment.old_input_total_current %}
                                 <div class="help" style="color: #666;">
-                                    Historical value was {{ assessment.old_input_total_historical|floatformat:2 }} {{ assessment.currency }}
+                                    Value at cashout: {{ assessment.old_input_total_current|floatformat:2 }} {{ assessment.currency }}
                                 </div>
                             {% endif %}
                         </div>
@@ -211,8 +223,11 @@
                             <th>Status</th>
                             <th>Historical Price</th>
                             <th>Historical Amount</th>
-                            <th>Current Price</th>
-                            <th>Current Amount</th>
+                            <th>Cashout Price</th>
+                            <th>Cashout Amount</th>
+                            <th>Today's Price</th>
+                            <th>Today's Amount</th>
+                            <th>Fiat Gain/Loss</th>
                             <th>Amount Used</th>
                         </tr>
                     </thead>
@@ -233,8 +248,17 @@
                             </td>
                             <td>{% if vin.historical_price %}{{ vin.historical_price }}{% else %}N/A{% endif %}</td>
                             <td>{% if vin.historical_amount %}{{ vin.historical_amount }}{% else %}N/A{% endif %}</td>
-                            <td>{% if vin.current_price %}{{ vin.current_price }}{% else %}—{% endif %}</td>
-                            <td>{% if vin.current_amount %}{{ vin.current_amount }}{% else %}—{% endif %}</td>
+                            <td>{% if vin.cashout_price %}{{ vin.cashout_price }}{% else %}—{% endif %}</td>
+                            <td>{% if vin.cashout_amount %}{{ vin.cashout_amount }}{% else %}—{% endif %}</td>
+                            <td>{% if vin.today_price %}{{ vin.today_price }}{% else %}—{% endif %}</td>
+                            <td>{% if vin.today_amount %}{{ vin.today_amount }}{% else %}—{% endif %}</td>
+                            <td>
+                                {% if vin.fiat_gain_loss is not None %}
+                                    <span style="color: {% if vin.fiat_gain_loss >= 0 %}#2e7d32{% else %}#c62828{% endif %}; font-weight: bold;">
+                                        {{ vin.fiat_gain_loss|floatformat:3 }}
+                                    </span>
+                                {% else %}—{% endif %}
+                            </td>
                             <td><strong>{% if vin.amount %}{{ vin.amount }}{% else %}N/A{% endif %}</strong></td>
                         </tr>
                         {% endfor %}
@@ -246,38 +270,42 @@
             {% if tx_data.outputs %}
             <div class="module">
                 <h3>Outputs</h3>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Index</th>
-                            <th>Type</th>
-                            <th>Address</th>
-                            <th>Value (sats)</th>
-                            <th>Price ({{ tx_data.currency }})</th>
-                            <th>Amount ({{ tx_data.currency }})</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for vout in tx_data.outputs %}
-                        <tr>
-                            <td>{% if vout.index is not None %}{{ vout.index }}{% else %}{{ forloop.counter0 }}{% endif %}</td>
-                            <td>
-                                {% if forloop.counter0 == 0 %}
-                                    <strong style="color: #1976d2;">Cashout</strong>
-                                {% elif forloop.counter0 == 1 %}
-                                    <span style="color: #666;">Change</span>
-                                {% else %}
-                                    <span style="color: #999;">Other</span>
-                                {% endif %}
-                            </td>
-                            <td>{% if vout.address %}{{ vout.address|truncatechars:30 }}{% else %}N/A{% endif %}</td>
-                            <td>{{ vout.value }}</td>
-                            <td>{% if vout.price %}{{ vout.price }}{% else %}N/A{% endif %}</td>
-                            <td>{% if vout.amount %}{{ vout.amount }}{% else %}N/A{% endif %}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Index</th>
+                                <th>Type</th>
+                                <th>Address</th>
+                                <th>Value (sats)</th>
+                                <th>Cashout Price ({{ tx_data.currency }})</th>
+                                <th>Cashout Amount ({{ tx_data.currency }})</th>
+                                <th>Today's Price</th>
+                                <th>Today's Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for vout in tx_data.outputs %}
+                            <tr>
+                                <td>{% if vout.index is not None %}{{ vout.index }}{% else %}{{ forloop.counter0 }}{% endif %}</td>
+                                <td>
+                                    {% if forloop.counter0 == 0 %}
+                                        <strong style="color: #1976d2;">Cashout</strong>
+                                    {% elif forloop.counter0 == 1 %}
+                                        <span style="color: #666;">Change</span>
+                                    {% else %}
+                                        <span style="color: #999;">Other</span>
+                                    {% endif %}
+                                </td>
+                                <td>{% if vout.address %}{{ vout.address|truncatechars:30 }}{% else %}N/A{% endif %}</td>
+                                <td>{{ vout.value }}</td>
+                                <td>{% if vout.price %}{{ vout.price }}{% else %}N/A{% endif %}</td>
+                                <td>{% if vout.amount %}{{ vout.amount }}{% else %}N/A{% endif %}</td>
+                                <td>{% if vout.today_price %}{{ vout.today_price }}{% else %}—{% endif %}</td>
+                                <td>{% if vout.today_amount %}{{ vout.today_amount }}{% else %}—{% endif %}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
             </div>
             {% endif %}
 
