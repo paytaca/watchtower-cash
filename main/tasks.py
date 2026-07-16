@@ -1009,7 +1009,7 @@ def get_bch_utxos(self, address):
                         count = qs.first().transactions.count()
                         qs.update(processed=True, transactions_count=count)
      
-            parse_tx_wallet_histories.delay(tx_hash, immediate=True)
+            parse_tx_wallet_histories(tx_hash, immediate=True)
 
         # Mark transactions as spent if they're not in the fresh UTXO set
         connection.ensure_connection()
