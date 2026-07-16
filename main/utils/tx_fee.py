@@ -97,11 +97,11 @@ def get_byte_count(
     for multisig_info in  multisig_inputs:
         total += get_multisig_input_byte_count(**multisig_info)
 
-    total += p2pkh_output_count * 34
-    total += p2sh_output_count * 32
+    total += p2pkh_output_count * 35
+    total += p2sh_output_count * 44
 
     if isinstance(push_data, str):
-        total += get
+        total += get_data_byte_count(push_data)
     elif isinstance(push_data, list):
         for push_data_output in push_data:
             total += get_data_byte_count(push_data_output)

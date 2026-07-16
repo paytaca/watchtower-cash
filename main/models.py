@@ -831,24 +831,27 @@ class WalletHistory(PostgresModel):
         Always returns the current value from the corresponding TransactionBroadcast record.
         This ensures there is no mismatch between WalletHistory and TransactionBroadcast data.
         """
-        from main.models import TransactionBroadcast
         
         if not self.wallet or not self.txid:
             return None
         
-        try:
-            txn_broadcast = TransactionBroadcast.objects.get(txid=self.txid)
-        except TransactionBroadcast.DoesNotExist:
-            return None
-        
-        if not txn_broadcast.output_fiat_amounts:
+        output_fiat_amounts = {}
+        txn_broadcast_qs = TransactionBroadcast.objects.filter(txid=self.txid).order_by("id")
+        for txn_broadcast in txn_broadcast_qs:
+            if isinstance(txn_broadcast.output_fiat_amounts, dict):
+                output_fiat_amounts = {
+                    **output_fiat_amounts,
+                    **txn_broadcast.output_fiat_amounts,
+                }
+
+        if not output_fiat_amounts:
             return None
         
         fiat_amounts = {}
         
         if self.record_type == WalletHistory.INCOMING:
             # Sum fiat amounts for outputs going to this wallet
-            for output_idx, output_data in txn_broadcast.output_fiat_amounts.items():
+            for output_idx, output_data in output_fiat_amounts.items():
                 recipient = output_data.get('recipient')
                 if not recipient:
                     continue
@@ -876,7 +879,7 @@ class WalletHistory(PostgresModel):
             
             if all_inputs_from_wallet:
                 # Sum fiat amounts for outputs NOT going back to this wallet (exclude change)
-                for output_idx, output_data in txn_broadcast.output_fiat_amounts.items():
+                for output_idx, output_data in output_fiat_amounts.items():
                     recipient = output_data.get('recipient')
                     if not recipient:
                         continue
