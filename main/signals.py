@@ -25,6 +25,7 @@ from main.tasks import (
 )
 from main.utils.cache import clear_wallet_history_cache, clear_wallet_balance_cache
 from main.utils.address_validator import is_bch_address
+from main.utils.signal_suppression import is_transaction_post_save_delay_suppressed
 
 
 @receiver(post_save, sender=settings.AUTH_USER_MODEL)
@@ -99,10 +100,12 @@ def transaction_post_save(sender, instance=None, created=False, **kwargs):
         if history_cache_keys:
             cache.delete(*history_cache_keys)
 
-    # Trigger the transaction post-save task
-    transaction.on_commit(
-        lambda: transaction_post_save_task.delay(address, instance.id, blockheight_id)
-    )
+    # Trigger the transaction post-save task (unless suppressed, e.g. during UTXO scans
+    # where parse_tx_wallet_histories already handles everything synchronously)
+    if not is_transaction_post_save_delay_suppressed():
+        transaction.on_commit(
+            lambda: transaction_post_save_task.delay(address, instance.id, blockheight_id)
+        )
 
 
 @receiver(pre_delete, sender=Transaction, dispatch_uid='main.signals.transaction_pre_delete')
