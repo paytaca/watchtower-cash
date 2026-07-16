@@ -495,8 +495,11 @@ def save_record(
                     transaction_obj.spending_txid = spending_txid
                     transaction_obj.spent = True
                 else:
-                    # Explicitly mark as unspent for UTXOs
-                    transaction_obj.spent = False
+                    # Don't reset transactions that are already marked as spent.
+                    # This matches the guard in the main path above — get_bch_utxos
+                    # may have just marked this as spent via select_for_update.
+                    if not transaction_obj.spent:
+                        transaction_obj.spent = False
                 
                 if transaction_obj.source != source:
                     transaction_obj.source = source
@@ -1009,7 +1012,7 @@ def get_bch_utxos(self, address):
                         count = qs.first().transactions.count()
                         qs.update(processed=True, transactions_count=count)
      
-            parse_tx_wallet_histories.delay(tx_hash, immediate=True)
+            parse_tx_wallet_histories(tx_hash, immediate=True)
 
         # Mark transactions as spent if they're not in the fresh UTXO set
         connection.ensure_connection()
@@ -2055,12 +2058,19 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
                     defaults=defaults
                 )
 
-                # Optimized: Always use async for market values parsing
-                resolve_wallet_history_usd_values.delay(txid=txid)
+                # Resolve USD and market values synchronously — these are lightweight
+                # DB queries against AssetPriceLog / PriceOracleMessage tables,
+                # no blocking external calls.
+                try:
+                    resolve_wallet_history_usd_values(txid=txid)
+                except Exception as exc:
+                    LOGGER.exception(f"Failed to resolve USD values for {txid}: {exc}")
                 
                 if history.tx_timestamp:
-                    # Always use .delay() for async execution
-                    parse_wallet_history_market_values.delay(history.id)
+                    try:
+                        parse_wallet_history_market_values(history.id)
+                    except Exception as exc:
+                        LOGGER.exception(f"Failed to resolve market values for history {history.id}: {exc}")
 
                 # Only send push notifications for newly created records to prevent duplicates
                 # when the same transaction is processed multiple times

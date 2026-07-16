@@ -27,6 +27,7 @@ from main.utils.cache import clear_wallet_history_cache, clear_wallet_balance_ca
 from main.utils.address_validator import is_bch_address
 
 
+
 @receiver(post_save, sender=settings.AUTH_USER_MODEL)
 def create_auth_token(sender, instance=None, created=False, **kwargs):
     if created:
