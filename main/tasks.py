@@ -495,8 +495,11 @@ def save_record(
                     transaction_obj.spending_txid = spending_txid
                     transaction_obj.spent = True
                 else:
-                    # Explicitly mark as unspent for UTXOs
-                    transaction_obj.spent = False
+                    # Don't reset transactions that are already marked as spent.
+                    # This matches the guard in the main path above — get_bch_utxos
+                    # may have just marked this as spent via select_for_update.
+                    if not transaction_obj.spent:
+                        transaction_obj.spent = False
                 
                 if transaction_obj.source != source:
                     transaction_obj.source = source
