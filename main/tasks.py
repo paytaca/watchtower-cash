@@ -41,7 +41,6 @@ from main.utils.push_notification import (
     send_wallet_history_push_notification_nft
 )
 from main.utils.cache import clear_wallet_history_cache, clear_wallet_balance_cache, clear_cache_for_spent_transactions
-from main.utils.signal_suppression import suppress_transaction_post_save_delay
 from django.db.utils import IntegrityError
 from django.conf import settings
 from django.utils import timezone, dateparse
@@ -959,62 +958,58 @@ def get_bch_utxos(self, address):
         fresh_utxo_set = set()
         
         # Process each fresh UTXO from the node
-        # Suppress the redundant transaction_post_save_task.delay() since
-        # parse_tx_wallet_histories is called synchronously below and handles
-        # everything (marking inputs spent, creating wallet history, etc.)
-        with suppress_transaction_post_save_delay():
-            for output in outputs:
-                index = output['tx_pos']
-                block = output['height']
-                tx_hash = output['tx_hash']
-                value = output['value']
-                
-                # Add to fresh UTXO set
-                fresh_utxo_set.add((tx_hash, index))
+        for output in outputs:
+            index = output['tx_pos']
+            block = output['height']
+            tx_hash = output['tx_hash']
+            value = output['value']
+            
+            # Add to fresh UTXO set
+            fresh_utxo_set.add((tx_hash, index))
 
-                block, created = BlockHeight.objects.get_or_create(number=block)
-                transaction_check = Transaction.objects.filter(
-                    txid=tx_hash,
-                    address__address=address,
-                    index=index
-                )
-                if transaction_check.exists():
-                    # Update existing transaction: mark as unspent, update value and blockheight
-                    _txn = transaction_check.first()
-                    if _txn.wallet == _txn.address.wallet:
-                        transaction_check.update(spent=False, value=value, blockheight=block)
-                    else:
-                        transaction_check.update(wallet=_txn.address.wallet, spent=False, value=value, blockheight=block)
-                    
-                    for obj in transaction_check:
-                        saved_utxo_ids.append(obj.id)
+            block, created = BlockHeight.objects.get_or_create(number=block)
+            transaction_check = Transaction.objects.filter(
+                txid=tx_hash,
+                address__address=address,
+                index=index
+            )
+            if transaction_check.exists():
+                # Update existing transaction: mark as unspent, update value and blockheight
+                _txn = transaction_check.first()
+                if _txn.wallet == _txn.address.wallet:
+                    transaction_check.update(spent=False, value=value, blockheight=block)
                 else:
-                    # Create new transaction record
-                    output_data = {
-                        'index': index,
-                        'value': value,
-                        'address': address,
-                        'token_data': output.get('token_data'),
-                    }
-                    processed_output_data = process_output(
-                        output_data,
-                        tx_hash,
-                        block_id=block.id,
-                        source=NODE.BCH.source,
-                    )
-                    created = processed_output_data['created']
-                    transaction_id = processed_output_data.get('transaction_id')
-                    if created and transaction_id:
-                        # Ensure newly created UTXO is marked as unspent
-                        Transaction.objects.filter(id=transaction_id).update(spent=False)
-                        saved_utxo_ids.append(transaction_id)
-                    if created:
-                        if not block.requires_full_scan:
-                            qs = BlockHeight.objects.filter(id=block.id)
-                            count = qs.first().transactions.count()
-                            qs.update(processed=True, transactions_count=count)
-         
-                parse_tx_wallet_histories(tx_hash, immediate=True)
+                    transaction_check.update(wallet=_txn.address.wallet, spent=False, value=value, blockheight=block)
+                
+                for obj in transaction_check:
+                    saved_utxo_ids.append(obj.id)
+            else:
+                # Create new transaction record
+                output_data = {
+                    'index': index,
+                    'value': value,
+                    'address': address,
+                    'token_data': output.get('token_data'),
+                }
+                processed_output_data = process_output(
+                    output_data,
+                    tx_hash,
+                    block_id=block.id,
+                    source=NODE.BCH.source,
+                )
+                created = processed_output_data['created']
+                transaction_id = processed_output_data.get('transaction_id')
+                if created and transaction_id:
+                    # Ensure newly created UTXO is marked as unspent
+                    Transaction.objects.filter(id=transaction_id).update(spent=False)
+                    saved_utxo_ids.append(transaction_id)
+                if created:
+                    if not block.requires_full_scan:
+                        qs = BlockHeight.objects.filter(id=block.id)
+                        count = qs.first().transactions.count()
+                        qs.update(processed=True, transactions_count=count)
+     
+            parse_tx_wallet_histories(tx_hash, immediate=True)
 
         # Mark transactions as spent if they're not in the fresh UTXO set
         connection.ensure_connection()
