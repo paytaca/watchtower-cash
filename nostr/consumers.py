@@ -21,6 +21,8 @@ class NostrUpdatesConsumer(JsonWebsocketConsumer):
     - ``{"type": "heartbeat"}`` — refreshes the wallet's last-active.
     - ``{"type": "typing", "room_id": ..., "recipients": [...]}`` —
       broadcasts a typing indicator to each recipient.
+    - ``{"type": "stop_typing", "room_id": ..., "recipients": [...]}`` —
+      broadcasts a stop-typing signal to each recipient.
 
     All other inbound payloads are rejected with close code 4001.
     """
@@ -120,6 +122,9 @@ class NostrUpdatesConsumer(JsonWebsocketConsumer):
 
         if msg_type == 'typing':
             return self._handle_typing(content)
+
+        if msg_type == 'stop_typing':
+            return self._handle_stop_typing(content)
 
         logger.warning(
             f'Nostr WS rejected unknown message type from '
@@ -241,6 +246,97 @@ class NostrUpdatesConsumer(JsonWebsocketConsumer):
                     f'not found — skipping WS push'
                 )
 
+    def _handle_stop_typing(self, content):
+        import re
+        from django.conf import settings
+        from .models import NostrPubkey
+        from .utils.auth import verify_wallet_ownership
+        from .utils.websocket import send_stop_typing_update
+
+        user = self.scope.get('user')
+        ok, reason = verify_wallet_ownership(user, self.wallet_hash)
+        if not ok:
+            logger.warning(
+                f'Nostr WS closing stop_typing for wallet '
+                f'{self.wallet_hash[:16]}... — {reason}'
+            )
+            self.close(code=4001)
+            return
+
+        room_id = content.get('room_id')
+        recipients = content.get('recipients')
+
+        if not room_id or not isinstance(room_id, str):
+            logger.warning(
+                f'Nostr WS rejected stop_typing — missing/invalid room_id from '
+                f'{self.wallet_hash[:16]}...'
+            )
+            self.close(code=4001)
+            return
+
+        if not recipients or not isinstance(recipients, list):
+            logger.warning(
+                f'Nostr WS rejected stop_typing — missing/invalid recipients from '
+                f'{self.wallet_hash[:16]}...'
+            )
+            self.close(code=4001)
+            return
+
+        MAX_RECIPIENTS = 500
+        if len(recipients) > MAX_RECIPIENTS:
+            logger.warning(
+                f'Nostr WS rejected stop_typing — too many recipients '
+                f'({len(recipients)}) from {self.wallet_hash[:16]}...'
+            )
+            self.close(code=4001)
+            return
+
+        for pk in recipients:
+            if not isinstance(pk, str) or not re.match(r'^[0-9a-fA-F]{64}$', pk):
+                logger.warning(
+                    f'Nostr WS rejected stop_typing — invalid recipient pubkey '
+                    f'from {self.wallet_hash[:16]}...'
+                )
+                self.close(code=4001)
+                return
+
+        normalized_recipients = [pk.lower() for pk in recipients]
+
+        np = NostrPubkey.objects.filter(
+            wallet_hash=self.wallet_hash,
+        ).values('pubkey_hex').first()
+
+        if not np:
+            logger.warning(
+                f'Nostr WS stop_typing — no NostrPubkey for wallet '
+                f'{self.wallet_hash[:16]}...'
+            )
+            return
+
+        sender_pubkey = np['pubkey_hex']
+
+        # Clear the typing throttle key so the sender can immediately
+        # send a new typing signal without being blocked by the 3s TTL.
+        cache = settings.REDISKV
+        cache.delete(f'typing:{sender_pubkey}:{room_id}')
+
+        room_map = {
+            np_recip['pubkey_hex']: np_recip['wallet_hash']
+            for np_recip in NostrPubkey.objects.filter(
+                pubkey_hex__in=normalized_recipients,
+            ).values('pubkey_hex', 'wallet_hash')
+        }
+
+        for recipient_pubkey in normalized_recipients:
+            recipient_wallet = room_map.get(recipient_pubkey)
+            if recipient_wallet:
+                send_stop_typing_update(recipient_wallet, sender_pubkey, room_id)
+            else:
+                logger.info(
+                    f'Nostr WS stop_typing — recipient {recipient_pubkey[:16]}... '
+                    f'not found — skipping WS push'
+                )
+
     def typing_update(self, event):
         """Forward a typing indicator to the connected client."""
         from .models import NostrPubkey
@@ -260,6 +356,20 @@ class NostrUpdatesConsumer(JsonWebsocketConsumer):
         )
         self.send(text_data=json.dumps({
             'type': 'typing',
+            'pubkey_hex': event['pubkey_hex'],
+            'room_id': event['room_id'],
+        }))
+
+    def stop_typing_update(self, event):
+        """Forward a stop-typing indicator to the connected client."""
+        logger.info(
+            f'Nostr WS received stop_typing_update for wallet '
+            f'{self.wallet_hash[:16]}...: pubkey='
+            f'{event.get("pubkey_hex", "")[:16]}... '
+            f'room={event.get("room_id", "")[:16]}...'
+        )
+        self.send(text_data=json.dumps({
+            'type': 'stop_typing',
             'pubkey_hex': event['pubkey_hex'],
             'room_id': event['room_id'],
         }))

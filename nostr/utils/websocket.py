@@ -76,6 +76,38 @@ def send_last_active_update(wallet_hash, pubkey_hex, timestamp):
         )
 
 
+def send_stop_typing_update(wallet_hash, sender_pubkey_hex, room_id):
+    """Push a stop-typing indicator to all clients connected for this wallet."""
+
+    channel_layer = get_channel_layer()
+    if channel_layer is None:
+        logger.warning(
+            f'No channel layer configured — cannot send stop_typing update '
+            f'for wallet {wallet_hash}'
+        )
+        return
+
+    room_group_name = f'nostr_updates_{wallet_hash}'
+
+    try:
+        async_to_sync(channel_layer.group_send)(
+            room_group_name,
+            {
+                'type': 'stop_typing_update',
+                'pubkey_hex': sender_pubkey_hex,
+                'room_id': room_id,
+            },
+        )
+        logger.info(
+            f'Sent stop_typing WS update for wallet {wallet_hash}, '
+            f'pubkey {sender_pubkey_hex[:16]}..., room {room_id[:16]}...'
+        )
+    except Exception as e:
+        logger.error(
+            f'Failed to send stop_typing WS update for wallet {wallet_hash}: {e}'
+        )
+
+
 def send_typing_update(wallet_hash, sender_pubkey_hex, room_id):
     """Push a typing indicator to all clients connected for this wallet.
 
