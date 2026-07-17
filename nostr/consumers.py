@@ -362,6 +362,15 @@ class NostrUpdatesConsumer(JsonWebsocketConsumer):
 
     def stop_typing_update(self, event):
         """Forward a stop-typing indicator to the connected client."""
+        from .models import NostrPubkey
+
+        can_see = NostrPubkey.objects.filter(
+            wallet_hash=self.wallet_hash,
+            show_active_status=True,
+        ).exists()
+        if not can_see:
+            return
+
         logger.info(
             f'Nostr WS received stop_typing_update for wallet '
             f'{self.wallet_hash[:16]}...: pubkey='

@@ -77,7 +77,36 @@ def send_last_active_update(wallet_hash, pubkey_hex, timestamp):
 
 
 def send_stop_typing_update(wallet_hash, sender_pubkey_hex, room_id):
-    """Push a stop-typing indicator to all clients connected for this wallet."""
+    """Push a stop-typing indicator to all clients connected for this wallet.
+
+    Skips the push if the sender's ``show_active_status`` is False (they're
+    invisible) or if the recipient's ``show_active_status`` is False (they
+    can't see others' status).
+    """
+    from nostr.models import NostrPubkey
+
+    sender_visible = NostrPubkey.objects.filter(
+        pubkey_hex=sender_pubkey_hex,
+        show_active_status=True,
+    ).exists()
+    if not sender_visible:
+        logger.info(
+            f'Skipping stop_typing WS push — sender pubkey '
+            f'{sender_pubkey_hex[:16]}... has show_active_status=False '
+            f'or not found'
+        )
+        return
+
+    recipient_can_see = NostrPubkey.objects.filter(
+        wallet_hash=wallet_hash,
+        show_active_status=True,
+    ).exists()
+    if not recipient_can_see:
+        logger.info(
+            f'Skipping stop_typing WS push — recipient wallet '
+            f'{wallet_hash[:16]}... has show_active_status=False or not found'
+        )
+        return
 
     channel_layer = get_channel_layer()
     if channel_layer is None:
