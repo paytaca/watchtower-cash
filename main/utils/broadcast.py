@@ -42,7 +42,11 @@ def _acquire_broadcast_locks(outpoints):
     sorted_outpoints = sorted(outpoints)
     for txid, vout in sorted_outpoints:
         lock_key = f'{BROADCAST_LOCK_KEY_PREFIX}:{txid}:{vout}'
-        acquired = cache.set(lock_key, '1', nx=True, ex=BROADCAST_LOCK_TIMEOUT)
+        try:
+            acquired = cache.set(lock_key, '1', nx=True, ex=BROADCAST_LOCK_TIMEOUT)
+        except Exception:
+            _release_broadcast_locks(lock_keys)
+            return None
         if acquired:
             lock_keys.append(lock_key)
         else:
@@ -106,12 +110,17 @@ def broadcast_transaction_sync(transaction_hex, price_log=None, output_fiat_amou
 
     try:
         # Check if transaction would be accepted to mempool
-        test_accept = NODE.BCH.test_mempool_accept(transaction_hex)
-        txid = test_accept['txid']
-        result['txid'] = txid
+        try:
+            test_accept = NODE.BCH.test_mempool_accept(transaction_hex)
+            txid = test_accept['txid']
+            result['txid'] = txid
 
-        if not test_accept['allowed']:
-            result['error'] = test_accept.get('reject-reason', 'transaction rejected by mempool')
+            if not test_accept['allowed']:
+                result['error'] = test_accept.get('reject-reason', 'transaction rejected by mempool')
+                return result
+        except Exception as exc:
+            LOGGER.exception(f'Node RPC error during mempool acceptance test: {exc}')
+            result['error'] = f'node rpc error: {exc}'
             return result
 
         # Create TransactionBroadcast record
@@ -136,10 +145,11 @@ def broadcast_transaction_sync(transaction_hex, price_log=None, output_fiat_amou
                 LOGGER.info(f'Synchronous broadcast succeeded for txid {broadcasted_txid}')
             else:
                 result['error'] = 'broadcast returned empty txid'
+                TransactionBroadcast.objects.filter(id=txn_broadcast.id).update(error='broadcast returned empty txid')
                 LOGGER.warning(f'Broadcast returned empty txid for {txid}')
         except Exception as exc:
             error = str(exc)
-            if 'already have transaction' in error:
+            if 'already have transaction' in error.lower():
                 # Transaction is already in mempool — treat as success
                 TransactionBroadcast.objects.filter(id=txn_broadcast.id).update(
                     date_succeeded=timezone.now()

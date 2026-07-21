@@ -10,15 +10,12 @@ from paytacagifts.models import Gift, Wallet, Campaign, Claim
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
 from main.utils.subscription import new_subscription
-from main.utils.queries.node import Node
 from main.utils.broadcast import broadcast_transaction_sync
-from main.models import Transaction, TransactionMetaAttribute, TransactionBroadcast
+from main.models import TransactionMetaAttribute
 from django.db.models import Sum, F, Q
-from datetime import datetime
 import logging
 import hashlib
 
-NODE = Node()
 LOGGER = logging.getLogger(__name__)
 
 class GiftViewSet(viewsets.GenericViewSet):

@@ -5,12 +5,10 @@ from rest_framework import status
 from rest_framework.views import APIView
 from main import serializers
 from main.models import TransactionBroadcast, AssetPriceLog
-from main.utils.queries.node import Node
 from main.utils.broadcast import broadcast_transaction_sync
 from main.tasks import send_post_broadcast_notifications_task, process_mempool_transaction_fast
 import logging
 
-NODE = Node()
 LOGGER = logging.getLogger(__name__)
 
 class BroadcastViewSet(generics.GenericAPIView):
