@@ -12,6 +12,7 @@ from drf_yasg.utils import swagger_auto_schema
 from main.utils.subscription import new_subscription
 from main.utils.broadcast import broadcast_transaction_sync
 from main.models import TransactionMetaAttribute
+from main.tasks import parse_tx_wallet_histories
 from django.db.models import Sum, F, Q
 import logging
 import hashlib
@@ -247,6 +248,7 @@ class GiftViewSet(viewsets.GenericViewSet):
                         value="Gift"
                     )
                 )
+                parse_tx_wallet_histories(txid, immediate=True)
             
             # Build response - old clients get original format, new clients get enhanced format
             response_data = {
@@ -318,6 +320,7 @@ class GiftViewSet(viewsets.GenericViewSet):
                     "message": f"Transaction broadcast failed: {error_msg}",
                 }, status=http_status)
             txid = broadcast_result['txid']
+            parse_tx_wallet_histories(txid, immediate=True)
         
         # Create the claim record (limit check already passed)
         if gift.campaign:
@@ -350,6 +353,7 @@ class GiftViewSet(viewsets.GenericViewSet):
                         value="Gift"
                     )
                 )
+                parse_tx_wallet_histories(txid, immediate=True)
             # Build response - old clients get original format, new clients get enhanced format
             response_data = {
                 "share": gift.share,
@@ -468,6 +472,7 @@ class GiftViewSet(viewsets.GenericViewSet):
                         value="Gift Recovery"
                     )
                 )
+                parse_tx_wallet_histories(txid, immediate=True)
             
             # Build response - old clients get original format, new clients get enhanced format
             response_data = {
