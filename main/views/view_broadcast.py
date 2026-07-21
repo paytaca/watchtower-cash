@@ -6,7 +6,8 @@ from rest_framework.views import APIView
 from main import serializers
 from main.models import TransactionBroadcast, AssetPriceLog
 from main.utils.queries.node import Node
-from main.tasks import broadcast_transaction, send_post_broadcast_notifications_task
+from main.utils.broadcast import broadcast_transaction_sync
+from main.tasks import send_post_broadcast_notifications_task, process_mempool_transaction_fast
 import logging
 
 NODE = Node()
@@ -32,24 +33,38 @@ class BroadcastViewSet(generics.GenericAPIView):
                 except AssetPriceLog.DoesNotExist:
                     LOGGER.warning(f"price_id {price_id} not found")
             
-            if NODE.BCH.get_latest_block(): # check if node is up
-                test_accept = NODE.BCH.test_mempool_accept(transaction)
-                txid = test_accept['txid']
-                if test_accept['allowed']:
-                    txn_broadcast = TransactionBroadcast(
-                        txid=txid,
-                        tx_hex=transaction,
-                        price_log=price_log,
-                        output_fiat_amounts=output_fiat_amounts
-                    )
-                    txn_broadcast.save()
-                    broadcast_transaction.delay(transaction, txid, txn_broadcast.id)
+            # Synchronous broadcast — only return success after the node confirms
+            # the transaction is in its mempool. This prevents false-positive
+            # success responses when the actual broadcast fails (e.g. txn-mempool-conflict).
+            # Redis locks on input outpoints prevent concurrent double-spend attempts.
+            broadcast_result = broadcast_transaction_sync(
+                transaction,
+                price_log=price_log,
+                output_fiat_amounts=output_fiat_amounts,
+            )
+            
+            if broadcast_result['success']:
+                txid = broadcast_result['txid']
+                response['txid'] = txid
+                response['success'] = True
+                
+                # The transaction is confirmed in the mempool at this point.
+                # Trigger async post-broadcast processing (mempool tx processing
+                # and notifications) without blocking the HTTP response.
+                try:
+                    process_mempool_transaction_fast.delay(txid, transaction, True)
+                except Exception as exc:
+                    LOGGER.error(f'Failed to queue mempool processing for {txid}: {exc}')
+                
+                try:
                     send_post_broadcast_notifications_task.delay(transaction)
-                    response['txid'] = txid
-                    response['success'] = True
-                else:
-                    response['error'] = test_accept['reject-reason']
-                return Response(response, status=status.HTTP_200_OK)
+                except Exception as exc:
+                    LOGGER.error(f'Failed to queue post-broadcast notifications for {txid}: {exc}')
+            else:
+                response['txid'] = broadcast_result.get('txid')
+                response['error'] = broadcast_result.get('error', 'broadcast failed')
+            
+            return Response(response, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 

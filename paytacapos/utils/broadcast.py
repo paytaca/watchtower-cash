@@ -1,18 +1,15 @@
-from main.tasks import broadcast_transaction as broadcast_tx
-from main.utils.broadcast import send_post_broadcast_notifications
+from main.utils.broadcast import broadcast_transaction_sync, send_post_broadcast_notifications
 
 def broadcast_transaction(tx_hex):
     response = { "success": False }
 
-    success, result = broadcast_tx(tx_hex)
-    if "already have transaction" in result:
-        success = True
-    if success:
+    broadcast_result = broadcast_transaction_sync(tx_hex)
+    if broadcast_result['success']:
         send_post_broadcast_notifications(tx_hex)
-        response["txid"] = result.split(" ")[-1]
+        response["txid"] = broadcast_result['txid']
         response["success"] = True
         return response
     else:
-        response["error"] = result
+        response["error"] = broadcast_result.get('error', 'broadcast failed')
         response["success"] = False
         return response

@@ -11,6 +11,7 @@ from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
 from main.utils.subscription import new_subscription
 from main.utils.queries.node import Node
+from main.utils.broadcast import broadcast_transaction_sync
 from main.models import Transaction, TransactionMetaAttribute, TransactionBroadcast
 from django.db.models import Sum, F, Q
 from datetime import datetime
@@ -229,14 +230,14 @@ class GiftViewSet(viewsets.GenericViewSet):
         # If claim already exists, return early (but still handle transaction_hex if provided)
         if claim:
             txid = None
+            broadcast_error = None
             if transaction_hex:
-                # Extract txid for metadata even if claim exists
-                try:
-                    test_accept = NODE.BCH.test_mempool_accept(transaction_hex)
-                    if test_accept.get('allowed', False):
-                        txid = test_accept.get('txid')
-                except Exception:
-                    pass  # Ignore errors if claim already exists
+                # Synchronous broadcast — only set txid if node confirms the tx is in mempool
+                broadcast_result = broadcast_transaction_sync(transaction_hex)
+                if broadcast_result['success']:
+                    txid = broadcast_result['txid']
+                else:
+                    broadcast_error = broadcast_result.get('error')
             
             # Create or update transaction metadata if txid is available
             if txid:
@@ -249,19 +250,6 @@ class GiftViewSet(viewsets.GenericViewSet):
                         value="Gift"
                     )
                 )
-
-                # Use the same async broadcast pipeline as /api/broadcast/
-                # (save a TransactionBroadcast record then enqueue Celery broadcast task)
-                try:
-                    txn_broadcast = TransactionBroadcast.objects.create(
-                        txid=txid,
-                        tx_hex=transaction_hex,
-                    )
-                    from main.tasks import broadcast_transaction
-                    broadcast_transaction.delay(transaction_hex, txid, txn_broadcast.id)
-                except Exception:
-                    # Don't fail the request if async pipeline can't be queued
-                    pass
             
             # Build response - old clients get original format, new clients get enhanced format
             response_data = {
@@ -270,11 +258,14 @@ class GiftViewSet(viewsets.GenericViewSet):
                 "claim_id": str(claim.id)
             }
             if transaction_hex:
-                # New clients get success and encrypted_gift_code
-                response_data["success"] = True
                 response_data["encrypted_gift_code"] = gift.encrypted_gift_code or ''
                 if txid:
+                    response_data["success"] = True
                     response_data["txid"] = txid
+                else:
+                    response_data["success"] = False
+                    if broadcast_error:
+                        response_data["message"] = f"Transaction broadcast failed: {broadcast_error}"
             return Response(response_data)
 
         # Check campaign limits BEFORE broadcasting transaction
@@ -318,51 +309,18 @@ class GiftViewSet(viewsets.GenericViewSet):
         # Now that limit check passed, handle transaction broadcasting if provided
         txid = None
         if transaction_hex:
-            # Match /api/broadcast/ behavior: do mempool test in-request,
-            # then broadcast asynchronously via Celery to avoid latency spikes.
-            # Check if node is available (fast failure vs long waits elsewhere)
-            if not NODE.BCH.get_latest_block():
-                return Response({
-                    "success": False,
-                    "message": "Blockchain node is not available",
-                }, status=503)
-
-            # Test mempool acceptance
-            try:
-                test_accept = NODE.BCH.test_mempool_accept(transaction_hex)
-                if not test_accept.get('allowed', False):
-                    reject_reason = test_accept.get('reject-reason', 'Unknown error')
-                    return Response({
-                        "success": False,
-                        "message": f"Transaction rejected by mempool: {reject_reason}",
-                    }, status=400)
-                # Extract txid for later use in metadata
-                txid = test_accept.get('txid')
-            except Exception as exc:
-                error_msg = str(exc)
-                LOGGER.exception(f"Error testing mempool acceptance: {exc}")
-                return Response({
-                    "success": False,
-                    "message": f"Error testing mempool acceptance: {error_msg}",
-                }, status=400)
-
-            # Save broadcast attempt and enqueue async broadcaster (same as /api/broadcast/)
-            try:
-                txn_broadcast = TransactionBroadcast.objects.create(
-                    txid=txid,
-                    tx_hex=transaction_hex,
-                )
-                from main.tasks import broadcast_transaction
-                broadcast_transaction.delay(transaction_hex, txid, txn_broadcast.id)
-            except Exception as exc:
-                # If we cannot enqueue the async broadcast pipeline, fail like the old behavior.
-                # This keeps semantics closer to "broadcast requested" even though actual send is async.
-                error_msg = str(exc)
-                LOGGER.exception(f"Error queueing transaction broadcast: {exc}")
+            # Synchronous broadcast — only proceed if node confirms the tx is in mempool.
+            # This prevents false-positive success responses when the actual broadcast fails.
+            broadcast_result = broadcast_transaction_sync(transaction_hex)
+            if not broadcast_result['success']:
+                error_msg = broadcast_result.get('error', 'broadcast failed')
+                # Map node-unavailable to 503, other errors to 400
+                http_status = 503 if error_msg == 'node unavailable' else 400
                 return Response({
                     "success": False,
                     "message": f"Transaction broadcast failed: {error_msg}",
-                }, status=400)
+                }, status=http_status)
+            txid = broadcast_result['txid']
         
         # Create the claim record (limit check already passed)
         if gift.campaign:
@@ -468,50 +426,19 @@ class GiftViewSet(viewsets.GenericViewSet):
             if gift.date_claimed is not None:
                 raise Exception("This gift has been claimed.")
             
-            # Handle transaction broadcasting if provided (match /api/broadcast/ behavior)
+            # Handle transaction broadcasting if provided
             txid = None
             if transaction_hex:
-                # Check if node is available
-                if not NODE.BCH.get_latest_block():
-                    return Response({
-                        "success": False,
-                        "message": "Blockchain node is not available",
-                    }, status=503)
-                
-                # Test mempool acceptance
-                try:
-                    test_accept = NODE.BCH.test_mempool_accept(transaction_hex)
-                    if not test_accept.get('allowed', False):
-                        reject_reason = test_accept.get('reject-reason', 'Unknown error')
-                        return Response({
-                            "success": False,
-                            "message": f"Transaction rejected by mempool: {reject_reason}",
-                        }, status=400)
-                    # Extract txid for later use in metadata
-                    txid = test_accept.get('txid')
-                except Exception as exc:
-                    error_msg = str(exc)
-                    LOGGER.exception(f"Error testing mempool acceptance: {exc}")
-                    return Response({
-                        "success": False,
-                        "message": f"Error testing mempool acceptance: {error_msg}",
-                    }, status=400)
-
-                # Save broadcast attempt and enqueue async broadcaster (same as /api/broadcast/)
-                try:
-                    txn_broadcast = TransactionBroadcast.objects.create(
-                        txid=txid,
-                        tx_hex=transaction_hex,
-                    )
-                    from main.tasks import broadcast_transaction
-                    broadcast_transaction.delay(transaction_hex, txid, txn_broadcast.id)
-                except Exception as exc:
-                    error_msg = str(exc)
-                    LOGGER.exception(f"Error queueing transaction broadcast: {exc}")
+                # Synchronous broadcast — only proceed if node confirms the tx is in mempool.
+                broadcast_result = broadcast_transaction_sync(transaction_hex)
+                if not broadcast_result['success']:
+                    error_msg = broadcast_result.get('error', 'broadcast failed')
+                    http_status = 503 if error_msg == 'node unavailable' else 400
                     return Response({
                         "success": False,
                         "message": f"Transaction broadcast failed: {error_msg}",
-                    }, status=400)
+                    }, status=http_status)
+                txid = broadcast_result['txid']
             
             # Check if a claim already exists for this wallet (from previous recovery attempt)
             # If it exists, we can still allow recovery (return the data without creating duplicate claim)
