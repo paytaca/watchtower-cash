@@ -293,6 +293,21 @@ class WalletHistoryView(APIView):
                 required=False,
                 description="Comma-separated field names to exclude from each record (e.g. senders,recipients)",
             ),
+            openapi.Parameter(
+                name="asset_filter",
+                type=openapi.TYPE_STRING,
+                in_=openapi.IN_QUERY,
+                required=False,
+                enum=["bch-only", "favorites", "bch-and-favorites"],
+                description="Filter by asset type. bch-only: BCH only. favorites: only tokens matching token_ids. bch-and-favorites: BCH + tokens matching token_ids.",
+            ),
+            openapi.Parameter(
+                name="token_ids",
+                type=openapi.TYPE_STRING,
+                in_=openapi.IN_QUERY,
+                required=False,
+                description="Comma-separated asset IDs (e.g. ct/category1,ct/category2) to filter by when asset_filter is favorites or bch-and-favorites",
+            ),
         ],
     )
     def get(self, request, *args, **kwargs):
@@ -319,6 +334,8 @@ class WalletHistoryView(APIView):
         start_date = request.query_params.get("start_date", None)
         end_date = request.query_params.get("end_date", None)
         exclude_raw = request.query_params.get("exclude", "")
+        asset_filter = request.query_params.get("asset_filter", None)
+        token_ids_raw = request.query_params.get("token_ids", "")
         exclude_fields = {f.strip() for f in exclude_raw.split(",") if f.strip()}
 
         is_cashtoken_nft = False
@@ -359,6 +376,8 @@ class WalletHistoryView(APIView):
                 start_date,
                 end_date,
                 exclude_fields,
+                asset_filter,
+                token_ids_raw,
             )
 
         cache_key = None
@@ -982,6 +1001,8 @@ class WalletHistoryView(APIView):
         start_date=None,
         end_date=None,
         exclude_fields=None,
+        asset_filter=None,
+        token_ids_raw="",
     ):
         """
         Get combined history for BCH and all tokens.
@@ -997,6 +1018,8 @@ class WalletHistoryView(APIView):
             and not start_date
             and not end_date
             and not exclude_fields
+            and not asset_filter
+            and not token_ids_raw
         )
 
         if wallet.version > 1:
@@ -1063,6 +1086,29 @@ class WalletHistoryView(APIView):
                 return Response(
                     data={"error": f"Invalid end_date format. Use YYYY-MM-DD"},
                     status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        # Apply asset filter
+        if asset_filter == "bch-only":
+            qs = qs.filter(token__name="bch", cashtoken_ft__isnull=True, cashtoken_nft__isnull=True)
+        elif asset_filter in ("favorites", "bch-and-favorites") and token_ids_raw:
+            token_id_list = [tid.strip() for tid in token_ids_raw.split(",") if tid.strip()]
+            ct_categories = [tid.split("/")[1] for tid in token_id_list if tid.startswith("ct/")]
+            slp_ids = [tid.split("/")[1] for tid in token_id_list if tid.startswith("slp/")]
+
+            token_filters = Q()
+            if ct_categories:
+                token_filters |= Q(cashtoken_ft__category__in=ct_categories)
+                token_filters |= Q(cashtoken_nft__category__in=ct_categories)
+            if slp_ids:
+                token_filters |= Q(token__tokenid__in=slp_ids)
+
+            if asset_filter == "favorites":
+                qs = qs.filter(token_filters)
+            else:
+                qs = qs.filter(
+                    Q(token__name="bch", cashtoken_ft__isnull=True, cashtoken_nft__isnull=True)
+                    | token_filters
                 )
 
         qs = qs.order_by(
