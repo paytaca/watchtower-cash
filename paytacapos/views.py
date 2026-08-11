@@ -1,7 +1,6 @@
 import pickle
 import base64
 import json
-import re
 from django.db.models import (
     F, Value,
     Func,
@@ -120,7 +119,7 @@ class PosDeviceViewSet(
 
     @transaction.atomic
     @swagger_auto_schema(method="post", request_body=UnlinkDeviceSerializer, responses={ 200: serializer_class })
-    @decorators.action(methods=["post"], detail=True)
+    @decorators.action(methods=["post"], detail=True, authentication_classes=[], permission_classes=[])
     def unlink_device(self, request, *args, **kwargs):
         instance = self.get_object()
         serializer = UnlinkDeviceSerializer(pos_device=instance, data=request.data)
@@ -184,7 +183,7 @@ class PosDeviceViewSet(
     def link_code_data(self, request, *args, **kwargs):
         link_code = request.query_params.get("code", None)
         link_request_data = PosDeviceLinkRequestSerializer.retrieve_link_request_data(link_code)
-        serializer = PosDeviceLinkRequestSerializer(data=link_request_data)
+        serializer = PosDeviceLinkRequestSerializer(data=link_request_data, context={'request': request})
         if not serializer.is_valid():
             return Response(serializer.errors, status=400)
         return Response(serializer.validated_data["encrypted_xpubkey"])
@@ -200,7 +199,7 @@ class PosDeviceViewSet(
     def link_code_data_v2(self, request, *args, **kwargs):
         link_code = request.query_params.get("code", None)
         link_request_data = PosDeviceLinkRequestV2Serializer.retrieve_link_request_data(link_code)
-        serializer = PosDeviceLinkRequestV2Serializer(data=link_request_data)
+        serializer = PosDeviceLinkRequestV2Serializer(data=link_request_data, context={'request': request})
         if not serializer.is_valid():
             return Response(serializer.errors, status=400)
         return Response(serializer.validated_data["encrypted_data"])
@@ -216,7 +215,7 @@ class PosDeviceViewSet(
     def nfc_request_code_data(self, request, *args, **kwargs):
         nfc_code = request.query_params.get("code", None)
         nfc_request_data = PosDeviceNfcRequestSerializer.retrieve_request_code_data(nfc_code)
-        serializer = PosDeviceNfcRequestSerializer(data=nfc_request_data)
+        serializer = PosDeviceNfcRequestSerializer(data=nfc_request_data, context={'request': request})
         if not serializer.is_valid():
             return Response(serializer.errors, status=400)
         return Response(serializer.validated_data["encrypted_data"])
@@ -306,24 +305,6 @@ class PosDeviceViewSet(
         return Response(serializer.data)
 
 
-POS_ID_MAX_DIGITS = 4
-MIN_POS_ADDRESS_INDEX = 10 ** POS_ID_MAX_DIGITS
-
-
-def get_posid_from_address(address):
-    '''Extract posid from address_path. POS addresses have index >= 10000.
-    Address path format: <change>/<index> where change is 0 (receiving) or 1 (change).'''
-    if not address.address_path:
-        return None
-    match = re.match(r'[01]/(\d+)', address.address_path)
-    if not match:
-        return None
-    index = int(match.group(1))
-    if index < MIN_POS_ADDRESS_INDEX:
-        return None
-    return index % MIN_POS_ADDRESS_INDEX
-
-
 class MerchantViewSet(viewsets.ModelViewSet):
     http_method_names = ["get", "post", "head", "patch", "delete"]
 
@@ -402,57 +383,23 @@ class MerchantViewSet(viewsets.ModelViewSet):
         response = { 'index': index }
         return Response(response)
 
-    @swagger_auto_schema(method="post", request_body=MerchantVaultAddressSerializer, responses={ 200: MerchantVaultAddressResponseSerializer })
+    @swagger_auto_schema(method="post", request_body=MerchantVaultAddressSerializer, response={ 200: MerchantListSerializer })
     @decorators.action(methods=["post"], detail=False)
     def vault_address(self, request, *args, **kwargs):
         serializer = MerchantVaultAddressSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        try:
-            address = Address.objects.get(address=serializer.validated_data['address'])
-        except Address.DoesNotExist:
-            return Response({})
-
-        posid = serializer.validated_data.get('posid')
-
-        if posid is None:
-            posid = get_posid_from_address(address)
-            if posid is None:
-                return Response({})
-
+        address = Address.objects.get(address=serializer.validated_data['address'])
         try:
             pos_device = PosDevice.objects.get(
                 wallet_hash=address.wallet.wallet_hash,
-                posid=posid
+                posid=serializer.validated_data['posid']
             )
-        except PosDevice.DoesNotExist:
+        except:
             return Response({})
 
-        if not pos_device.merchant:
-            return Response({})
-
-        merchant = pos_device.merchant
-        response_data = MerchantVaultAddressResponseSerializer(merchant).data
-
-        logo = merchant.logo_60
-        if logo and logo.size < 512 * 1024:
-            try:
-                ext = logo.name.rsplit('.', 1)[-1].lower()
-                if ext in ('jpg', 'jpeg'):
-                    mime = 'image/jpeg'
-                elif ext == 'svg':
-                    mime = 'image/svg+xml'
-                else:
-                    mime = f'image/{ext}'
-                logo.seek(0)
-                response_data['logo_data'] = f'data:{mime};base64,{base64.b64encode(logo.read()).decode()}'
-            except Exception:
-                logger.exception("Failed to encode merchant logo for vault_address")
-                response_data['logo_data'] = None
-        else:
-            response_data['logo_data'] = None
-
-        return Response(response_data)
+        serializer = MerchantListSerializer(pos_device.merchant)
+        return Response(serializer.data)
 
     @decorators.action(methods=['get'], detail=False)
     def countries(self, request, *args, **kwargs):
