@@ -120,7 +120,7 @@ class PosDeviceViewSet(
 
     @transaction.atomic
     @swagger_auto_schema(method="post", request_body=UnlinkDeviceSerializer, responses={ 200: serializer_class })
-    @decorators.action(methods=["post"], detail=True)
+    @decorators.action(methods=["post"], detail=True, authentication_classes=[], permission_classes=[])
     def unlink_device(self, request, *args, **kwargs):
         instance = self.get_object()
         serializer = UnlinkDeviceSerializer(pos_device=instance, data=request.data)
