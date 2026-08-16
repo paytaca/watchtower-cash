@@ -308,6 +308,14 @@ class WalletHistoryView(APIView):
                 required=False,
                 description="Comma-separated asset IDs (e.g. ct/category1,ct/category2) to filter by when asset_filter is favorites or bch-and-favorites",
             ),
+            openapi.Parameter(
+                name="categorize",
+                type=openapi.TYPE_BOOLEAN,
+                in_=openapi.IN_QUERY,
+                default=False,
+                required=False,
+                description="If true, each history record gets a category field (cauldron, p2p-ramp, or empty)",
+            ),
         ],
     )
     def get(self, request, *args, **kwargs):
@@ -336,6 +344,10 @@ class WalletHistoryView(APIView):
         exclude_raw = request.query_params.get("exclude", "")
         asset_filter = request.query_params.get("asset_filter", None)
         token_ids_raw = request.query_params.get("token_ids", "")
+        categorize = (
+            str(request.query_params.get("categorize", "false")).strip().lower()
+            == "true"
+        )
         exclude_fields = {f.strip() for f in exclude_raw.split(",") if f.strip()}
 
         is_cashtoken_nft = False
@@ -378,6 +390,7 @@ class WalletHistoryView(APIView):
                 exclude_fields,
                 asset_filter,
                 token_ids_raw,
+                categorize,
             )
 
         cache_key = None
@@ -393,6 +406,7 @@ class WalletHistoryView(APIView):
             and not start_date
             and not end_date
             and not exclude_fields
+            and not categorize
         )
 
         if wallet.version > 1:
@@ -968,6 +982,9 @@ class WalletHistoryView(APIView):
                     for item in history
                 ]
 
+            if categorize:
+                history = self._apply_categories(history)
+
             if wallet.version == 1:
                 return Response(data=history, status=status.HTTP_200_OK)
             else:
@@ -984,6 +1001,34 @@ class WalletHistoryView(APIView):
                     store_object(cache_key, data, cache)
 
         return Response(data=data, status=status.HTTP_200_OK)
+
+    def _apply_categories(self, history):
+        history_txids = {item["txid"] for item in history}
+
+        cauldron_txids = set(
+            TransactionMetaAttribute.objects.filter(
+                txid__in=history_txids,
+                key="cauldron-swap",
+            ).values_list("txid", flat=True)
+        )
+
+        from rampp2p.models.model_order import Transaction as RampTransaction
+
+        release_txids = set(
+            RampTransaction.objects.filter(
+                txid__in=history_txids,
+                action=RampTransaction.ActionType.RELEASE,
+            ).values_list("txid", flat=True)
+        )
+
+        for item in history:
+            if item["txid"] in cauldron_txids:
+                item["category"] = "cauldron"
+            elif item["txid"] in release_txids:
+                item["category"] = "p2p-ramp"
+            else:
+                item["category"] = ""
+        return history
 
     def _get_combined_history(
         self,
@@ -1003,6 +1048,7 @@ class WalletHistoryView(APIView):
         exclude_fields=None,
         asset_filter=None,
         token_ids_raw="",
+        categorize=False,
     ):
         """
         Get combined history for BCH and all tokens.
@@ -1020,6 +1066,7 @@ class WalletHistoryView(APIView):
             and not exclude_fields
             and not asset_filter
             and not token_ids_raw
+            and not categorize
         )
 
         if wallet.version > 1:
@@ -1299,6 +1346,9 @@ class WalletHistoryView(APIView):
                 {k: v for k, v in item.items() if k not in exclude_fields}
                 for item in history
             ]
+
+        if categorize:
+            history = self._apply_categories(history)
 
         # Paginate
         pages = Paginator(history, page_size)
