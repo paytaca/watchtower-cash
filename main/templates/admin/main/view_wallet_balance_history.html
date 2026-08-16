@@ -79,6 +79,9 @@
             {% if wallet_data.last_balance_check %}
             <div class="form-row">
                 <strong>Last Balance Check:</strong> {{ wallet_data.last_balance_check }}
+                {% if wallet_data.last_balance_check_relative %}
+                <span style="color: #666; font-size: 0.9em;">({{ wallet_data.last_balance_check_relative }})</span>
+                {% endif %}
             </div>
             {% endif %}
             

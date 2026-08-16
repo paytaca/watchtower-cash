@@ -18,8 +18,9 @@ from main.tasks import (
 from main.management.commands.tx_fiat_amounts import get_tx_with_fiat_amounts
 
 from dynamic_raw_id.admin import DynamicRawIDMixin
-from django.utils.html import format_html
+from django.utils.html import format_html, mark_safe
 from django.conf import settings
+from django.utils import timezone
 import datetime
 import json
 import logging
@@ -505,7 +506,7 @@ class WalletAdmin(DynamicRawIDMixin, admin.ModelAdmin):
         'wallet_hash',
         'wallet_type',
         'project',
-        'last_balance_check',
+        'last_balance_check_time',
         'last_utxo_scan_succeeded',
         'paytaca_app_version'
     ]
@@ -522,6 +523,13 @@ class WalletAdmin(DynamicRawIDMixin, admin.ModelAdmin):
     search_fields = [
         'wallet_hash'
     ]
+
+    def last_balance_check_time(self, obj):
+        if not obj.last_balance_check:
+            return None
+        return self._relative_time(obj.last_balance_check)
+    last_balance_check_time.short_description = 'Last balance check'
+    last_balance_check_time.admin_order_field = 'last_balance_check'
 
     def get_urls(self):
         urls = super().get_urls()
@@ -640,6 +648,7 @@ class WalletAdmin(DynamicRawIDMixin, admin.ModelAdmin):
                             'project': str(wallet.project) if wallet.project else None,
                             'date_created': wallet.date_created,
                             'last_balance_check': wallet.last_balance_check,
+                            'last_balance_check_relative': self._relative_time(wallet.last_balance_check),
                             'last_utxo_scan_succeeded': wallet.last_utxo_scan_succeeded,
                             'fiat_currency': fiat_currency,
                         }
@@ -786,6 +795,27 @@ class WalletAdmin(DynamicRawIDMixin, admin.ModelAdmin):
         }
         return render(request, 'admin/main/view_wallet_balance_history.html', context)
 
+    def _relative_time(self, dt):
+        if not dt:
+            return None
+        delta = timezone.now() - dt
+        seconds = int(delta.total_seconds())
+        if seconds < 0:
+            seconds = 0
+        intervals = [
+            (31536000, 'year'),
+            (2592000, 'month'),
+            (86400, 'day'),
+            (3600, 'hour'),
+            (60, 'minute'),
+            (1, 'second'),
+        ]
+        for seconds_in_unit, unit in intervals:
+            if seconds >= seconds_in_unit:
+                count = int(seconds // seconds_in_unit)
+                return f'{count} {unit}{"s" if count != 1 else ""} ago'
+        return 'just now'
+
     def rescan_utxos(self, request, queryset):
         for wallet in queryset:
             addresses = wallet.addresses.all()
@@ -849,6 +879,10 @@ class WalletHistoryAdmin(DynamicRawIDMixin, admin.ModelAdmin):
         'date_created'
     ]
 
+    readonly_fields = [
+        'transaction_metadata'
+    ]
+
     dynamic_raw_id_fields = [
         'wallet',
         'token',
@@ -861,6 +895,30 @@ class WalletHistoryAdmin(DynamicRawIDMixin, admin.ModelAdmin):
         'wallet__wallet_hash',
         'txid'
     ]
+
+    def transaction_metadata(self, obj):
+        attrs = TransactionMetaAttribute.objects.filter(txid=obj.txid).order_by('key')
+        if not attrs:
+            return format_html('<i>No transaction metadata</i>')
+        rows = []
+        for attr in attrs:
+            source = 'system' if attr.system_generated else 'user'
+            rows.append(
+                format_html(
+                    '<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>',
+                    attr.key,
+                    attr.value,
+                    attr.wallet_hash or '-',
+                    source
+                )
+            )
+        return format_html(
+            '<table>'
+            '<thead><tr><th>Key</th><th>Value</th><th>Wallet</th><th>Source</th></tr></thead>'
+            '<tbody>{}</tbody></table>',
+            mark_safe(''.join(rows))
+        )
+    transaction_metadata.short_description = 'Transaction Metadata'
 
     def get_urls(self):
         urls = super().get_urls()
@@ -1152,6 +1210,31 @@ class CashNonFungibleTokenAdmin(admin.ModelAdmin):
     refetch_metadata.short_description = "Refetch metadata from BCMR"
     
 
+class TransactionMetaAttributeAdmin(admin.ModelAdmin):
+    list_display = [
+        'id',
+        'txid',
+        'key',
+        'value',
+        'wallet_hash',
+        'system_generated'
+    ]
+
+    list_filter = [
+        'system_generated',
+        'key'
+    ]
+
+    search_fields = [
+        'txid',
+        'key',
+        'value',
+        'wallet_hash'
+    ]
+
+    ordering = ['-id']
+
+
 class TransactionBroadcastAdmin(DynamicRawIDMixin, admin.ModelAdmin):
     list_display = [
         'txid',
@@ -1229,6 +1312,7 @@ admin.site.register(ContractHistory, ContractHistoryAdmin)
 admin.site.register(WalletHistory, WalletHistoryAdmin)
 admin.site.register(WalletNftToken, WalletNftTokenAdmin)
 admin.site.register(TransactionBroadcast, TransactionBroadcastAdmin)
+admin.site.register(TransactionMetaAttribute, TransactionMetaAttributeAdmin)
 admin.site.register(AssetPriceLog, AssetPriceLogAdmin)
 
 class AppVersionAdmin(admin.ModelAdmin):
