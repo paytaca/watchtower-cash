@@ -2,7 +2,7 @@ from django.core.management.base import BaseCommand
 from django.utils import timezone
 
 from main.models import WalletActivity, WalletHistory
-from main.utils.wallet_activity import activity_kind_for_history, history_amount_to_satoshis
+from main.utils.wallet_activity import activity_kind_for_history
 
 
 class Command(BaseCommand):
@@ -34,8 +34,7 @@ class Command(BaseCommand):
         queryset = WalletHistory.objects.filter(
             record_type__in=[WalletHistory.OUTGOING, WalletHistory.INCOMING],
             wallet__wallet_type='bch',
-            token__name__iexact='bch',
-        ).select_related('wallet', 'token')
+        ).select_related('wallet')
 
         if target_date:
             day = timezone.datetime.strptime(target_date, '%Y-%m-%d').date()
@@ -69,7 +68,6 @@ class Command(BaseCommand):
                     kind=kind,
                     defaults={
                         'activity_date': activity_date,
-                        'amount': history_amount_to_satoshis(history),
                     },
                 )
 

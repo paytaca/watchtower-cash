@@ -26,7 +26,7 @@ from main.tasks import (
 )
 from main.utils.cache import clear_wallet_history_cache, clear_wallet_balance_cache
 from main.utils.address_validator import is_bch_address
-from main.utils.wallet_activity import activity_kind_for_history, history_amount_to_satoshis
+from main.utils.wallet_activity import activity_kind_for_history
 
 
 LOGGER = logging.getLogger(__name__)
@@ -44,7 +44,6 @@ def record_wallet_activity(history):
         kind=kind,
         defaults={
             'activity_date': activity_date,
-            'amount': history_amount_to_satoshis(history),
         },
     )
 
