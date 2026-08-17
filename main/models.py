@@ -1229,7 +1229,6 @@ class WalletActivity(PostgresModel):
     )
     activity_date = models.DateField(db_index=True)
     kind = models.CharField(max_length=32, choices=KIND_CHOICES, db_index=True)
-    amount = models.BigIntegerField(blank=True, null=True)
     date_created = models.DateTimeField(auto_now_add=True)
 
     class Meta:

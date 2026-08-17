@@ -26,20 +26,16 @@ from main.tasks import (
 )
 from main.utils.cache import clear_wallet_history_cache, clear_wallet_balance_cache
 from main.utils.address_validator import is_bch_address
+from main.utils.wallet_activity import activity_kind_for_history
 
 
 LOGGER = logging.getLogger(__name__)
 
 
 def record_wallet_activity(history):
-    """Create a WalletActivity row for an outgoing/incoming transaction."""
-    if not history.wallet:
-        return
-    if history.record_type == WalletHistory.OUTGOING:
-        kind = WalletActivity.KIND_TRANSACTION_SEND
-    elif history.record_type == WalletHistory.INCOMING:
-        kind = WalletActivity.KIND_TRANSACTION_RECEIVE
-    else:
+    """Create a WalletActivity row for an outgoing/incoming BCH transaction."""
+    kind = activity_kind_for_history(history)
+    if kind is None:
         return
     activity_date = history.tx_timestamp.date() if history.tx_timestamp else timezone.localdate()
     WalletActivity.objects.get_or_create(
@@ -48,7 +44,6 @@ def record_wallet_activity(history):
         kind=kind,
         defaults={
             'activity_date': activity_date,
-            'amount': int(round(abs(history.amount) * 100_000_000)) if history.amount is not None else None,
         },
     )
 

@@ -2,16 +2,17 @@ from django.core.management.base import BaseCommand
 from django.utils import timezone
 
 from main.models import WalletActivity, WalletHistory
+from main.utils.wallet_activity import activity_kind_for_history
 
 
 class Command(BaseCommand):
-    help = 'One-time backfill of WalletActivity records from historical WalletHistory sends'
+    help = 'One-time backfill of WalletActivity records from historical BCH WalletHistory sends/receives'
 
     def add_arguments(self, parser):
         parser.add_argument(
             '--date',
             type=str,
-            help='Only backfill sends on this UTC day (YYYY-MM-DD). Defaults to all history.',
+            help='Only backfill activity on this UTC day (YYYY-MM-DD). Defaults to all history.',
         )
         parser.add_argument(
             '--dry-run',
@@ -32,7 +33,7 @@ class Command(BaseCommand):
 
         queryset = WalletHistory.objects.filter(
             record_type__in=[WalletHistory.OUTGOING, WalletHistory.INCOMING],
-            wallet__isnull=False,
+            wallet__wallet_type='bch',
         ).select_related('wallet')
 
         if target_date:
@@ -41,19 +42,18 @@ class Command(BaseCommand):
 
         total = queryset.count()
         self.stdout.write(
-            f"Backfilling WalletActivity from {total} outgoing/incoming WalletHistory records"
+            f"Backfilling WalletActivity from {total} BCH outgoing/incoming WalletHistory records"
         )
 
         created = 0
         skipped = 0
 
         for idx, history in enumerate(queryset.iterator(chunk_size=2000)):
+            kind = activity_kind_for_history(history)
+            if kind is None:
+                continue
+
             activity_date = history.tx_timestamp.date() if history.tx_timestamp else timezone.localdate()
-            kind = (
-                WalletActivity.KIND_TRANSACTION_SEND
-                if history.record_type == WalletHistory.OUTGOING
-                else WalletActivity.KIND_TRANSACTION_RECEIVE
-            )
 
             if dry_run:
                 was_created = not WalletActivity.objects.filter(
@@ -68,7 +68,6 @@ class Command(BaseCommand):
                     kind=kind,
                     defaults={
                         'activity_date': activity_date,
-                        'amount': int(round(abs(history.amount) * 100_000_000)) if history.amount is not None else None,
                     },
                 )
 
