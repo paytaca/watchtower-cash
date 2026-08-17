@@ -92,6 +92,11 @@ main_urls += [
         name="growth-report",
     ),
     re_path(
+        r"^reports/wallet_activity/$",
+        views.WalletActivityReportView.as_view(),
+        name="wallet-activity-report",
+    ),
+    re_path(
         r"^task/(?P<task_id>[\w+:-]+)/$",
         views.TaskStatusView.as_view(),
         name="task-status",

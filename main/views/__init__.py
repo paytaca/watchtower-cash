@@ -32,3 +32,4 @@ from main.views.view_asset_setting import *
 from main.views.view_address_book import *
 from main.views.view_wallet_history_explorer import *
 from main.views.view_growth_report import *
+from main.views.view_wallet_activity_report import *
