@@ -314,6 +314,9 @@ class UnlinkDeviceSerializer(serializers.Serializer):
 
     def save(self):
         self.pos_device.linked_device.delete()
+        self.pos_device.linked_device = None
+        self.pos_device.nfc_payments_enabled = False
+        self.pos_device.save()
         self.pos_device.refresh_from_db()
         send_device_update(self.pos_device, action="unlink")
         return self.pos_device
