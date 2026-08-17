@@ -31,7 +31,7 @@ class Command(BaseCommand):
         target_date = options.get('date')
 
         queryset = WalletHistory.objects.filter(
-            record_type=WalletHistory.OUTGOING,
+            record_type__in=[WalletHistory.OUTGOING, WalletHistory.INCOMING],
             wallet__isnull=False,
         ).select_related('wallet')
 
@@ -41,7 +41,7 @@ class Command(BaseCommand):
 
         total = queryset.count()
         self.stdout.write(
-            f"Backfilling WalletActivity from {total} outgoing WalletHistory records"
+            f"Backfilling WalletActivity from {total} outgoing/incoming WalletHistory records"
         )
 
         created = 0
@@ -49,18 +49,23 @@ class Command(BaseCommand):
 
         for idx, history in enumerate(queryset.iterator(chunk_size=2000)):
             activity_date = history.tx_timestamp.date() if history.tx_timestamp else timezone.now().date()
+            kind = (
+                WalletActivity.KIND_TRANSACTION_SEND
+                if history.record_type == WalletHistory.OUTGOING
+                else WalletActivity.KIND_TRANSACTION_RECEIVE
+            )
 
             if dry_run:
                 was_created = not WalletActivity.objects.filter(
                     wallet=history.wallet,
                     history=history,
-                    kind=WalletActivity.KIND_TRANSACTION_SEND,
+                    kind=kind,
                 ).exists()
             else:
                 _, was_created = WalletActivity.objects.get_or_create(
                     wallet=history.wallet,
                     history=history,
-                    kind=WalletActivity.KIND_TRANSACTION_SEND,
+                    kind=kind,
                     defaults={
                         'activity_date': activity_date,
                         'amount': int(round(abs(history.amount) * 100_000_000)) if history.amount else None,

@@ -32,16 +32,20 @@ LOGGER = logging.getLogger(__name__)
 
 
 def record_wallet_activity(history):
-    """Create a WalletActivity row for an outgoing transaction-send."""
+    """Create a WalletActivity row for an outgoing/incoming transaction."""
     if not history.wallet:
         return
-    if history.record_type != WalletHistory.OUTGOING:
+    if history.record_type == WalletHistory.OUTGOING:
+        kind = WalletActivity.KIND_TRANSACTION_SEND
+    elif history.record_type == WalletHistory.INCOMING:
+        kind = WalletActivity.KIND_TRANSACTION_RECEIVE
+    else:
         return
     activity_date = history.tx_timestamp.date() if history.tx_timestamp else timezone.localdate()
     WalletActivity.objects.get_or_create(
         wallet=history.wallet,
         history=history,
-        kind=WalletActivity.KIND_TRANSACTION_SEND,
+        kind=kind,
         defaults={
             'activity_date': activity_date,
             'amount': int(round(abs(history.amount) * 100_000_000)) if history.amount else None,

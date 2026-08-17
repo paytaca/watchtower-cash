@@ -1206,10 +1206,12 @@ class AddressBookAddress(models.Model):
 
 class WalletActivity(models.Model):
     KIND_TRANSACTION_SEND = 'transaction-send'
+    KIND_TRANSACTION_RECEIVE = 'transaction-receive'
     KIND_APP_OPENING = 'app-opening'
 
     KIND_CHOICES = [
         (KIND_TRANSACTION_SEND, 'Transaction Send'),
+        (KIND_TRANSACTION_RECEIVE, 'Transaction Receive'),
         (KIND_APP_OPENING, 'App Opening'),
     ]
 

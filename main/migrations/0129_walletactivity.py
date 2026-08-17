@@ -14,7 +14,7 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('activity_date', models.DateField(db_index=True)),
-                ('kind', models.CharField(choices=[('transaction-send', 'Transaction Send'), ('app-opening', 'App Opening')], db_index=True, max_length=32)),
+                ('kind', models.CharField(choices=[('transaction-send', 'Transaction Send'), ('transaction-receive', 'Transaction Receive'), ('app-opening', 'App Opening')], db_index=True, max_length=32)),
                 ('amount', models.BigIntegerField(blank=True, null=True)),
                 ('date_created', models.DateTimeField(auto_now_add=True)),
                 ('history', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='activities', to='main.wallethistory')),
