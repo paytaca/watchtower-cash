@@ -1204,7 +1204,7 @@ class AddressBookAddress(models.Model):
         return self.address
 
 
-class WalletActivity(models.Model):
+class WalletActivity(PostgresModel):
     KIND_TRANSACTION_SEND = 'transaction-send'
     KIND_TRANSACTION_RECEIVE = 'transaction-receive'
     KIND_APP_OPENING = 'app-opening'

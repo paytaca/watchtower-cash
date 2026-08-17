@@ -48,7 +48,7 @@ def record_wallet_activity(history):
         kind=kind,
         defaults={
             'activity_date': activity_date,
-            'amount': int(round(abs(history.amount) * 100_000_000)) if history.amount else None,
+            'amount': int(round(abs(history.amount) * 100_000_000)) if history.amount is not None else None,
         },
     )
 

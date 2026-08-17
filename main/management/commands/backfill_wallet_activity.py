@@ -48,7 +48,7 @@ class Command(BaseCommand):
         skipped = 0
 
         for idx, history in enumerate(queryset.iterator(chunk_size=2000)):
-            activity_date = history.tx_timestamp.date() if history.tx_timestamp else timezone.now().date()
+            activity_date = history.tx_timestamp.date() if history.tx_timestamp else timezone.localdate()
             kind = (
                 WalletActivity.KIND_TRANSACTION_SEND
                 if history.record_type == WalletHistory.OUTGOING
@@ -68,7 +68,7 @@ class Command(BaseCommand):
                     kind=kind,
                     defaults={
                         'activity_date': activity_date,
-                        'amount': int(round(abs(history.amount) * 100_000_000)) if history.amount else None,
+                        'amount': int(round(abs(history.amount) * 100_000_000)) if history.amount is not None else None,
                     },
                 )
 
