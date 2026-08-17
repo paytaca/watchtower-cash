@@ -5,6 +5,8 @@ from rest_framework.test import APIClient
 
 from main.models import Project, Token, Wallet, WalletActivity, WalletHistory
 
+import hashlib
+
 
 def _utc_date_str(dt):
     return dt.strftime("%Y-%m-%d")
@@ -72,6 +74,15 @@ class WalletActivityReportViewTestCase(TestCase):
         entry = data["results"][0]
         self.assertEqual(entry["event_id"], str(activity.id))
         self.assertNotEqual(entry["event_id"], "abc123")
+
+    def test_returns_wallet_digest_not_raw_wallet_hash(self):
+        history = self._create_history(txid="digest_txid")
+        self._create_activity(history=history)
+        response = self.client.get(self.url, {"date": self.date_str})
+        entry = response.json()["results"][0]
+        expected = hashlib.sha256(self.wallet_a.wallet_hash.encode()).hexdigest()
+        self.assertEqual(entry["wallet_digest"], expected)
+        self.assertNotIn("wallet_hash", entry)
 
     def test_transaction_send_returns_txid_and_sats_amount(self):
         history = self._create_history(txid="send_txid", amount=1.0)

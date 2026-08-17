@@ -1,3 +1,4 @@
+import hashlib
 from datetime import datetime
 
 from django.core.paginator import Paginator
@@ -24,8 +25,9 @@ class WalletActivityReportView(APIView):
     """Return per-event WalletActivity rows for a specific UTC day.
 
     Each event carries the WalletActivity record id as ``event_id``,
-    together with the wallet hash, activity date, kind, and (for
-    transaction events) the on-chain txid and amount in satoshis.
+    together with a wallet digest (sha256 of the wallet hash), the
+    activity date, kind, and (for transaction events) the on-chain
+    txid and amount in satoshis.
     """
 
     @swagger_auto_schema(
@@ -100,7 +102,9 @@ class WalletActivityReportView(APIView):
                 txid = history.txid
             events.append({
                 "event_id": str(activity.id),
-                "wallet_hash": activity.wallet.wallet_hash,
+                "wallet_digest": hashlib.sha256(
+                    activity.wallet.wallet_hash.encode()
+                ).hexdigest(),
                 "activity_date": activity.activity_date.isoformat(),
                 "kind": activity.kind,
                 "txid": txid,
