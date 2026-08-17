@@ -6,7 +6,9 @@ from rest_framework.test import APIClient
 
 from authentication.models import AuthToken
 from main.models import Project, Wallet
-from paytacapos.models import Merchant
+import bitcoin
+
+from paytacapos.models import Merchant, PosDevice, LinkedDeviceInfo, UnlinkDeviceRequest
 
 
 _TEST_FERNET_KEY = Fernet.generate_key().decode()
@@ -99,3 +101,47 @@ class TestMerchantCardRegistrationView(TestCase):
             HTTP_X_NFC_SERVER_TOKEN=_TEST_NFC_SERVER_TOKEN,
         )
         self.assertEqual(response.status_code, 200)
+
+
+class TestPosDeviceUnlink(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.wallet_hash = "test-wallet-hash"
+        self.posid = 1
+        self.pos_device = PosDevice.objects.create(
+            wallet_hash=self.wallet_hash,
+            posid=self.posid,
+            nfc_payments_enabled=True,
+        )
+        self.linked_device = LinkedDeviceInfo.objects.create(
+            link_code="test-link-code",
+        )
+        self.pos_device.linked_device = self.linked_device
+        self.pos_device.save()
+
+        privkey = bitcoin.random_key()
+        self.verifying_pubkey = bitcoin.privkey_to_pubkey(privkey)
+        signature = bitcoin.ecdsa_sign(self.linked_device.link_code, privkey)
+
+        self.unlink_request = UnlinkDeviceRequest.objects.create(
+            linked_device_info=self.linked_device,
+            signature=signature,
+            nonce=123,
+        )
+
+        self.unlink_url = reverse(
+            "paytacapos-devices-unlink-device",
+            kwargs={"wallet_hash_posid": f"{self.wallet_hash}:{self.posid}"},
+        )
+
+    def test_unlink_device_resets_nfc_payments_enabled(self):
+        response = self.client.post(
+            self.unlink_url,
+            {"verifying_pubkey": self.verifying_pubkey},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.pos_device.refresh_from_db()
+        self.assertFalse(self.pos_device.nfc_payments_enabled)
+        self.assertFalse(response.data["nfc_payments_enabled"])
+        self.assertIsNone(self.pos_device.linked_device)
