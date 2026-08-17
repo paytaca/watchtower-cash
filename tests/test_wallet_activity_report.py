@@ -101,6 +101,21 @@ class WalletActivityReportViewTestCase(TestCase):
         self.assertIsNone(entry["txid"])
         self.assertIsNone(entry["amount"])
 
+    def test_transaction_receive_returns_txid_and_sats_amount(self):
+        history = self._create_history(
+            txid="recv_txid",
+            amount=1.0,
+            record_type=WalletHistory.INCOMING,
+        )
+        self._create_activity(
+            history=history, kind=WalletActivity.KIND_TRANSACTION_RECEIVE
+        )
+        response = self.client.get(self.url, {"date": self.date_str})
+        entry = response.json()["results"][0]
+        self.assertEqual(entry["kind"], WalletActivity.KIND_TRANSACTION_RECEIVE)
+        self.assertEqual(entry["txid"], "recv_txid")
+        self.assertEqual(entry["amount"], 100_000_000)
+
     def test_activity_outside_date_excluded(self):
         old_day = self.today.replace(year=self.today.year - 1)
         history = self._create_history(txid="old_txid")

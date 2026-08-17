@@ -1,7 +1,7 @@
 import hashlib
 from datetime import datetime
 
-from django.core.paginator import Paginator
+from django.core.paginator import EmptyPage, Paginator
 from django.utils import timezone
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
@@ -70,6 +70,7 @@ class WalletActivityReportView(APIView):
                 {"error": "page and page_size must be positive integers."},
                 status=http_status.HTTP_400_BAD_REQUEST,
             )
+        page_size = min(page_size, 1000)
 
         report_date = _parse_date(date_str)
         if report_date is None:
@@ -85,7 +86,7 @@ class WalletActivityReportView(APIView):
         pages = Paginator(activities, page_size)
         try:
             page_obj = pages.page(page)
-        except Exception:
+        except EmptyPage:
             return Response(
                 {"error": "Page out of range."},
                 status=http_status.HTTP_400_BAD_REQUEST,
@@ -98,7 +99,7 @@ class WalletActivityReportView(APIView):
             txid = None
             if history is not None:
                 if history.amount is not None:
-                    amount = int(history.amount * 100_000_000)
+                    amount = int(round(history.amount * 100_000_000))
                 txid = history.txid
             events.append({
                 "event_id": str(activity.id),
