@@ -126,6 +126,8 @@ class PosDeviceViewSet(
         serializer = UnlinkDeviceSerializer(pos_device=instance, data=request.data)
         serializer.is_valid(raise_exception=True)
         instance = serializer.save()
+        PosDevice.objects.filter(pk=instance.pk).update(nfc_payments_enabled=False)
+        instance.refresh_from_db()
         return Response(self.get_serializer(instance).data)
 
     @transaction.atomic
