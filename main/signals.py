@@ -41,9 +41,9 @@ def record_wallet_activity(history):
     WalletActivity.objects.get_or_create(
         wallet=history.wallet,
         history=history,
+        kind=WalletActivity.KIND_TRANSACTION_SEND,
         defaults={
             'activity_date': activity_date,
-            'kind': WalletActivity.KIND_TRANSACTION_SEND,
             'amount': int(round(abs(history.amount) * 100_000_000)) if history.amount else None,
         },
     )

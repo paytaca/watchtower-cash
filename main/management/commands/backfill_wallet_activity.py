@@ -50,18 +50,22 @@ class Command(BaseCommand):
         for idx, history in enumerate(queryset.iterator(chunk_size=2000)):
             activity_date = history.tx_timestamp.date() if history.tx_timestamp else timezone.now().date()
 
-            if not dry_run:
+            if dry_run:
+                was_created = not WalletActivity.objects.filter(
+                    wallet=history.wallet,
+                    history=history,
+                    kind=WalletActivity.KIND_TRANSACTION_SEND,
+                ).exists()
+            else:
                 _, was_created = WalletActivity.objects.get_or_create(
                     wallet=history.wallet,
                     history=history,
+                    kind=WalletActivity.KIND_TRANSACTION_SEND,
                     defaults={
                         'activity_date': activity_date,
-                        'kind': WalletActivity.KIND_TRANSACTION_SEND,
                         'amount': int(round(abs(history.amount) * 100_000_000)) if history.amount else None,
                     },
                 )
-            else:
-                was_created = True
 
             if was_created:
                 created += 1
