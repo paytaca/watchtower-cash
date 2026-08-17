@@ -18,6 +18,7 @@ from main.models import (
     WalletHistoryQuerySet,
     Address,
     TransactionBroadcast,
+    WalletActivity,
 )
 from main.tasks import (
     transaction_post_save_task,
@@ -25,6 +26,31 @@ from main.tasks import (
 )
 from main.utils.cache import clear_wallet_history_cache, clear_wallet_balance_cache
 from main.utils.address_validator import is_bch_address
+
+
+LOGGER = logging.getLogger(__name__)
+
+
+def record_wallet_activity(history):
+    """Create a WalletActivity row for an outgoing/incoming transaction."""
+    if not history.wallet:
+        return
+    if history.record_type == WalletHistory.OUTGOING:
+        kind = WalletActivity.KIND_TRANSACTION_SEND
+    elif history.record_type == WalletHistory.INCOMING:
+        kind = WalletActivity.KIND_TRANSACTION_RECEIVE
+    else:
+        return
+    activity_date = history.tx_timestamp.date() if history.tx_timestamp else timezone.localdate()
+    WalletActivity.objects.get_or_create(
+        wallet=history.wallet,
+        history=history,
+        kind=kind,
+        defaults={
+            'activity_date': activity_date,
+            'amount': int(round(abs(history.amount) * 100_000_000)) if history.amount is not None else None,
+        },
+    )
 
 
 
@@ -217,6 +243,11 @@ def transaction_meta_attr_post_save(sender, instance=None, created=False, **kwar
 @receiver(post_save, sender=WalletHistory, dispatch_uid='main.tasks.wallet_history_post_save')
 def wallet_history_post_save(sender, instance=None, created=False, **kwargs):
     if created:
+        try:
+            record_wallet_activity(instance)
+        except Exception:
+            LOGGER.exception("Failed to record WalletActivity for history %s", instance.pk)
+
         # Clear wallet history cache for this wallet to ensure fresh data
         # Note: Deletion of earlier records is now handled in parse_wallet_history using update_or_create
         if instance.wallet:

@@ -1202,3 +1202,46 @@ class AddressBookAddress(models.Model):
 
     def __str__(self):
         return self.address
+
+
+class WalletActivity(PostgresModel):
+    KIND_TRANSACTION_SEND = 'transaction-send'
+    KIND_TRANSACTION_RECEIVE = 'transaction-receive'
+    KIND_APP_OPENING = 'app-opening'
+
+    KIND_CHOICES = [
+        (KIND_TRANSACTION_SEND, 'Transaction Send'),
+        (KIND_TRANSACTION_RECEIVE, 'Transaction Receive'),
+        (KIND_APP_OPENING, 'App Opening'),
+    ]
+
+    wallet = models.ForeignKey(
+        Wallet,
+        on_delete=models.CASCADE,
+        related_name='activities',
+    )
+    history = models.ForeignKey(
+        WalletHistory,
+        on_delete=models.SET_NULL,
+        related_name='activities',
+        null=True,
+        blank=True,
+    )
+    activity_date = models.DateField(db_index=True)
+    kind = models.CharField(max_length=32, choices=KIND_CHOICES, db_index=True)
+    amount = models.BigIntegerField(blank=True, null=True)
+    date_created = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Wallet Activity"
+        verbose_name_plural = "Wallet Activities"
+        ordering = ['-activity_date', '-date_created']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['wallet', 'history', 'kind', 'activity_date'],
+                name='unique_wallet_activity_wallet_history',
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.kind} {self.wallet.wallet_hash[:16]}... on {self.activity_date}"
