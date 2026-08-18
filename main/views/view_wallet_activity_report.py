@@ -38,13 +38,34 @@ def asset_for_history(history):
     return None
 
 
+def amount_in_display_units(history):
+    """Return the WalletHistory amount in display units.
+
+    BCH amounts are already stored in BCH and returned as-is. CashToken
+    amounts are stored in base units and divided by 10^decimals. Returns
+    None when the row has no amount.
+    """
+    if history is None or history.amount is None:
+        return None
+    if history.cashtoken_ft_id is not None:
+        info = history.cashtoken_ft.info
+        decimals = info.decimals if (info and info.decimals is not None) else 0
+    elif history.cashtoken_nft_id is not None:
+        info = history.cashtoken_nft.info
+        decimals = info.decimals if (info and info.decimals is not None) else 0
+    else:
+        return history.amount
+    return history.amount / (10 ** decimals)
+
+
 class WalletActivityReportView(APIView):
     """Return per-event WalletActivity rows for a specific UTC day.
 
     Each event carries the WalletActivity record id as ``event_id``,
     together with a wallet digest (sha256 of the wallet hash), the
     activity date, kind, asset (``'bch'`` or ``'ct/{category}'``), and
-    (for transaction events) the on-chain txid and amount in satoshis.
+    (for transaction events) the on-chain txid and amount in display
+    units (BCH for BCH records, token units for CashTokens).
     """
 
     @swagger_auto_schema(
@@ -102,7 +123,9 @@ class WalletActivityReportView(APIView):
             "wallet",
             "history",
             "history__cashtoken_ft",
+            "history__cashtoken_ft__info",
             "history__cashtoken_nft",
+            "history__cashtoken_nft__info",
         ).order_by("-date_created", "-id")
 
         pages = Paginator(activities, page_size)
@@ -117,12 +140,9 @@ class WalletActivityReportView(APIView):
         events = []
         for activity in page_obj.object_list:
             history = activity.history
-            amount = None
             txid = None
             asset = None
             if history is not None:
-                if history.amount is not None:
-                    amount = int(round(history.amount * 100_000_000))
                 txid = history.txid
                 asset = asset_for_history(history)
             events.append({
@@ -134,7 +154,7 @@ class WalletActivityReportView(APIView):
                 "kind": activity.kind,
                 "asset": asset,
                 "txid": txid,
-                "amount": amount,
+                "amount": amount_in_display_units(history),
             })
 
         return Response({
