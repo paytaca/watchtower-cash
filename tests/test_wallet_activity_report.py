@@ -117,6 +117,7 @@ class WalletActivityReportViewTestCase(TestCase):
             txid="ct_txid",
             amount=1_500_000,
             cashtoken_ft=self.cashtoken,
+            token=None,
         )
         self._create_activity(history=history, kind=WalletActivity.KIND_TRANSACTION_SEND)
         response = self.client.get(self.url, {"date": self.date_str})

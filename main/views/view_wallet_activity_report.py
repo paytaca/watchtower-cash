@@ -122,6 +122,7 @@ class WalletActivityReportView(APIView):
         ).select_related(
             "wallet",
             "history",
+            "history__token",
             "history__cashtoken_ft",
             "history__cashtoken_ft__info",
             "history__cashtoken_nft",
