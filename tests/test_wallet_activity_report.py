@@ -3,7 +3,15 @@ from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from main.models import Project, Token, Wallet, WalletActivity, WalletHistory
+from main.models import (
+    CashFungibleToken,
+    CashTokenInfo,
+    Project,
+    Token,
+    Wallet,
+    WalletActivity,
+    WalletHistory,
+)
 
 import hashlib
 
@@ -21,6 +29,16 @@ class WalletActivityReportViewTestCase(TestCase):
             tokenid="",
             token_ticker="BCH",
         )
+        self.cashtoken = CashFungibleToken.objects.create(
+            category="ct_category_abc",
+        )
+        self.cashtoken_info = CashTokenInfo.objects.create(
+            name="Test Token",
+            symbol="TT",
+            decimals=6,
+        )
+        self.cashtoken.info = self.cashtoken_info
+        self.cashtoken.save()
         self.wallet_a = Wallet.objects.create(
             wallet_hash="wallet_a_hash",
             wallet_type="bch",
@@ -84,24 +102,39 @@ class WalletActivityReportViewTestCase(TestCase):
         self.assertEqual(entry["wallet_digest"], expected)
         self.assertNotIn("wallet_hash", entry)
 
-    def test_transaction_send_returns_txid_and_sats_amount(self):
+    def test_transaction_send_returns_txid_and_bch_amount(self):
         history = self._create_history(txid="send_txid", amount=1.0)
         self._create_activity(history=history, kind=WalletActivity.KIND_TRANSACTION_SEND)
         response = self.client.get(self.url, {"date": self.date_str})
         entry = response.json()["results"][0]
         self.assertEqual(entry["kind"], WalletActivity.KIND_TRANSACTION_SEND)
         self.assertEqual(entry["txid"], "send_txid")
-        self.assertEqual(entry["amount"], 100_000_000)
+        self.assertEqual(entry["amount"], 1.0)
+        self.assertEqual(entry["asset"], "bch")
 
-    def test_app_opening_has_null_txid_and_amount(self):
+    def test_cashtoken_history_returns_ct_asset(self):
+        history = self._create_history(
+            txid="ct_txid",
+            amount=1_500_000,
+            cashtoken_ft=self.cashtoken,
+            token=None,
+        )
+        self._create_activity(history=history, kind=WalletActivity.KIND_TRANSACTION_SEND)
+        response = self.client.get(self.url, {"date": self.date_str})
+        entry = response.json()["results"][0]
+        self.assertEqual(entry["asset"], "ct/ct_category_abc")
+        self.assertEqual(entry["amount"], 1.5)
+
+    def test_app_opening_has_null_txid_amount_and_asset(self):
         self._create_activity(kind=WalletActivity.KIND_APP_OPENING)
         response = self.client.get(self.url, {"date": self.date_str})
         entry = response.json()["results"][0]
         self.assertEqual(entry["kind"], WalletActivity.KIND_APP_OPENING)
         self.assertIsNone(entry["txid"])
         self.assertIsNone(entry["amount"])
+        self.assertIsNone(entry["asset"])
 
-    def test_transaction_receive_returns_txid_and_sats_amount(self):
+    def test_transaction_receive_returns_txid_and_bch_amount(self):
         history = self._create_history(
             txid="recv_txid",
             amount=1.0,
@@ -114,7 +147,7 @@ class WalletActivityReportViewTestCase(TestCase):
         entry = response.json()["results"][0]
         self.assertEqual(entry["kind"], WalletActivity.KIND_TRANSACTION_RECEIVE)
         self.assertEqual(entry["txid"], "recv_txid")
-        self.assertEqual(entry["amount"], 100_000_000)
+        self.assertEqual(entry["amount"], 1.0)
 
     def test_activity_outside_date_excluded(self):
         old_day = self.today.replace(year=self.today.year - 1)
