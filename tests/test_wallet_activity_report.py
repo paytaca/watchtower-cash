@@ -3,7 +3,14 @@ from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from main.models import Project, Token, Wallet, WalletActivity, WalletHistory
+from main.models import (
+    CashFungibleToken,
+    Project,
+    Token,
+    Wallet,
+    WalletActivity,
+    WalletHistory,
+)
 
 import hashlib
 
@@ -20,6 +27,9 @@ class WalletActivityReportViewTestCase(TestCase):
             name="bch",
             tokenid="",
             token_ticker="BCH",
+        )
+        self.cashtoken = CashFungibleToken.objects.create(
+            category="ct_category_abc",
         )
         self.wallet_a = Wallet.objects.create(
             wallet_hash="wallet_a_hash",
@@ -92,14 +102,27 @@ class WalletActivityReportViewTestCase(TestCase):
         self.assertEqual(entry["kind"], WalletActivity.KIND_TRANSACTION_SEND)
         self.assertEqual(entry["txid"], "send_txid")
         self.assertEqual(entry["amount"], 100_000_000)
+        self.assertEqual(entry["asset"], "bch")
 
-    def test_app_opening_has_null_txid_and_amount(self):
+    def test_cashtoken_history_returns_ct_asset(self):
+        history = self._create_history(
+            txid="ct_txid",
+            amount=100.0,
+            cashtoken_ft=self.cashtoken,
+        )
+        self._create_activity(history=history, kind=WalletActivity.KIND_TRANSACTION_SEND)
+        response = self.client.get(self.url, {"date": self.date_str})
+        entry = response.json()["results"][0]
+        self.assertEqual(entry["asset"], "ct/ct_category_abc")
+
+    def test_app_opening_has_null_txid_amount_and_asset(self):
         self._create_activity(kind=WalletActivity.KIND_APP_OPENING)
         response = self.client.get(self.url, {"date": self.date_str})
         entry = response.json()["results"][0]
         self.assertEqual(entry["kind"], WalletActivity.KIND_APP_OPENING)
         self.assertIsNone(entry["txid"])
         self.assertIsNone(entry["amount"])
+        self.assertIsNone(entry["asset"])
 
     def test_transaction_receive_returns_txid_and_sats_amount(self):
         history = self._create_history(

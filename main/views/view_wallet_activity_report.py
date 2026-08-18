@@ -21,13 +21,30 @@ def _parse_date(date_str):
     return timezone.now().date()
 
 
+def asset_for_history(history):
+    """Return the asset identifier for a WalletHistory row.
+
+    Returns ``'bch'`` for BCH records, ``'ct/{category}'`` for CashToken
+    records, or None when the row has no recognizable asset.
+    """
+    if history is None:
+        return None
+    if history.token is not None and history.token.name == "bch":
+        return "bch"
+    if history.cashtoken_ft_id is not None:
+        return f"ct/{history.cashtoken_ft.category}"
+    if history.cashtoken_nft_id is not None:
+        return f"ct/{history.cashtoken_nft.category}"
+    return None
+
+
 class WalletActivityReportView(APIView):
     """Return per-event WalletActivity rows for a specific UTC day.
 
     Each event carries the WalletActivity record id as ``event_id``,
     together with a wallet digest (sha256 of the wallet hash), the
-    activity date, kind, and (for transaction events) the on-chain
-    txid and amount in satoshis.
+    activity date, kind, asset (``'bch'`` or ``'ct/{category}'``), and
+    (for transaction events) the on-chain txid and amount in satoshis.
     """
 
     @swagger_auto_schema(
@@ -81,7 +98,12 @@ class WalletActivityReportView(APIView):
 
         activities = WalletActivity.objects.filter(
             activity_date=report_date,
-        ).select_related("wallet", "history").order_by("-date_created", "-id")
+        ).select_related(
+            "wallet",
+            "history",
+            "history__cashtoken_ft",
+            "history__cashtoken_nft",
+        ).order_by("-date_created", "-id")
 
         pages = Paginator(activities, page_size)
         try:
@@ -97,10 +119,12 @@ class WalletActivityReportView(APIView):
             history = activity.history
             amount = None
             txid = None
+            asset = None
             if history is not None:
                 if history.amount is not None:
                     amount = int(round(history.amount * 100_000_000))
                 txid = history.txid
+                asset = asset_for_history(history)
             events.append({
                 "event_id": str(activity.id),
                 "wallet_digest": hashlib.sha256(
@@ -108,6 +132,7 @@ class WalletActivityReportView(APIView):
                 ).hexdigest(),
                 "activity_date": activity.activity_date.isoformat(),
                 "kind": activity.kind,
+                "asset": asset,
                 "txid": txid,
                 "amount": amount,
             })
