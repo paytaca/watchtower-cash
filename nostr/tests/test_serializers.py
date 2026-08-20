@@ -1,5 +1,5 @@
 from django.test import TestCase
-from nostr.serializers import PubkeyLastOnlineSerializer, MAX_PUBKEYS
+from nostr.serializers import PubkeyLastOnlineSerializer, MAX_PUBKEYS, RoomUpdateSerializer
 
 
 VALID_HEX = "aabbccdd0011eeffaabbccdd0011eeffaabbccdd0011eeffaabbccdd0011eeff"
@@ -49,4 +49,33 @@ class PubkeyLastOnlineSerializerTestCase(TestCase):
 
     def test_missing_field(self):
         serializer = PubkeyLastOnlineSerializer(data={})
+        self.assertFalse(serializer.is_valid())
+
+
+class RoomUpdateSerializerTestCase(TestCase):
+    def test_valid_with_members(self):
+        serializer = RoomUpdateSerializer(data={
+            "wallet_hash": "wh1",
+            "members": [VALID_HEX, f"{1:064x}"],
+        })
+        self.assertTrue(serializer.is_valid())
+        self.assertEqual(len(serializer.validated_data["members"]), 2)
+
+    def test_members_optional(self):
+        serializer = RoomUpdateSerializer(data={"wallet_hash": "wh1", "name": "x"})
+        self.assertTrue(serializer.is_valid())
+        self.assertNotIn("members", serializer.validated_data)
+
+    def test_invalid_member_hex(self):
+        serializer = RoomUpdateSerializer(data={
+            "wallet_hash": "wh1",
+            "members": ["not-hex"],
+        })
+        self.assertFalse(serializer.is_valid())
+
+    def test_member_too_long(self):
+        serializer = RoomUpdateSerializer(data={
+            "wallet_hash": "wh1",
+            "members": ["x" * 65],
+        })
         self.assertFalse(serializer.is_valid())

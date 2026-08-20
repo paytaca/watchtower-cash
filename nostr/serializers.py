@@ -121,6 +121,11 @@ class RoomUpdateSerializer(serializers.Serializer):
     name = serializers.CharField(max_length=255, required=False)
     subject = serializers.CharField(allow_null=True, required=False)
     archived = serializers.BooleanField(required=False)
+    members = serializers.ListField(
+        child=serializers.CharField(max_length=64),
+        allow_empty=True,
+        required=False,
+    )
 
 
 class RoomBatchSyncSerializer(serializers.Serializer):
