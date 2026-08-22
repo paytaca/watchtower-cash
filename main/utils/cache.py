@@ -380,10 +380,16 @@ def clear_wallet_history_cache_for_txid(wallet_hash, txid):
             cache.delete(cache_key)
         
         # Also clear the "all" combined history cache if it exists
-        # (for when all=true parameter is used)
+        # (for when all=true parameter is used). This covers both the plain
+        # combined key and the exclude-field variants.
         for page, page_size in pages_to_clear:
             cache_key = f'wallet:history:{wallet_hash}:all:{page}:{page_size}'
             cache.delete(cache_key)
+            exclude_cache_keys = cache.keys(
+                f'wallet:history:{wallet_hash}:all:{page}:{page_size}:exclude:*'
+            )
+            if exclude_cache_keys:
+                cache.delete(*exclude_cache_keys)
 
 
 LAST_ACTIVE_TTL = 60 * 60 * 24  # 24 hours

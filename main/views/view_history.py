@@ -1063,7 +1063,6 @@ class WalletHistoryView(APIView):
             and not attribute
             and not start_date
             and not end_date
-            and not exclude_fields
             and not asset_filter
             and not token_ids_raw
             and not categorize
@@ -1072,8 +1071,16 @@ class WalletHistoryView(APIView):
         if wallet.version > 1:
             if use_cache:
                 cache = settings.REDISKV
+                # Include the sorted exclude fields so different exclude variants
+                # do not collide. Invalidation still works because
+                # clear_wallet_history_cache clears by the
+                # `wallet:history:{wallet_hash}:*` prefix, which covers this key.
+                exclude_component = ""
+                if exclude_fields:
+                    exclude_component = ":exclude:" + ",".join(sorted(exclude_fields))
                 cache_key = (
                     f"wallet:history:{wallet_hash}:all:{str(page)}:{str(page_size)}"
+                    f"{exclude_component}"
                 )
                 data = retrieve_object(cache_key, cache)
 
