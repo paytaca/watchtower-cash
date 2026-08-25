@@ -1205,6 +1205,10 @@ class AddressBookAddress(models.Model):
 
 
 class WalletActivity(PostgresModel):
+    # pk declared explicitly as BigAutoField to match migrations 0129/0131
+    # (auto-detected id would otherwise downgrade the column to AutoField)
+    id = models.BigAutoField(primary_key=True)
+
     KIND_TRANSACTION_SEND = 'transaction-send'
     KIND_TRANSACTION_RECEIVE = 'transaction-receive'
     KIND_APP_OPENING = 'app-opening'

@@ -38,6 +38,7 @@ services:
   postgres:
     image: "postgres:11.1-alpine"
     command: -c "max_connections=400"
+    mem_limit: 1g
     volumes:
       - watchtower_db_data:/var/lib/postgresql/data
     env_file:
@@ -46,6 +47,8 @@ services:
       - "5432"
   redis:
     image: "redis:alpine"
+    command: redis-server --maxmemory 256mb --maxmemory-policy noeviction
+    mem_limit: 320m
     env_file:
       - /root/watchtower/compose/.env_chipnet
   emqx:
@@ -53,6 +56,12 @@ services:
     environment:
       - EMQX_NAME=watchtower-chipnet
       - EMQX_ALLOW_ANONYMOUS=true
+      - EMQX_MQTT__SESSION_EXPIRY_INTERVAL=5m
+      - EMQX_MQTT__MAX_MQUEUE_LEN=100
+      - EMQX_MQTT__MAX_INFLIGHT=16
+      - EMQX_MQTT__MAX_PACKET_SIZE=64KB
+      - EMQX_NODE__GLOBAL_GC_INTERVAL=10m
+    mem_limit: 640m
     volumes:
       - emqx_data:/opt/emqx/data
       - emqx_log:/opt/emqx/log

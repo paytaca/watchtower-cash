@@ -23,7 +23,8 @@ class Report(models.Model):
 
     class Meta:
         indexes = [
-            models.Index(fields=['reporter', 'reported_peer', '-created_at']),
+            # name pinned to match existing DB index (created in migration 0240)
+            models.Index(fields=['reporter', 'reported_peer', '-created_at'], name='rampp2p_repo_report_55e1d5_idx'),
         ]
 
     def __str__(self):

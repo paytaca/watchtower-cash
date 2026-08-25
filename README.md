@@ -132,6 +132,10 @@ docker-compose -f compose/mainnet.yml up -d
 docker-compose -f compose/chipnet.yml up -d
 ```
 
+> **Note for local developers**
+> The chipnet supervisor config launches many Celery workers (≈36 processes). On constrained machines you can scale them down by editing `supervisord.conf` (reduce the `--autoscale` max values) or by providing a custom `docker-compose.override.yml` that points to a trimmed supervisor config. This keeps the dev environment lighter while preserving functional parity.
+
+
 ### Testing
 
 Run tests using docker-compose:

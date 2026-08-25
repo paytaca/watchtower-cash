@@ -15,7 +15,8 @@ class NostrPubkey(models.Model):
 
     class Meta:
         indexes = [
-            models.Index(fields=['pubkey_hex', 'wallet_hash', 'last_active']),
+            # name pinned to match existing DB index (created in migration 0005)
+            models.Index(fields=['pubkey_hex', 'wallet_hash', 'last_active'], name='nostr_nostr_pubkey__046ea9_idx'),
         ]
 
 
