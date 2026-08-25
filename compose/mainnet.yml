@@ -9,7 +9,7 @@ services:
     container_name: watchtower_web
     build: /root/watchtower
     image: watchtower_web
-    command: [ "supervisord", "-c", "/code/supervisord.conf", "--nodaemon" ]
+    command: [ "supervisord", "-c", "/code/supervisord-mainnet.conf", "--nodaemon" ]
     env_file: /root/watchtower/compose/.env_mainnet
     volumes:
       - /var/www/images:/images
