@@ -283,14 +283,11 @@ class TransactionAdmin(DynamicRawIDMixin, admin.ModelAdmin):
                         cashout_output = tx_data['outputs'][0]
                         cashout_amount = Decimal(str(cashout_output.get('amount', 0) or 0))
                         
-                        # Second output is change (if exists)
+# Second output is change (if exists)
                         change_amount = Decimal('0')
                         if len(tx_data['outputs']) > 1:
                             change_output = tx_data['outputs'][1]
                             change_amount = Decimal(str(change_output.get('amount', 0) or 0))
-                        
-                        # Net received = cashout amount (what merchant gets)
-                        net_received = cashout_amount
                         
                         # Total output amount (cashout + change)
                         total_output_amount = Decimal(str(tx_data.get('total_output_amount', 0) or 0))
@@ -348,6 +345,12 @@ class TransactionAdmin(DynamicRawIDMixin, admin.ModelAdmin):
                                 if cashout_amount > 0:
                                     gain_portion_percentage = (gain_portion_of_cashout / float(cashout_amount)) * 100
                             
+                            # Net received = cashout amount minus 10% fee on gain (what merchant actually gets)
+                            if cashout_gain_loss > 0:
+                                net_received = float(cashout_amount) - charge_on_gain
+                            else:
+                                net_received = float(cashout_amount)
+                            
                             # Reimbursement: only cover the actual fiat loss on within-threshold inputs.
                             # Beyond-threshold losses are the merchant's risk (they held too long).
                             # The cashout ratio applies because only the cashed portion realizes the loss.
@@ -360,6 +363,9 @@ class TransactionAdmin(DynamicRawIDMixin, admin.ModelAdmin):
                                 # Reimburse the actual fiat loss on within-threshold inputs, cashed portion only
                                 reimbursement_amount = float(new_input_fiat_loss) * cashout_ratio
                                 total_after_reimbursement = float(cashout_amount) + reimbursement_amount
+                            
+                            # Actual sales = historical cost basis of only the cashed-out portion (inputs - change)
+                            actual_sales = cashout_cost_basis
                             
                             assessment = {
                                 'total_input_amount': float(total_input_amount),
@@ -387,6 +393,11 @@ class TransactionAdmin(DynamicRawIDMixin, admin.ModelAdmin):
                                 'new_input_count': new_input_count,
                                 'new_input_total': float(new_input_total),
                                 'new_input_total_current': float(new_input_total_current),
+                                'actual_sales': float(actual_sales),
+                                'bch_price_change_gain_loss': float(cashout_gain_loss),
+                                'our_share_of_gain': float(charge_on_gain) if charge_on_gain is not None else 0,
+                                'merchant_net_amount': float(net_received),
+                                'loss_covered': float(reimbursement_amount) if reimbursement_amount is not None else 0,
                             }
                         
                 except Exception as e:

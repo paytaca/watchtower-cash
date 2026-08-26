@@ -81,119 +81,144 @@
             </div>
 
             {% if assessment %}
-            <div class="module assessment-box" style="margin-top: 20px; padding: 20px; border: 2px solid {% if assessment.is_gain %}#4CAF50{% else %}#f44336{% endif %}; border-radius: 5px; background-color: {% if assessment.is_gain %}#e8f5e9{% else %}#ffebee{% endif %};">
-                <h2 style="margin-top: 0; color: {% if assessment.is_gain %}#2e7d32{% else %}#c62828{% endif %};">
-                    Cashout Assessment
+            <div class="module assessment-box" style="margin-top: 20px; padding: 24px; border-radius: 8px; background-color: #fafafa; border: 1px solid #e0e0e0;">
+                <h2 style="margin-top: 0; margin-bottom: 20px; color: #1a1a1a; font-size: 1.4em; font-weight: 600;">
+                    Cashout Breakdown
                 </h2>
                 
-                <div class="assessment-details">
-                    <div class="form-row">
-                        <strong>Total Input Amount (Cost Basis):</strong> 
-                        <span style="font-size: 1.1em;">{{ assessment.total_input_amount|floatformat:2 }} {{ assessment.currency }}</span>
-                    </div>
-                    
-                    <div class="form-row">
-                        <strong>Cashout Amount (Output 0):</strong> 
-                        <span style="font-size: 1.1em;">{{ assessment.cashout_amount|floatformat:2 }} {{ assessment.currency }}</span>
-                    </div>
-                    
-                    {% if assessment.change_amount > 0 %}
-                    <div class="form-row">
-                        <strong>Change Amount (Output 1):</strong> 
-                        <span style="font-size: 1.1em;">{{ assessment.change_amount|floatformat:2 }} {{ assessment.currency }}</span>
-                    </div>
-                    {% endif %}
-                    
-                    <div class="form-row">
-                        <strong>Net Received:</strong> 
-                        <span style="font-size: 1.1em; font-weight: bold;">{{ assessment.net_received|floatformat:2 }} {{ assessment.currency }}</span>
-                    </div>
-                    
-                    <hr style="margin: 15px 0; border: 1px solid #ccc;">
-                    
-                    <div class="form-row" style="margin-top: 15px;">
-                        <strong style="font-size: 1.2em;">Total Gain/Loss:</strong> 
-                        <span style="font-size: 1.3em; font-weight: bold; color: {% if assessment.gain_loss >= 0 %}#2e7d32{% else %}#c62828{% endif %};">
-                            {{ assessment.gain_loss|floatformat:2 }} {{ assessment.currency }}
-                            ({{ assessment.percentage|floatformat:2 }}%)
-                        </span>
-                        <div class="help" style="margin-top: 5px; color: #666;">
-                            Total gain/loss based on total output amount vs total input amount ({{ assessment.total_input_amount|floatformat:2 }} {{ assessment.currency }}).
+                <div class="clean-breakdown">
+                    <div class="form-row" style="margin-bottom: 16px; padding: 16px; background: white; border-radius: 6px; border: 1px solid #e0e0e0;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <span style="color: #666; font-size: 0.95em;">For the</span>
+                            <span style="font-size: 1.3em; font-weight: 700; color: #1a1a1a;">{{ assessment.cashout_amount|floatformat:2 }} {{ assessment.currency }}</span>
+                            <span style="color: #666; font-size: 0.95em;">worth of BCH sent</span>
                         </div>
                     </div>
                     
-                    <div class="form-row" style="margin-top: 15px;">
-                        <strong style="font-size: 1.2em;">Cashout {{ assessment.is_gain|yesno:"GAIN,LOSS" }}:</strong> 
-                        <span style="font-size: 1.3em; font-weight: bold; color: {% if assessment.is_gain %}#2e7d32{% else %}#c62828{% endif %};">
-                            {{ assessment.cashout_gain_loss|floatformat:2 }} {{ assessment.currency }}
-                        </span>
-                        <div class="help" style="margin-top: 5px; color: #666;">
-                            Cashout P&amp;L = Cashout proceeds (current) − Cashout's share of cost basis (historical).
+                    {% if assessment.is_gain %}
+                    <!-- GAIN CASE -->
+                    <div class="breakdown-row" style="display: flex; justify-content: space-between; align-items: center; padding: 14px 0; border-bottom: 1px solid #e0e0e0;">
+                        <span style="color: #333; font-size: 1.05em;">Actual sales</span>
+                        <span style="font-size: 1.15em; font-weight: 600; color: #1a1a1a;">{{ assessment.actual_sales|floatformat:2 }} {{ assessment.currency }}</span>
+                    </div>
+                    
+                    <div class="breakdown-row" style="display: flex; justify-content: space-between; align-items: center; padding: 14px 0; border-bottom: 1px solid #e0e0e0;">
+                        <span style="color: #2e7d32; font-size: 1.05em;">Gain from BCH price increase</span>
+                        <span style="font-size: 1.15em; font-weight: 600; color: #2e7d32;">+ {{ assessment.bch_price_change_gain_loss|floatformat:2 }} {{ assessment.currency }}</span>
+                    </div>
+                    
+                    <div class="breakdown-row" style="display: flex; justify-content: space-between; align-items: center; padding: 14px 0; border-bottom: 1px solid #e0e0e0;">
+                        <span style="color: #ff9800; font-size: 1.05em;">Our 10% share of the gain</span>
+                        <span style="font-size: 1.15em; font-weight: 600; color: #ff9800;">- {{ assessment.our_share_of_gain|floatformat:2 }} {{ assessment.currency }}</span>
+                    </div>
+                    
+                    <div class="breakdown-row" style="display: flex; justify-content: space-between; align-items: center; padding: 16px 0 8px 0; border-bottom: none;">
+                        <span style="color: #1a1a1a; font-size: 1.15em; font-weight: 600;">Net amount the merchant receives</span>
+                        <span style="font-size: 1.35em; font-weight: 700; color: #1a1a1a;">{{ assessment.merchant_net_amount|floatformat:2 }} {{ assessment.currency }}</span>
+                    </div>
+                    
+                    {% else %}
+                    <!-- LOSS CASE -->
+                    <div class="breakdown-row" style="display: flex; justify-content: space-between; align-items: center; padding: 14px 0; border-bottom: 1px solid #e0e0e0;">
+                        <span style="color: #333; font-size: 1.05em;">Actual sales</span>
+                        <span style="font-size: 1.15em; font-weight: 600; color: #1a1a1a;">{{ assessment.actual_sales|floatformat:2 }} {{ assessment.currency }}</span>
+                    </div>
+                    
+                    <div class="breakdown-row" style="display: flex; justify-content: space-between; align-items: center; padding: 14px 0; border-bottom: 1px solid #e0e0e0;">
+                        <span style="color: #c62828; font-size: 1.05em;">Loss from BCH price decrease</span>
+                        <span style="font-size: 1.15em; font-weight: 600; color: #c62828;">{{ assessment.bch_price_change_gain_loss|floatformat:2 }} {{ assessment.currency }}</span>
+                    </div>
+                    
+                    {% if assessment.loss_covered > 0 %}
+                    <div class="breakdown-row" style="display: flex; justify-content: space-between; align-items: center; padding: 14px 0; border-bottom: 1px solid #e0e0e0;">
+                        <span style="color: #2e7d32; font-size: 1.05em;">Loss covered (within {{ assessment.age_threshold_days }} days)</span>
+                        <span style="font-size: 1.15em; font-weight: 600; color: #2e7d32;">+ {{ assessment.loss_covered|floatformat:2 }} {{ assessment.currency }}</span>
+                    </div>
+                    {% endif %}
+                    
+                    <div class="breakdown-row" style="display: flex; justify-content: space-between; align-items: center; padding: 16px 0 8px 0; border-bottom: none;">
+                        <span style="color: #1a1a1a; font-size: 1.15em; font-weight: 600;">Net amount the merchant receives</span>
+                        <span style="font-size: 1.35em; font-weight: 700; color: #1a1a1a;">{{ assessment.merchant_net_amount|floatformat:2 }} {{ assessment.currency }}</span>
+                    </div>
+                    {% endif %}
+                </div>
+                
+                <details style="margin-top: 24px; padding: 16px; background: white; border-radius: 6px; border: 1px solid #e0e0e0;">
+                    <summary style="cursor: pointer; color: #666; font-size: 0.95em; font-weight: 500;">Show detailed analysis</summary>
+                    <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #e0e0e0;">
+                        <div class="form-row" style="margin-bottom: 12px;">
+                            <strong>Cashout Amount (Output 0):</strong> 
+                            <span style="float: right;">{{ assessment.cashout_amount|floatformat:2 }} {{ assessment.currency }}</span>
+                        </div>
+                        
+                        {% if assessment.change_amount > 0 %}
+                        <div class="form-row" style="margin-bottom: 12px;">
+                            <strong>Change Amount (Output 1):</strong> 
+                            <span style="float: right;">{{ assessment.change_amount|floatformat:2 }} {{ assessment.currency }}</span>
+                        </div>
+                        {% endif %}
+                        
+                        <hr style="margin: 12px 0; border: 1px solid #e0e0e0;">
+                        
+                        <div class="form-row" style="margin-bottom: 12px;">
+                            <strong>Total Gain/Loss (overall):</strong> 
+                            <span style="float: right; color: {% if assessment.gain_loss >= 0 %}#2e7d32{% else %}#c62828{% endif %}; font-weight: 600;">
+                                {{ assessment.gain_loss|floatformat:2 }} {{ assessment.currency }} ({{ assessment.percentage|floatformat:2 }}%)
+                            </span>
+                        </div>
+                        
+                        <div class="form-row" style="margin-bottom: 12px;">
+                            <strong>Cashout {{ assessment.is_gain|yesno:"GAIN,LOSS" }}:</strong> 
+                            <span style="float: right; color: {% if assessment.is_gain %}#2e7d32{% else %}#c62828{% endif %}; font-weight: 600;">
+                                {{ assessment.cashout_gain_loss|floatformat:2 }} {{ assessment.currency }}
+                            </span>
+                        </div>
+                        
+                        <div class="help" style="margin-bottom: 12px; color: #666; font-size: 0.9em;">
+                            Cashout P&L = Cashout proceeds − Cashout's share of cost basis (historical).
                             Cashout cost basis: {{ assessment.cashout_cost_basis|floatformat:2 }} {{ assessment.currency }} 
                             ({{ assessment.cashout_pnl_pct|floatformat:2 }}% of cashout cost basis).
                         </div>
-                    </div>
-                    
-                    {% if assessment.is_gain and assessment.charge_on_gain is not None %}
-                    <div class="form-row" style="margin-top: 15px; padding: 10px; background-color: #e8f5e9; border-left: 4px solid #4CAF50;">
-                        <strong>Charge on Gain (10%):</strong> 
-                        <span style="font-size: 1.1em; font-weight: bold; color: #2e7d32;">
-                            {{ assessment.charge_on_gain|floatformat:2 }} {{ assessment.currency }}
-                        </span>
-                        <div class="help" style="margin-top: 5px; color: #666;">
-                            10% charge on the cashout's gain amount ({{ assessment.cashout_gain_loss|floatformat:2 }} {{ assessment.currency }}).
+                        
+                        {% if assessment.is_gain and assessment.charge_on_gain is not None %}
+                        <div class="form-row" style="margin-bottom: 12px; padding: 8px; background-color: #e8f5e9; border-left: 3px solid #4CAF50; border-radius: 4px;">
+                            <strong>Charge on Gain (10%):</strong> 
+                            <span style="float: right; color: #2e7d32; font-weight: 600;">
+                                {{ assessment.charge_on_gain|floatformat:2 }} {{ assessment.currency }}
+                            </span>
                         </div>
-                    </div>
-                    {% endif %}
-                    
-                    {% if not assessment.is_gain and assessment.loss_percentage_over_inputs is not None %}
-                    <div class="form-row" style="margin-top: 15px; padding: 10px; background-color: #ffebee; border-left: 4px solid #f44336;">
-                        <strong>Loss Percentage Over Total Inputs:</strong> 
-                        <span style="font-size: 1.1em; font-weight: bold; color: #c62828;">
-                            {{ assessment.loss_percentage_over_inputs|floatformat:2 }}%
-                        </span>
-                        <div class="help" style="margin-top: 5px; color: #666;">
-                            This represents what percentage of the original amount ({{ assessment.total_input_amount|floatformat:2 }} {{ assessment.currency }}) was lost in the cashout portion.
+                        {% endif %}
+                        
+                        {% if not assessment.is_gain and assessment.loss_percentage_over_inputs is not None %}
+                        <div class="form-row" style="margin-bottom: 12px; padding: 8px; background-color: #ffebee; border-left: 3px solid #f44336; border-radius: 4px;">
+                            <strong>Loss Percentage Over Total Inputs:</strong> 
+                            <span style="float: right; color: #c62828; font-weight: 600;">
+                                {{ assessment.loss_percentage_over_inputs|floatformat:2 }}%
+                            </span>
                         </div>
                         
-                        <div class="form-row" style="margin-top: 10px;">
-                            <strong>Reimbursement Amount (Loss to Bear):</strong> 
-                            <span style="font-size: 1.1em; font-weight: bold; color: #c62828;">
+                        <div class="form-row" style="margin-bottom: 12px; padding: 8px; background-color: #fff3e0; border-left: 3px solid #ff9800; border-radius: 4px;">
+                            <strong>Reimbursement (Loss Covered):</strong> 
+                            <span style="float: right; color: #2e7d32; font-weight: 600;">
                                 {{ assessment.reimbursement_amount|floatformat:2 }} {{ assessment.currency }}
                             </span>
-                            <div class="help" style="margin-top: 5px; color: #666;">
-                                Only the actual fiat loss on within-threshold inputs is covered.
-                                Beyond-threshold losses are the merchant's risk.
+                            <div class="help" style="margin-top: 4px; color: #666; font-size: 0.85em;">
                                 Within-threshold fiat loss: {{ assessment.new_input_fiat_loss|floatformat:3 }} {{ assessment.currency }}
-                                × cashout ratio = {{ assessment.reimbursement_amount|floatformat:2 }} {{ assessment.currency }}.
-                            </div>
-                        </div>
-                        
-                        {% if assessment.total_after_reimbursement is not None %}
-                        <div class="form-row" style="margin-top: 10px; padding: 8px; background-color: #fff3cd; border-left: 4px solid #ffc107;">
-                            <strong>Merchant Total After Reimbursement:</strong> 
-                            <span style="font-size: 1.1em; font-weight: bold; color: #856404;">
-                                {{ assessment.total_after_reimbursement|floatformat:2 }} {{ assessment.currency }}
-                            </span>
-                            <div class="help" style="margin-top: 5px; color: #666;">
-                                Cashout ({{ assessment.cashout_amount|floatformat:2 }} {{ assessment.currency }}) + Reimbursement ({{ assessment.reimbursement_amount|floatformat:2 }} {{ assessment.currency }}) = {{ assessment.total_after_reimbursement|floatformat:2 }} {{ assessment.currency }}
                             </div>
                         </div>
                         {% endif %}
-                    </div>
-                    {% endif %}
-
-                    <div class="form-row" style="margin-top: 15px; padding: 10px; background-color: #fff3e0; border-left: 4px solid #ff9800;">
-                        <strong>Input Age Analysis (Threshold: {{ assessment.age_threshold_days }} days)</strong>
-                        <div class="help" style="margin-top: 5px; color: #666;">
+                        
+                        <hr style="margin: 12px 0; border: 1px solid #e0e0e0;">
+                        
+                        <strong style="color: #ff9800;">Input Age Analysis (Threshold: {{ assessment.age_threshold_days }} days)</strong>
+                        <div class="help" style="margin: 8px 0; color: #666; font-size: 0.9em;">
                             Inputs valued at historical cost (what merchant originally received).
                             Outputs valued at cashout price (cashout proceeds).
-                            Gain/loss = Cashout outputs − Input cost basis.
                         </div>
-                        <div class="form-row" style="margin-top: 10px;">
+                        <div class="form-row" style="margin-bottom: 8px;">
                             <strong>Within Threshold:</strong> {{ assessment.new_input_count }} input(s) — {{ assessment.new_input_total|floatformat:2 }} {{ assessment.currency }} (historical cost)
                             {% if assessment.new_input_total_current %}
-                                <div class="help" style="color: #666;">
+                                <div class="help" style="color: #666; font-size: 0.9em;">
                                     Value at cashout: {{ assessment.new_input_total_current|floatformat:2 }} {{ assessment.currency }}
                                 </div>
                             {% endif %}
@@ -201,13 +226,13 @@
                         <div class="form-row">
                             <strong>Beyond Threshold:</strong> {{ assessment.old_input_count }} input(s) — {{ assessment.old_input_total|floatformat:2 }} {{ assessment.currency }} (historical cost)
                             {% if assessment.old_input_total_current %}
-                                <div class="help" style="color: #666;">
+                                <div class="help" style="color: #666; font-size: 0.9em;">
                                     Value at cashout: {{ assessment.old_input_total_current|floatformat:2 }} {{ assessment.currency }}
                                 </div>
                             {% endif %}
                         </div>
                     </div>
-                </div>
+                </details>
             </div>
             {% endif %}
 
