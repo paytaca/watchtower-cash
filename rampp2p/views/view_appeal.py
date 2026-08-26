@@ -13,6 +13,7 @@ from authentication.permissions import RampP2PIsAuthenticated
 import rampp2p.models as models
 import rampp2p.serializers as serializers
 import rampp2p.utils.websocket as websocket
+import rampp2p.utils.utils as utils
 
 from rampp2p.validators import *
 from rampp2p.utils.handler import update_order_status
@@ -68,17 +69,19 @@ class AppealViewSet(viewsets.GenericViewSet):
             
             # get this user's unread orders
             member_orders = models.OrderMember.objects.filter(
-                Q(read_at__isnull=True) & 
+                Q(read_at__isnull=True) &
                 (Q(peer__wallet_hash=wallet_hash) | Q(arbiter__wallet_hash=wallet_hash))).values_list('order', flat=True)
-            
+
             # count which appeals have orders that are subset of this user's unread orders
             unread_count = models.Appeal.objects.filter(order__in=member_orders).count()
-            
+            ongoing_count = utils._count_ongoing(wallet_hash)
+
             data = {
                 'appeals': serializer.data,
                 'count': count,
                 'total_pages': total_pages,
-                'unread_count': unread_count
+                'unread_count': unread_count,
+                'ongoing_count': ongoing_count
             }
             return Response(data, status.HTTP_200_OK)
         except Exception as err:
@@ -176,13 +179,15 @@ class AppealViewSet(viewsets.GenericViewSet):
                 # Count the number of unread appeals for arbiter
                 rbtr_unread_orders = models.OrderMember.objects.filter(Q(read_at__isnull=True) & Q(arbiter__wallet_hash=appeal.order.arbiter.wallet_hash)).values_list('order', flat=True)
                 rbtr_unread_apls_count = models.Appeal.objects.filter(order__in=rbtr_unread_orders).count()
-                
+                rbtr_ongoing_count = utils._count_ongoing(rbtr_wallet_hash)
+
                 # Send appeal WebSocket notification to arbiter
                 websocket.send_general_update({
                     'type': WSGeneralMessageType.NEW_APPEAL.value,
                     'extra': {
                         'appeal': rbtr_appeal.data,
-                        'unread_count': rbtr_unread_apls_count
+                        'unread_count': rbtr_unread_apls_count,
+                        'ongoing_count': rbtr_ongoing_count
                     }
                 }, rbtr_wallet_hash)
 

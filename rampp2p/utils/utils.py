@@ -1,4 +1,4 @@
-from django.db.models import Q
+from django.db.models import Q, OuterRef, Subquery
 from django.conf import settings
 from django.apps import apps
 from decimal import Decimal, ROUND_DOWN
@@ -36,17 +36,38 @@ async def unread_orders_count(wallet_hash):
 
     if is_arbiter:
         # get arbiter orders
-        member_orders_sync =  sync_to_async(OrderMember.objects.filter(Q(read_at__isnull=True) 
+        member_orders_sync =  sync_to_async(OrderMember.objects.filter(Q(read_at__isnull=True)
             & Q(arbiter__wallet_hash=wallet_hash)).values_list, thread_sensitive=True)
         member_orders = await member_orders_sync('order', flat=True)
-        
+
         # count only the orders with appeals
         count_sync = sync_to_async(Appeal.objects.filter(order__in=member_orders).count, thread_sensitive=True)
         count = await count_sync()
     else:
-        count_sync = sync_to_async(OrderMember.objects.filter(Q(read_at__isnull=True) 
+        count_sync = sync_to_async(OrderMember.objects.filter(Q(read_at__isnull=True)
             & Q(peer__wallet_hash=wallet_hash)).count, thread_sensitive=True)
         count = await count_sync()
+    return count
+
+COMPLETED_STATUSES = ['RLS', 'RFN', 'CNCL']
+
+def _count_ongoing(wallet_hash):
+    Order = apps.get_model('rampp2p', 'Order')
+    Status = apps.get_model('rampp2p', 'Status')
+    orders = Order.objects.filter(
+        Q(owner__wallet_hash=wallet_hash) |
+        Q(ad_snapshot__ad__owner__wallet_hash=wallet_hash)
+    )
+    latest_status_subq = (
+        Status.objects.filter(order=OuterRef('pk'))
+        .order_by('-created_at')
+        .values('status')[:1]
+    )
+    orders = orders.annotate(latest_status=Subquery(latest_status_subq))
+    return orders.exclude(latest_status__in=COMPLETED_STATUSES).count()
+
+async def ongoing_orders_count(wallet_hash):
+    count = await sync_to_async(_count_ongoing, thread_sensitive=True)(wallet_hash)
     return count
 
 def satoshi_to_bch(satoshi):

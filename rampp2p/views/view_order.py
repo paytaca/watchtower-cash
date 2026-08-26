@@ -360,11 +360,13 @@ class OrderViewSet(viewsets.GenericViewSet):
         unread_count = models.OrderMember.objects.filter(
             Q(peer__wallet_hash=wallet_hash) & Q(read_at__isnull=True)
         ).count()
+        ongoing_count = utils._count_ongoing(wallet_hash)
         data = {
             "orders": serializer.data,
             "count": count,
             "total_pages": total_pages,
             "unread_count": unread_count,
+            "ongoing_count": ongoing_count,
         }
         return Response(data, status.HTTP_200_OK)
 
@@ -522,10 +524,12 @@ class OrderViewSet(viewsets.GenericViewSet):
                     Q(read_at__isnull=True) & Q(peer__wallet_hash=wallet_hash)
                 ).count()
 
+            ongoing_count = utils._count_ongoing(wallet_hash)
+
             websocket.send_general_update(
                 {
                     "type": WSGeneralMessageType.READ_ORDER.value,
-                    "extra": {"unread_count": unread_count},
+                    "extra": {"unread_count": unread_count, "ongoing_count": ongoing_count},
                 },
                 wallet_hash,
             )
@@ -767,13 +771,18 @@ class OrderViewSet(viewsets.GenericViewSet):
         unread_count = models.OrderMember.objects.filter(
             Q(read_at__isnull=True) & Q(peer__wallet_hash=ad.owner.wallet_hash)
         ).count()
+        ongoing_count = utils._count_ongoing(ad.owner.wallet_hash)
         serialized_order = serializers.OrderSerializer(
             order, context={"wallet_hash": ad.owner.wallet_hash}
         )
         websocket.send_general_update(
             {
                 "type": WSGeneralMessageType.NEW_ORDER.value,
-                "extra": {"order": serialized_order.data, "unread_count": unread_count},
+                "extra": {
+                    "order": serialized_order.data,
+                    "unread_count": unread_count,
+                    "ongoing_count": ongoing_count,
+                },
             },
             ad.owner.wallet_hash,
         )

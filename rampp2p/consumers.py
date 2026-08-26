@@ -1,6 +1,6 @@
 from channels.generic.websocket import AsyncWebsocketConsumer
 from asgiref.sync import sync_to_async
-from rampp2p.utils import unread_orders_count
+from rampp2p.utils import unread_orders_count, ongoing_orders_count
 from rampp2p.models import Peer
 from datetime import datetime
 import json
@@ -103,12 +103,14 @@ class GeneralUpdatesConsumer(AsyncWebsocketConsumer):
         user = await self.get_user_from_wallet_hash(self.wallet_hash)
         await self.set_user_active(user, True)
         unread_count = await unread_orders_count(self.wallet_hash)
-        data = { 
+        ongoing_count = await ongoing_orders_count(self.wallet_hash)
+        data = {
             'success': True,
             'type': 'ConnectionMessage',
             'extra': {
-                'message': f"Subscribed to '{self.room_name}'", 
-                'unread_count': unread_count
+                'message': f"Subscribed to '{self.room_name}'",
+                'unread_count': unread_count,
+                'ongoing_count': ongoing_count
             }
         }
         await self.send(text_data=json.dumps(data))
