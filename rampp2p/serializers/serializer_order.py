@@ -190,10 +190,7 @@ class OrderSerializer(serializers.ModelSerializer):
 
     def get_payment_method_opts(self, obj):
         statuses = obj.status_set.all()
-        if isinstance(statuses, list):
-            has_escrowed = any(status.status == models.StatusType.ESCROWED for status in statuses)
-        else:
-            has_escrowed = statuses.filter(status=models.StatusType.ESCROWED).exists()
+        has_escrowed = statuses.filter(status=models.StatusType.ESCROWED).exists()
 
         if has_escrowed:
             serialized_payment_methods = SubsetPaymentMethodSerializer(
@@ -251,20 +248,9 @@ class OrderSerializer(serializers.ModelSerializer):
     def get_read_at(self, obj):
         wallet_hash = self.context.get('wallet_hash')
         order_members = obj.members.all()
-        if isinstance(order_members, list):
-            order_member = next(
-                (
-                    member
-                    for member in order_members
-                    if (member.peer and member.peer.wallet_hash == wallet_hash)
-                    or (member.arbiter and member.arbiter.wallet_hash == wallet_hash)
-                ),
-                None,
-            )
-        else:
-            order_member = order_members.filter(
-                Q(peer__wallet_hash=wallet_hash) | Q(arbiter__wallet_hash=wallet_hash)
-            ).first()
+        order_member = order_members.filter(
+            Q(peer__wallet_hash=wallet_hash) | Q(arbiter__wallet_hash=wallet_hash)
+        ).first()
 
         if order_member is not None:
             read_at = order_member.read_at
@@ -275,12 +261,8 @@ class OrderSerializer(serializers.ModelSerializer):
         wallet_hash = self.context.get('wallet_hash')
         statuses = obj.status_set.all()
         if obj.is_seller(wallet_hash):
-            if isinstance(statuses, list):
-                return any(status.seller_read_at is None for status in statuses)
             return statuses.filter(seller_read_at__isnull=True).exists()
 
-        if isinstance(statuses, list):
-            return any(status.buyer_read_at is None for status in statuses)
         return statuses.filter(buyer_read_at__isnull=True).exists()
     
     def get_feedback(self, obj):

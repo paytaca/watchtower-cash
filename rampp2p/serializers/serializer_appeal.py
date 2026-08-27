@@ -70,29 +70,15 @@ class AppealSerializer(BaseAppealSerializer):
     
     def get_latest_order_status(self, obj):
         statuses = obj.status_set.all()
-        if isinstance(statuses, list):
-            return statuses[0] if statuses else None
-
         if statuses.exists():
             return statuses.order_by('-created_at').first()
         
     def get_read_at(self, obj):
         wallet_hash = self.context.get('wallet_hash')
         order_members = obj.order.members.all()
-        if isinstance(order_members, list):
-            order_member = next(
-                (
-                    member
-                    for member in order_members
-                    if (member.peer and member.peer.wallet_hash == wallet_hash)
-                    or (member.arbiter and member.arbiter.wallet_hash == wallet_hash)
-                ),
-                None,
-            )
-        else:
-            order_member = order_members.filter(
-                Q(peer__wallet_hash=wallet_hash) | Q(arbiter__wallet_hash=wallet_hash)
-            ).first()
+        order_member = order_members.filter(
+            Q(peer__wallet_hash=wallet_hash) | Q(arbiter__wallet_hash=wallet_hash)
+        ).first()
 
         if order_member is not None:
             read_at = order_member.read_at

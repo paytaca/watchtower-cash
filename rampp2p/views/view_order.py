@@ -399,8 +399,6 @@ class OrderViewSet(viewsets.GenericViewSet):
         if params["query_name"]:
             queryset = queryset.filter(owner__name__icontains=params["query_name"])
 
-        queryset = _optimize_order_queryset(queryset)
-
         # Count total pages
         count = queryset.count()
         total_pages = page
