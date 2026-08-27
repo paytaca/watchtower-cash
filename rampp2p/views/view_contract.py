@@ -446,7 +446,7 @@ class ContractViewSet(viewsets.GenericViewSet):
             raise ValidationError('Caller is not seller nor arbiter')
         
         # Check if status is RELEASE_PENDING or PAID
-        status = Status.objects.filter(order__id=order.id).latest('created_at')
+        status = models.Status.objects.filter(order__id=order.id).latest('created_at')
         if not (status.status == StatusType.RELEASE_PENDING) and not (status.status == StatusType.PAID):
             raise ValidationError(f'Action requires status {StatusType.RELEASE_PENDING.label} or {StatusType.PAID.label}')
 

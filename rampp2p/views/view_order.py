@@ -128,7 +128,7 @@ class CashinOrderViewSet(viewsets.GenericViewSet):
         if status_type == "ONGOING":
             queryset = queryset.exclude(last_status__in=completed_status)
         if status_type == "COMPLETED":
-            queryset = queryset.exclude(last_status__in=completed_status)
+            queryset = queryset.filter(last_status__in=completed_status)
 
         # fetches orders created by user
         owned_orders = Q(owner__wallet_hash=wallet_hash)
@@ -893,7 +893,7 @@ class OrderStatusViewSet(viewsets.GenericViewSet):
 
     @action(detail=True, methods=["get"])
     def list_status(self, request, pk):
-        queryset = Status.objects.filter(order__id=pk).order_by("-created_at")
+        queryset = models.Status.objects.filter(order__id=pk).order_by("-created_at")
         serializer = serializers.StatusSerializer(queryset, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
