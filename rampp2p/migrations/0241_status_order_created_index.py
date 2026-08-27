@@ -12,7 +12,7 @@ class Migration(migrations.Migration):
             model_name='status',
             index=models.Index(
                 fields=['order', '-created_at'],
-                name='rampp2p_status_order_created_idx',
+                name='rampp2p_status_order_ct_idx',
             ),
         ),
     ]

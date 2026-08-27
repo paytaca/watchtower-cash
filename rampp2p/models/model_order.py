@@ -48,7 +48,7 @@ class Order(models.Model):
             # Optimize owned-order listings sorted by newest first
             models.Index(
                 fields=["owner", "-created_at"],
-                name="rampp2p_order_owner_created_idx",
+                name="rampp2p_order_owner_ct_idx",
             ),
             # Optimize tracking-id generation counts over created_at ranges
             models.Index(fields=["created_at"], name="rampp2p_order_created_at_idx"),
@@ -320,7 +320,7 @@ class Status(models.Model):
             # Optimize latest-status subqueries (order + created_at ordering)
             models.Index(
                 fields=["order", "-created_at"],
-                name="rampp2p_status_order_created_idx",
+                name="rampp2p_status_order_ct_idx",
             ),
         ]
 

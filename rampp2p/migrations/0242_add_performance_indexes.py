@@ -21,7 +21,7 @@ class Migration(migrations.Migration):
         migrations.AddIndex(
             model_name="order",
             index=models.Index(
-                fields=["owner", "-created_at"], name="rampp2p_order_owner_created_idx"
+                fields=["owner", "-created_at"], name="rampp2p_order_owner_ct_idx"
             ),
         ),
         migrations.AddIndex(
