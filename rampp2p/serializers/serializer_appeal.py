@@ -54,7 +54,12 @@ class AppealSerializer(BaseAppealSerializer):
         }
 
     def get_order(self, obj):
-        status = self.get_latest_order_status(obj.order)
+        status = obj.order.status
+        if status is None:
+            return {
+                'id': obj.order.id,
+                'status': None,
+            }
         return {
             'id': obj.order.id,
             'status': {
@@ -64,15 +69,18 @@ class AppealSerializer(BaseAppealSerializer):
         }
     
     def get_latest_order_status(self, obj):
-        statuses = models.Status.objects.filter(Q(order=obj))
+        statuses = obj.status_set.all()
         if statuses.exists():
-            return statuses.last()
+            return statuses.order_by('-created_at').first()
         
     def get_read_at(self, obj):
         wallet_hash = self.context.get('wallet_hash')
-        order_member = models.OrderMember.objects.filter(Q(order__id=obj.order.id) & (Q(peer__wallet_hash=wallet_hash) | Q(arbiter__wallet_hash=wallet_hash)))
-        if order_member.exists():
-            read_at = order_member.first().read_at
+        order_members = obj.order.members.all()
+        order_member = order_members.filter(
+            Q(peer__wallet_hash=wallet_hash) | Q(arbiter__wallet_hash=wallet_hash)
+        ).first()
+
+        if order_member is not None:
+            read_at = order_member.read_at
             return str(read_at) if read_at != None else read_at
         return None
-

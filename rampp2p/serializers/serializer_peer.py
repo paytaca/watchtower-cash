@@ -1,10 +1,8 @@
 from rest_framework import serializers
 from django.db.models import Q, Subquery, OuterRef, F
 from rampp2p.models import Peer, ReservedName
-from rampp2p.utils.utils import _count_ongoing
 
 class PeerProfileSerializer(serializers.ModelSerializer):
-    ongoing_orders_count = serializers.SerializerMethodField()
     class Meta:
         model = Peer
         fields = [
@@ -15,13 +13,9 @@ class PeerProfileSerializer(serializers.ModelSerializer):
             'address',
             'address_path',
             'is_disabled',
-            'ongoing_orders_count',
             'is_online',
             'last_online_at'
         ]
-
-    def get_ongoing_orders_count(self, obj: Peer):
-        return _count_ongoing(obj.wallet_hash)
 
 class PeerSerializer(serializers.ModelSerializer):
     trade_count = serializers.SerializerMethodField()

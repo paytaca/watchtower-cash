@@ -425,7 +425,7 @@ class ContractViewSet(viewsets.GenericViewSet):
         transactions = models.Transaction.objects.filter(contract__id=contract_id, txid__isnull=False)
         tx_data = []
         for _, tx in enumerate(transactions):
-            tx_outputs = models.Recipient.objects.filter(transaction__id=tx.id)
+            tx_outputs = tx.recipients.all()
             data = {}
             data["txn"] = serializers.TransactionSerializer(tx).data
             data["txn"]["outputs"] = serializers.RecipientSerializer(tx_outputs, many=True).data
@@ -446,7 +446,7 @@ class ContractViewSet(viewsets.GenericViewSet):
             raise ValidationError('Caller is not seller nor arbiter')
         
         # Check if status is RELEASE_PENDING or PAID
-        status = Status.objects.filter(order__id=order.id).latest('created_at')
+        status = models.Status.objects.filter(order__id=order.id).latest('created_at')
         if not (status.status == StatusType.RELEASE_PENDING) and not (status.status == StatusType.PAID):
             raise ValidationError(f'Action requires status {StatusType.RELEASE_PENDING.label} or {StatusType.PAID.label}')
 

@@ -62,8 +62,12 @@ class AdSnapshotSerializer(serializers.ModelSerializer):
         return instance.price
     
     def get_payment_methods(self, obj: models.AdSnapshot):
-        payment_type_ids = obj.payment_types.values_list('id')
-        payment_types = obj.ad.payment_methods.filter(payment_type__in=payment_type_ids)
+        payment_type_ids = {payment_type.id for payment_type in obj.payment_types.all()}
+        payment_types = [
+            payment_method
+            for payment_method in obj.ad.payment_methods.all()
+            if payment_method.payment_type_id in payment_type_ids
+        ]
         return SubsetPaymentMethodSerializer(payment_types, many=True).data
     
     def get_owner(self, obj: models.AdSnapshot):
@@ -115,8 +119,12 @@ class SubsetAdSnapshotSerializer(AdSnapshotSerializer):
         }
     
     def get_payment_methods(self, obj: models.AdSnapshot):
-        payment_type_ids = obj.payment_types.values_list('id')
-        payment_types = obj.ad.payment_methods.filter(payment_type__in=payment_type_ids)
+        payment_type_ids = {payment_type.id for payment_type in obj.payment_types.all()}
+        payment_types = [
+            payment_method
+            for payment_method in obj.ad.payment_methods.all()
+            if payment_method.payment_type_id in payment_type_ids
+        ]
         return SubsetPaymentMethodSerializer(payment_types, many=True).data
     
     def get_appeal_cooldown(self, obj):

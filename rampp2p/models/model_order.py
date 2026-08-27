@@ -45,6 +45,13 @@ class Order(models.Model):
         indexes = [
             # Optimize Order model for trade count calculations
             models.Index(fields=["ad_snapshot"], name="rampp2p_order_ad_snapshot_idx"),
+            # Optimize owned-order listings sorted by newest first
+            models.Index(
+                fields=["owner", "-created_at"],
+                name="rampp2p_order_owner_created_idx",
+            ),
+            # Optimize tracking-id generation counts over created_at ranges
+            models.Index(fields=["created_at"], name="rampp2p_order_created_at_idx"),
         ]
 
     def __str__(self):
@@ -53,8 +60,12 @@ class Order(models.Model):
     @property
     def status(self):
         Status = apps.get_model("rampp2p", "Status")
-        last_status = Status.objects.filter(order__id=self.id).last()
-        return last_status
+        cache = getattr(self, "_prefetched_objects_cache", None)
+        if cache and "status_set" in cache:
+            statuses = cache["status_set"]
+            return statuses[0] if statuses else None
+
+        return Status.objects.filter(order__id=self.id).order_by("-created_at").first()
 
     @property
     def trade_type(self):
@@ -186,6 +197,14 @@ class OrderMember(models.Model):
         return self.user.wallet_hash
 
     class Meta:
+        indexes = [
+            # Optimize unread-count lookups for peers and arbiters
+            models.Index(fields=["peer", "read_at"], name="rampp2p_om_peer_read_idx"),
+            models.Index(
+                fields=["arbiter", "read_at"],
+                name="rampp2p_om_arbiter_read_idx",
+            ),
+        ]
         constraints = [
             models.UniqueConstraint(
                 fields=["type", "peer", "order"],
@@ -295,6 +314,15 @@ class Status(models.Model):
     created_by = models.CharField(max_length=75, db_index=True, null=True, blank=True)
     seller_read_at = models.DateTimeField(null=True, blank=True)
     buyer_read_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        indexes = [
+            # Optimize latest-status subqueries (order + created_at ordering)
+            models.Index(
+                fields=["order", "-created_at"],
+                name="rampp2p_status_order_created_idx",
+            ),
+        ]
 
     def __str__(self):
         return str(self.id)
