@@ -170,8 +170,10 @@ class OrderSerializer(serializers.ModelSerializer):
 
     def get_contract(self, obj):
         try:
-            contract = models.Contract.objects.get(order=obj)
+            contract = obj.contract
         except models.Contract.DoesNotExist:
+            return None
+        if contract is None:
             return None
         return contract.id
     
@@ -189,8 +191,8 @@ class OrderSerializer(serializers.ModelSerializer):
         return serializer.data
 
     def get_payment_method_opts(self, obj):
-        statuses = obj.status_set.all()
-        has_escrowed = statuses.filter(status=models.StatusType.ESCROWED).exists()
+        statuses = list(obj.status_set.all())
+        has_escrowed = any(status.status == models.StatusType.ESCROWED for status in statuses)
 
         if has_escrowed:
             serialized_payment_methods = SubsetPaymentMethodSerializer(
@@ -259,11 +261,11 @@ class OrderSerializer(serializers.ModelSerializer):
 
     def get_has_unread_status(self, obj):
         wallet_hash = self.context.get('wallet_hash')
-        statuses = obj.status_set.all()
+        statuses = list(obj.status_set.all())
         if obj.is_seller(wallet_hash):
-            return statuses.filter(seller_read_at__isnull=True).exists()
+            return any(status.seller_read_at is None for status in statuses)
 
-        return statuses.filter(buyer_read_at__isnull=True).exists()
+        return any(status.buyer_read_at is None for status in statuses)
     
     def get_feedback(self, obj):
         wallet_hash = self.context['wallet_hash']

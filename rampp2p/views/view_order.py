@@ -63,6 +63,7 @@ def _optimize_order_queryset(queryset):
             queryset=models.OrderMember.objects.select_related("peer", "arbiter"),
         ),
         "ad_snapshot__payment_types",
+        "payment_methods",
         "ad_snapshot__ad__payment_methods__payment_type__dynamic_fields",
         "ad_snapshot__ad__payment_methods__values__field_reference",
         "orderpayment_set__payment_method",
@@ -75,8 +76,6 @@ def _peer_ratings_for_orders(orders):
     peer_ids = set()
     for order in orders:
         peer_ids.add(order.owner_id)
-        if order.arbiter_id:
-            peer_ids.add(order.arbiter_id)
         peer_ids.add(order.ad_snapshot.ad.owner_id)
 
     if not peer_ids:
@@ -111,7 +110,7 @@ class CashinOrderViewSet(viewsets.GenericViewSet):
         except (ValueError, ValidationError) as err:
             return Response({"error": err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
 
-        queryset = models.Order.objects.filter(is_cash_in=True)
+        queryset = _optimize_order_queryset(models.Order.objects.filter(is_cash_in=True))
 
         # exclude completed orders
         completed_status = [
