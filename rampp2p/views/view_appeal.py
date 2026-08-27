@@ -6,6 +6,7 @@ from rest_framework.permissions import AllowAny
 
 from django.db import transaction
 from django.core.exceptions import ValidationError
+from django.db.models import Prefetch
 
 from authentication.token import TokenAuthentication
 from authentication.permissions import RampP2PIsAuthenticated
@@ -49,6 +50,25 @@ class AppealViewSet(viewsets.GenericViewSet):
             order_by_key = 'created_at' if sort_by_date == 'asc' else '-created_at'
             queryset = models.Appeal.objects.filter(order__pk__in=arbiter_order_ids).order_by(order_by_key)
 
+            queryset = queryset.select_related(
+                'owner',
+                'order',
+                'order__owner',
+                'order__arbiter',
+                'order__ad_snapshot',
+                'order__ad_snapshot__ad',
+                'order__ad_snapshot__ad__owner',
+            ).prefetch_related(
+                Prefetch(
+                    'order__status_set',
+                    queryset=models.Status.objects.order_by('-created_at'),
+                ),
+                Prefetch(
+                    'order__members',
+                    queryset=models.OrderMember.objects.select_related('peer', 'arbiter'),
+                ),
+            )
+
             if appeal_state == 'PENDING':
                 queryset = queryset.exclude(resolved_at__isnull=False)
             if appeal_state == 'RESOLVED':
@@ -90,7 +110,24 @@ class AppealViewSet(viewsets.GenericViewSet):
     def retrieve(self, request, pk):
         wallet_hash = request.user.wallet_hash
         try:
-            appeal = models.Appeal.objects.get(pk=pk)
+            appeal = models.Appeal.objects.select_related(
+                'owner',
+                'order',
+                'order__owner',
+                'order__arbiter',
+                'order__ad_snapshot',
+                'order__ad_snapshot__ad',
+                'order__ad_snapshot__ad__owner',
+            ).prefetch_related(
+                Prefetch(
+                    'order__status_set',
+                    queryset=models.Status.objects.order_by('-created_at'),
+                ),
+                Prefetch(
+                    'order__members',
+                    queryset=models.OrderMember.objects.select_related('peer', 'arbiter'),
+                ),
+            ).get(pk=pk)
             self._check_appeal_permissions(wallet_hash, appeal.order)
             response = self._retrieve(request, appeal)
             return Response(response, status=status.HTTP_200_OK)
@@ -101,7 +138,24 @@ class AppealViewSet(viewsets.GenericViewSet):
     def retrieve_by_order(self, request, pk):
         wallet_hash = request.user.wallet_hash
         try:
-            appeal = models.Appeal.objects.get(order__id=pk)
+            appeal = models.Appeal.objects.select_related(
+                'owner',
+                'order',
+                'order__owner',
+                'order__arbiter',
+                'order__ad_snapshot',
+                'order__ad_snapshot__ad',
+                'order__ad_snapshot__ad__owner',
+            ).prefetch_related(
+                Prefetch(
+                    'order__status_set',
+                    queryset=models.Status.objects.order_by('-created_at'),
+                ),
+                Prefetch(
+                    'order__members',
+                    queryset=models.OrderMember.objects.select_related('peer', 'arbiter'),
+                ),
+            ).get(order__id=pk)
             self._check_appeal_permissions(wallet_hash, appeal.order)
             response = self._retrieve(request, appeal)
             return Response(response, status=status.HTTP_200_OK)

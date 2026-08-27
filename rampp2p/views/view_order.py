@@ -16,6 +16,8 @@ from django.db.models import (
     Value,
     BooleanField,
     CharField,
+    Prefetch,
+    Avg,
 )
 
 from decimal import Decimal
@@ -41,6 +43,51 @@ from rampp2p.pagination import StandardResultsSetPagination
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+def _optimize_order_queryset(queryset):
+    return queryset.select_related(
+        "owner",
+        "arbiter",
+        "contract",
+        "ad_snapshot__ad__owner",
+        "ad_snapshot__fiat_currency",
+        "ad_snapshot__crypto_currency",
+    ).prefetch_related(
+        Prefetch(
+            "status_set",
+            queryset=models.Status.objects.order_by("-created_at"),
+        ),
+        Prefetch(
+            "members",
+            queryset=models.OrderMember.objects.select_related("peer", "arbiter"),
+        ),
+        "ad_snapshot__payment_types",
+        "ad_snapshot__ad__payment_methods__payment_type__dynamic_fields",
+        "ad_snapshot__ad__payment_methods__values__field_reference",
+        "orderpayment_set__payment_method",
+        "orderpayment_set__orderpaymentattachment_set__image",
+        Prefetch("contract__transaction_set"),
+    )
+
+
+def _peer_ratings_for_orders(orders):
+    peer_ids = set()
+    for order in orders:
+        peer_ids.add(order.owner_id)
+        if order.arbiter_id:
+            peer_ids.add(order.arbiter_id)
+        peer_ids.add(order.ad_snapshot.ad.owner_id)
+
+    if not peer_ids:
+        return {}
+
+    return dict(
+        models.OrderFeedback.objects.filter(to_peer_id__in=peer_ids)
+        .values("to_peer_id")
+        .annotate(avg_rating=Avg("rating"))
+        .values_list("to_peer_id", "avg_rating")
+    )
 
 
 class CashinOrderViewSet(viewsets.GenericViewSet):
@@ -114,7 +161,10 @@ class CashinOrderViewSet(viewsets.GenericViewSet):
         offset = (page - 1) * limit
         page_results = queryset[offset : offset + limit]
 
-        context = {"wallet_hash": wallet_hash}
+        context = {
+            "wallet_hash": wallet_hash,
+            "peer_ratings": _peer_ratings_for_orders(page_results),
+        }
         serializer = serializers.OrderSerializer(
             page_results, many=True, context=context
         )
@@ -174,6 +224,8 @@ class PublicOrdersViewSet(
             )
         )
 
+        queryset = _optimize_order_queryset(queryset)
+
         return queryset
 
 
@@ -184,7 +236,7 @@ class OrderViewSet(viewsets.GenericViewSet):
 
     def retrieve(self, request, pk):
         try:
-            order = self.get_queryset().get(pk=pk)
+            order = _optimize_order_queryset(self.get_queryset()).get(pk=pk)
         except models.Order.DoesNotExist:
             raise Http404
 
@@ -195,7 +247,11 @@ class OrderViewSet(viewsets.GenericViewSet):
             )
 
         serialized_order = serializers.OrderSerializer(
-            order, context={"wallet_hash": wallet_hash}
+            order,
+            context={
+                "wallet_hash": wallet_hash,
+                "peer_ratings": _peer_ratings_for_orders([order]),
+            },
         ).data
 
         if serialized_order["status"]["value"] == StatusType.APPEALED:
@@ -224,7 +280,7 @@ class OrderViewSet(viewsets.GenericViewSet):
         except (ValueError, ValidationError) as err:
             return Response({"error": err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
 
-        queryset = models.Order.objects.all()
+        queryset = _optimize_order_queryset(models.Order.objects.all())
 
         # fetches orders created by user
         owned_orders = Q(owner__wallet_hash=wallet_hash)
@@ -343,6 +399,8 @@ class OrderViewSet(viewsets.GenericViewSet):
         if params["query_name"]:
             queryset = queryset.filter(owner__name__icontains=params["query_name"])
 
+        queryset = _optimize_order_queryset(queryset)
+
         # Count total pages
         count = queryset.count()
         total_pages = page
@@ -353,7 +411,10 @@ class OrderViewSet(viewsets.GenericViewSet):
         offset = (page - 1) * limit
         page_results = queryset[offset : offset + limit]
 
-        context = {"wallet_hash": wallet_hash}
+        context = {
+            "wallet_hash": wallet_hash,
+            "peer_ratings": _peer_ratings_for_orders(page_results),
+        }
         serializer = serializers.OrderSerializer(
             page_results, many=True, context=context
         )
@@ -458,7 +519,11 @@ class OrderViewSet(viewsets.GenericViewSet):
             order.save()
 
         serialized_order = serializers.OrderSerializer(
-            order, context={"wallet_hash": wallet_hash}
+            order,
+            context={
+                "wallet_hash": wallet_hash,
+                "peer_ratings": _peer_ratings_for_orders([order]),
+            },
         ).data
         return Response(serialized_order, status=status.HTTP_200_OK)
 

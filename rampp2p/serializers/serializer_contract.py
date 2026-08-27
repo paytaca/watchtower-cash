@@ -69,7 +69,7 @@ class ContractSerializer(BaseContractSerializer):
         return contract.created_at.timestamp()
 
     def get_parties(self, contract):
-        members = models.ContractMember.objects.filter(contract__id=contract.id)
+        members = contract.members.all()
         arbiter, seller, buyer = None, None, None
         for member in members:
             type = member.member_type

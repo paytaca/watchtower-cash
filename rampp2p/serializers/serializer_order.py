@@ -112,6 +112,16 @@ class OrderSerializer(serializers.ModelSerializer):
             'read_at',
             'has_unread_status'
         ]
+
+    def _get_peer_rating(self, peer):
+        if peer is None:
+            return None
+
+        peer_ratings = self.context.get('peer_ratings') or {}
+        if peer.id in peer_ratings:
+            return peer_ratings.get(peer.id)
+
+        return peer.average_rating()
     
     def get_price(self, obj):
         return obj.ad_snapshot.price
@@ -142,7 +152,7 @@ class OrderSerializer(serializers.ModelSerializer):
                     'public_key': member.public_key,
                     'name': member.name,
                     'address': member.address,
-                    'rating': member.average_rating(),
+                    'rating': self._get_peer_rating(member),
                     'is_ad_owner': member.wallet_hash == ad_owner.wallet_hash,
                     'is_online': member.is_online,
                     'last_online_at': member.last_online_at
@@ -153,7 +163,7 @@ class OrderSerializer(serializers.ModelSerializer):
         return {
             'id': obj.owner.id,
             'name': obj.owner.name,
-            'rating': obj.owner.average_rating(),
+            'rating': self._get_peer_rating(obj.owner),
             'is_online': obj.owner.is_online,
             'last_online_at': obj.owner.last_online_at
         }
@@ -166,15 +176,28 @@ class OrderSerializer(serializers.ModelSerializer):
         return contract.id
     
     def get_transactions(self, obj):
-        transactions = models.Transaction.objects.filter(contract__order__id = obj.id)
+        try:
+            contract = obj.contract
+        except models.Contract.DoesNotExist:
+            return []
+
+        if contract is None:
+            return []
+
+        transactions = contract.transaction_set.all()
         serializer = TransactionSerializer(transactions, many=True)
         return serializer.data
 
     def get_payment_method_opts(self, obj):
-        escrowed_status = models.Status.objects.filter(Q(order=obj) & Q(status=models.StatusType.ESCROWED))
-        if escrowed_status.exists():            
+        statuses = obj.status_set.all()
+        if isinstance(statuses, list):
+            has_escrowed = any(status.status == models.StatusType.ESCROWED for status in statuses)
+        else:
+            has_escrowed = statuses.filter(status=models.StatusType.ESCROWED).exists()
+
+        if has_escrowed:
             serialized_payment_methods = SubsetPaymentMethodSerializer(
-                obj.payment_methods.all(), 
+                obj.payment_methods.all(),
                 many=True,
                 context={'order_id': obj.id}
             )
@@ -182,10 +205,10 @@ class OrderSerializer(serializers.ModelSerializer):
             return payment_methods
     
     def get_payment_methods_selected(self, obj):
-        order_payments = models.OrderPayment.objects.select_related('payment_method').filter(order_id=obj.id)
+        order_payments = obj.orderpayment_set.all()
         payment_methods = []
         for method in order_payments:
-            attachments = models.OrderPaymentAttachment.objects.filter(payment__id=method.id)
+            attachments = method.orderpaymentattachment_set.all()
             data = SubsetPaymentMethodSerializer(method.payment_method, context={'order_id': obj.id}).data
             data['order_payment_id'] = method.id
             data['attachments'] = OrderPaymentAttachmentSerializer(attachments, many=True).data
@@ -193,8 +216,7 @@ class OrderSerializer(serializers.ModelSerializer):
         return payment_methods
 
     def get_latest_order_status(self, obj):
-        latest_status = models.Status.objects.filter(Q(order=obj)).last()
-        return latest_status
+        return obj.status
     
     def get_trade_type(self, obj):
         ad_trade_type = obj.ad_snapshot.trade_type
@@ -215,9 +237,9 @@ class OrderSerializer(serializers.ModelSerializer):
     
     def get_last_modified_at(self, obj):
         last_modified_at = None
-        latest_status = models.Status.objects.values('created_at').filter(order__id=obj.id).order_by('-created_at').first()
+        latest_status = self.get_latest_order_status(obj)
         if latest_status is not None:
-            last_modified_at = str(latest_status['created_at'])
+            last_modified_at = str(latest_status.created_at)
         return last_modified_at
     
     def get_is_ad_owner(self, obj):
@@ -228,28 +250,47 @@ class OrderSerializer(serializers.ModelSerializer):
     
     def get_read_at(self, obj):
         wallet_hash = self.context.get('wallet_hash')
-        order_member = models.OrderMember.objects.filter(Q(order__id=obj.id) & (Q(peer__wallet_hash=wallet_hash) | Q(arbiter__wallet_hash=wallet_hash)))
-        if order_member.exists():
-            read_at = order_member.first().read_at
+        order_members = obj.members.all()
+        if isinstance(order_members, list):
+            order_member = next(
+                (
+                    member
+                    for member in order_members
+                    if (member.peer and member.peer.wallet_hash == wallet_hash)
+                    or (member.arbiter and member.arbiter.wallet_hash == wallet_hash)
+                ),
+                None,
+            )
+        else:
+            order_member = order_members.filter(
+                Q(peer__wallet_hash=wallet_hash) | Q(arbiter__wallet_hash=wallet_hash)
+            ).first()
+
+        if order_member is not None:
+            read_at = order_member.read_at
             return str(read_at) if read_at != None else read_at
         return None
 
     def get_has_unread_status(self, obj):
         wallet_hash = self.context.get('wallet_hash')
-        statuses = models.Status.objects.filter(order__id=obj.id)
-        has_unread = False
+        statuses = obj.status_set.all()
         if obj.is_seller(wallet_hash):
-            has_unread = statuses.filter(seller_read_at__isnull=True).exists()
-        else:
-            has_unread = statuses.filter(buyer_read_at__isnull=True).exists()
-        return has_unread
+            if isinstance(statuses, list):
+                return any(status.seller_read_at is None for status in statuses)
+            return statuses.filter(seller_read_at__isnull=True).exists()
+
+        if isinstance(statuses, list):
+            return any(status.buyer_read_at is None for status in statuses)
+        return statuses.filter(buyer_read_at__isnull=True).exists()
     
     def get_feedback(self, obj):
         wallet_hash = self.context['wallet_hash']
         status = self.get_status(obj)
         feedback = None
         if status['value'] in ['CNCL', 'RLS', 'RFN']:
-            user_feedback = models.OrderFeedback.objects.filter(Q(from_peer__wallet_hash=wallet_hash) and Q(order__id=obj.id)).first()
+            user_feedback = models.OrderFeedback.objects.filter(
+                Q(from_peer__wallet_hash=wallet_hash) & Q(order__id=obj.id)
+            ).first()
             if user_feedback:
                 feedback = {
                     'id': user_feedback.id,

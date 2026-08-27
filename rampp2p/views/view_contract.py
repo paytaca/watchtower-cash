@@ -425,7 +425,7 @@ class ContractViewSet(viewsets.GenericViewSet):
         transactions = models.Transaction.objects.filter(contract__id=contract_id, txid__isnull=False)
         tx_data = []
         for _, tx in enumerate(transactions):
-            tx_outputs = models.Recipient.objects.filter(transaction__id=tx.id)
+            tx_outputs = tx.recipients.all()
             data = {}
             data["txn"] = serializers.TransactionSerializer(tx).data
             data["txn"]["outputs"] = serializers.RecipientSerializer(tx_outputs, many=True).data

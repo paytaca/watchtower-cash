@@ -41,10 +41,10 @@ class SubsetPaymentMethodSerializer(serializers.ModelSerializer):
             'payment_type',
             'values',
             'dynamic_values'
-        ]
+    ]
     
     def get_values(self, obj):
-        payment_method_fields = models.PaymentMethodField.objects.filter(payment_method=obj.id)
+        payment_method_fields = obj.values.all()
         return PaymentMethodFieldSerializer(payment_method_fields, many=True).data
 
     def get_dynamic_values(self, obj):
