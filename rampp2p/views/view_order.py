@@ -869,6 +869,15 @@ class OrderStatusViewSet(viewsets.GenericViewSet):
                 status.save()
 
         has_cashin_alerts = utils.check_has_cashin_alerts(wallet_hash)
+
+        ongoing_count = utils._count_ongoing(wallet_hash)
+        websocket.send_general_update(
+            {
+                "type": WSGeneralMessageType.READ_ORDER.value,
+                "extra": {"ongoing_count": ongoing_count},
+            },
+            wallet_hash,
+        )
         return Response({"has_cashin_alerts": has_cashin_alerts}, status=200)
 
     @action(detail=True, methods=["post"])
