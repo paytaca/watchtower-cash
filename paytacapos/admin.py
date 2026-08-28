@@ -1,12 +1,15 @@
 from django.contrib import admin
 from django.urls import reverse
 from django.utils.html import format_html
+from django.db.models import Sum
+from django.db.models.functions import Coalesce
 from dynamic_raw_id.admin import DynamicRawIDMixin
 from .models import *
 from dynamic_raw_id.admin import DynamicRawIDMixin
 from main.models import (
     Wallet,
-    WalletHistory
+    WalletHistory,
+    Transaction
 )
 
 from rampp2p.utils import satoshi_to_bch
@@ -138,6 +141,7 @@ class MerchantAdmin(admin.ModelAdmin):
         "merchant_location",
         "verified",
         "active",
+        "wallet_balance",
         "incoming_txs",
         "outgoing_txs",
         "last_transaction"
@@ -162,6 +166,18 @@ class MerchantAdmin(admin.ModelAdmin):
                     _location = obj.location.country
         return _location
     
+    def wallet_balance(self, obj):
+        try:
+            balance = Transaction.objects.filter(
+                wallet__wallet_hash=obj.wallet_hash,
+                spent=False,
+                token__name__iexact='bch'
+            ).aggregate(total=Coalesce(Sum('value'), 0))['total']
+            return f"{satoshi_to_bch(balance):.8f} BCH"
+        except Exception:
+            return None
+    wallet_balance.short_description = "Wallet Balance"
+
     def incoming_txs(self, obj):
         wallet = Wallet.objects.get(wallet_hash=obj.wallet_hash)
         in_history = WalletHistory.objects.filter(wallet=wallet, record_type='incoming')
