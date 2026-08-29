@@ -87,7 +87,6 @@ INSTALLED_APPS = [
     "paytacapos",
     "paytacagifts",
     "anyhedge",
-    "chat",
     "notifications",
     "nostr",
     "bitcoincash_oauth_django",
@@ -555,7 +554,6 @@ LOGGING = {
         "": {"level": "WARNING", "handlers": ["console"], "propagate": False},
         "django": {"handlers": ["console"], "level": "INFO", "propagate": False},
         "main": {"handlers": ["console"], "level": "INFO", "propagate": False},
-        "chat": {"handlers": ["console"], "level": "INFO", "propagate": False},
         "django.template": {
             "handlers": ["console"],
             "level": "INFO",
