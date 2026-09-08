@@ -715,6 +715,12 @@ SERVICER_ADDR = config("SERVICER_ADDR", "")
 SERVICE_FEE = config("SERVICE_FEE", 1000)
 ARBITRATION_FEE = config("ARBITRATION_FEE", 1000)
 CONTRACT_FEE = config("CONTRACT_FEE", 1000)
+
+# Cauldron DEX platform fee, charged by clients on token <-> BCH swaps.
+# Served via GET /api/cauldron-fee/. An empty address disables the feature.
+CAULDRON_FEE = config("CAULDRON_FEE", 30)  # basis points; 30 = 0.3%
+CAULDRON_FEE_ADDRESS = config("CAULDRON_FEE_ADDRESS", "")
+CAULDRON_FEE_MAX_USD = config("CAULDRON_FEE_MAX_USD", 1.0)
 SMART_CONTRACT_VERSION = config("SMART_CONTRACT_VERSION", "0.8.0")
 
 PAYTACAPOS_PAYOUT_XPUBKEY = config("PAYTACAPOS_PAYOUT_XPUBKEY", "")

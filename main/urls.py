@@ -296,6 +296,11 @@ main_urls += [
     ),
     path("broadcast/", views.BroadcastViewSet.as_view(), name="broadcast-transaction"),
     path(
+        "cauldron-fee/",
+        views.CauldronFeeView.as_view(),
+        name="cauldron-fee",
+    ),
+    path(
         "broadcast/output-fiat-amounts/",
         views.TransactionOutputFiatAmountsView.as_view(),
         name="broadcast-output-fiat-amounts",
