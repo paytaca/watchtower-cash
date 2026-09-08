@@ -88,7 +88,6 @@ def new_subscription(**kwargs):
     web_url = kwargs.get('webhook_url', None)
     webhook_secret = kwargs.get('webhook_secret', _UNSET)
     telegram_id = kwargs.get('telegram_id', None)
-    chat_identity = kwargs.get('chat_identity', None)
     remove_duplicate_path = kwargs.get('remove_duplicate_path', False)
     advance_subscription = kwargs.get('advance_subscription', False)
 
