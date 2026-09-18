@@ -63,13 +63,42 @@ import pytz
 
 import rampp2p.utils.transaction as rampp2p_utils
 from jpp.models import Invoice as JPPInvoice
-from main.utils.transaction_processing import mark_transaction_inputs_as_spent, mark_transactions_as_spent
+from main.utils.transaction_processing import (
+    mark_transaction_inputs_as_spent,
+    mark_transactions_as_spent,
+    reverse_dropped_transaction,
+)
 
 
 LOGGER = logging.getLogger(__name__)
 
 REDIS_STORAGE = settings.REDISKV
 NODE = Node()
+
+# Redis sorted set of mempool txids recently seen by watchtower, scored by
+# time of sighting. Used by revert_dropped_mempool_transactions to detect txs
+# that were later dropped from the mempool without being confirmed.
+MEMPOOL_SEEN_TXIDS_KEY = 'mempool:seen_txids'
+MEMPOOL_SEEN_TXIDS_MAX = 50000
+
+
+def _track_seen_mempool_txid(txid):
+    """
+    Record a mempool txid so the dropped-tx sweeper can verify it later.
+
+    This is required for txs that only ever appear as `spending_txid` on the
+    inputs they mark as spent (e.g. when all of their outputs are to untracked
+    addresses), since those leave no unconfirmed Transaction rows to scan.
+    """
+    try:
+        REDIS_STORAGE.zadd(MEMPOOL_SEEN_TXIDS_KEY, {txid: time.time()})
+        count = REDIS_STORAGE.zcard(MEMPOOL_SEEN_TXIDS_KEY)
+        if count > MEMPOOL_SEEN_TXIDS_MAX:
+            REDIS_STORAGE.zremrangebyrank(
+                MEMPOOL_SEEN_TXIDS_KEY, 0, count - MEMPOOL_SEEN_TXIDS_MAX - 1
+            )
+    except Exception as exc:
+        LOGGER.error(f"Failed to track seen mempool txid {txid}: {exc}")
 
 
 # NOTIFICATIONS
@@ -980,9 +1009,9 @@ def get_bch_utxos(self, address):
                 # Update existing transaction: mark as unspent, update value and blockheight
                 _txn = transaction_check.first()
                 if _txn.wallet == _txn.address.wallet:
-                    transaction_check.update(spent=False, value=value, blockheight=block)
+                    transaction_check.update(spent=False, spending_txid='', value=value, blockheight=block)
                 else:
-                    transaction_check.update(wallet=_txn.address.wallet, spent=False, value=value, blockheight=block)
+                    transaction_check.update(wallet=_txn.address.wallet, spent=False, spending_txid='', value=value, blockheight=block)
                 
                 for obj in transaction_check:
                     saved_utxo_ids.append(obj.id)
@@ -3028,6 +3057,9 @@ def _process_mempool_transaction(tx_hash, tx_hex=None, immediate=False, force=Fa
         if 'coinbase' in inputs[0].keys():
             return
 
+        # Track this mempool tx so the dropped-tx sweeper can verify it later.
+        _track_seen_mempool_txid(tx_hash)
+
         save_histories = False
         inputs_data = []
 
@@ -3159,6 +3191,94 @@ def process_mempool_transaction_throttled(tx_hash, tx_hex=None, immediate=False)
 )
 def process_mempool_transaction_fast(tx_hash, tx_hex=None, immediate=False):
     _process_mempool_transaction(tx_hash, tx_hex, immediate)
+
+
+@shared_task(bind=True, queue='get_utxos', max_retries=3)
+def revert_dropped_mempool_transactions(self, batch_size=200):
+    """
+    Detect mempool transactions that were dropped (neither in the mempool nor
+    on-chain) and reverse their effects on the watchtower database.
+
+    This covers the Cauldron conflicting-trades case, where the losing trade
+    and every transaction built on top of it are evicted from the mempool.
+
+    Candidate txids come from two sources:
+      * the Redis set of recently seen mempool txids (captures txs that only
+        appear as `spending_txid` because all their outputs are untracked)
+      * unconfirmed Transaction rows already in the database (drains any
+        pre-existing backlog gradually, bounded by `batch_size`)
+
+    A node lookup is the source of truth: a tx still in the mempool is left
+    alone, a confirmed tx is dropped from the tracking set, and only a tx that
+    the node reports as nonexistent is reversed.
+
+    Idempotent and safe to run repeatedly.
+    """
+    candidates = []
+
+    try:
+        seen_txids = REDIS_STORAGE.zrange(MEMPOOL_SEEN_TXIDS_KEY, 0, batch_size - 1)
+        candidates += [
+            txid.decode() if isinstance(txid, bytes) else txid for txid in seen_txids
+        ]
+    except Exception as exc:
+        LOGGER.error(
+            f"revert_dropped_mempool_transactions: failed to read "
+            f"{MEMPOOL_SEEN_TXIDS_KEY}: {exc}"
+        )
+
+    try:
+        db_txids = (
+            Transaction.objects.filter(blockheight__isnull=True)
+            .values_list('txid', flat=True)
+            .distinct()[:batch_size]
+        )
+        candidates += list(db_txids)
+    except Exception as exc:
+        LOGGER.error(
+            f"revert_dropped_mempool_transactions: failed to query unconfirmed "
+            f"txids: {exc}"
+        )
+
+    # dedupe while preserving order
+    candidates = list(dict.fromkeys(candidates))
+    if not candidates:
+        return {'checked': 0, 'reverted': []}
+
+    reverted = []
+    for txid in candidates:
+        try:
+            tx = NODE.BCH.get_transaction(txid)
+        except Exception as exc:
+            # RPC failure: leave the txid for a later sweep.
+            LOGGER.error(
+                f"revert_dropped_mempool_transactions: node query failed for "
+                f"{txid}: {exc}"
+            )
+            continue
+
+        if tx:
+            confirmations = tx.get('confirmations')
+            if confirmations and confirmations >= 1:
+                # Confirmed; the block parser owns it now.
+                REDIS_STORAGE.zrem(MEMPOOL_SEEN_TXIDS_KEY, txid)
+            # else: still in the mempool, keep tracking for a later sweep.
+            continue
+
+        # The node reports no such mempool or blockchain transaction: dropped.
+        LOGGER.info(f"revert_dropped_mempool_transactions: reverting dropped tx {txid}")
+        try:
+            reverse_dropped_transaction(txid)
+            reverted.append(txid)
+            REDIS_STORAGE.zrem(MEMPOOL_SEEN_TXIDS_KEY, txid)
+        except Exception as exc:
+            LOGGER.exception(
+                f"revert_dropped_mempool_transactions: failed to reverse {txid}: {exc}"
+            )
+
+    result = {'checked': len(candidates), 'reverted': reverted}
+    LOGGER.info(f"revert_dropped_mempool_transactions: {result}")
+    return result
 
 
 @shared_task(queue='save_record')

@@ -416,6 +416,10 @@ CELERY_BEAT_SCHEDULE = {
         "schedule": 60,
     },
     "bulk_rebroadcast": {"task": "main.tasks.bulk_rebroadcast", "schedule": 30},
+    "revert_dropped_mempool_transactions": {
+        "task": "main.tasks.revert_dropped_mempool_transactions",
+        "schedule": 60 * 3,
+    },
     "cancel_expired_orders": {
         "task": "rampp2p.tasks.task_order.cancel_expired_orders",
         "schedule": 60,  # run every 1 minute

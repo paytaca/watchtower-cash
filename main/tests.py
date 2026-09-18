@@ -5,13 +5,24 @@ from unittest.mock import patch, MagicMock
 
 import requests as requests_lib
 from cryptography.fernet import Fernet, InvalidToken
+from django.db.models import ProtectedError
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from rest_framework.test import APIClient
 
-from main.models import Recipient
+from main.models import (
+    Recipient,
+    Transaction,
+    Wallet,
+    Address,
+    Token,
+    BlockHeight,
+    WalletHistory,
+)
+from main.tasks import revert_dropped_mempool_transactions
 from main.throttles import WebhookSecretThrottle
 from main.utils.recipient_handler import RecipientHandler, WebhookOwnershipRequired, WebhookSecretRegistrationRequired
+from main.utils.transaction_processing import reverse_dropped_transaction
 from main.utils.webhook import encrypt_webhook_secret, decrypt_webhook_secret, send_webhook
 
 # Fixed Fernet key used across all webhook tests — never use in production
@@ -364,3 +375,210 @@ class TestSendWebhookDecryptionFailure(TestCase):
         resp = send_webhook(r, {'txid': 'abc'})
 
         self.assertEqual(resp.status_code, 599)
+
+
+# ---------------------------------------------------------------------------
+# Reversing dropped (never-confirmed) transactions
+# ---------------------------------------------------------------------------
+
+class DroppedTransactionTestBase(TestCase):
+    """Shared fixtures; cache helpers are stubbed so tests need no Redis."""
+
+    def setUp(self):
+        patchers = [
+            patch('main.utils.transaction_processing.clear_cache_for_spent_transactions'),
+            patch('main.utils.transaction_processing.clear_wallet_balance_cache'),
+            patch('main.utils.transaction_processing.clear_wallet_history_cache'),
+            patch('main.signals.is_bch_address', return_value=True),
+        ]
+        self.cache_mocks = [p.start() for p in patchers]
+        self.addCleanup(lambda: [p.stop() for p in patchers])
+
+        self.token, _ = Token.objects.get_or_create(
+            name='bch', tokenid='', defaults={'token_ticker': 'BCH'}
+        )
+        self.wallet = Wallet.objects.create(
+            wallet_hash='testwallet', wallet_type='bch', version=1
+        )
+        self.addr = Address.objects.create(
+            address='bitcoincash:qinput', wallet=self.wallet, address_path='0/0'
+        )
+        self.addr2 = Address.objects.create(
+            address='bitcoincash:qoutput', wallet=self.wallet, address_path='0/1'
+        )
+
+    def make_txn(self, txid, index=0, address=None, spent=False,
+                 spending_txid='', blockheight=None):
+        return Transaction.objects.create(
+            txid=txid,
+            index=index,
+            address=address or self.addr,
+            spent=spent,
+            spending_txid=spending_txid,
+            blockheight=blockheight,
+            source='test',
+            token=self.token,
+            value=1000,
+        )
+
+
+class TestReverseDroppedTransaction(DroppedTransactionTestBase):
+
+    def test_restores_spent_inputs(self):
+        txn = self.make_txn('utxo_tx', spent=True, spending_txid='dropped_tx')
+
+        reverse_dropped_transaction('dropped_tx')
+
+        txn.refresh_from_db()
+        self.assertFalse(txn.spent)
+        self.assertEqual(txn.spending_txid, '')
+
+    def test_deletes_phantom_outputs(self):
+        self.make_txn('dropped_tx', address=self.addr2)
+
+        reverse_dropped_transaction('dropped_tx')
+
+        self.assertFalse(
+            Transaction.objects.filter(txid='dropped_tx').exists()
+        )
+
+    def test_keeps_confirmed_outputs(self):
+        block = BlockHeight.objects.create(number=100)
+        self.make_txn('dropped_tx', address=self.addr2, blockheight=block)
+
+        reverse_dropped_transaction('dropped_tx')
+
+        self.assertTrue(Transaction.objects.filter(txid='dropped_tx').exists())
+
+    def test_deletes_wallet_history(self):
+        WalletHistory.objects.create(
+            txid='dropped_tx', wallet=self.wallet, record_type='outgoing', amount=1
+        )
+
+        reverse_dropped_transaction('dropped_tx')
+
+        self.assertFalse(WalletHistory.objects.filter(txid='dropped_tx').exists())
+
+    def test_leaves_unrelated_transactions_untouched(self):
+        other = self.make_txn('other_tx', spent=True, spending_txid='some_other')
+
+        reverse_dropped_transaction('dropped_tx')
+
+        other.refresh_from_db()
+        self.assertTrue(other.spent)
+        self.assertEqual(other.spending_txid, 'some_other')
+
+    def test_recurses_into_descendants(self):
+        # dropped_tx output spent by child_tx; child_tx has its own output
+        self.make_txn(
+            'dropped_tx', address=self.addr2, spent=True, spending_txid='child_tx'
+        )
+        self.make_txn('child_tx', address=self.addr2)
+
+        reverse_dropped_transaction('dropped_tx')
+
+        self.assertFalse(Transaction.objects.filter(txid='dropped_tx').exists())
+        self.assertFalse(Transaction.objects.filter(txid='child_tx').exists())
+
+    def test_does_not_reverse_confirmed_child(self):
+        block = BlockHeight.objects.create(number=100)
+        self.make_txn(
+            'dropped_tx', address=self.addr2, spent=True, spending_txid='child_tx'
+        )
+        confirmed_child = self.make_txn('child_tx', address=self.addr2, blockheight=block)
+
+        reverse_dropped_transaction('dropped_tx')
+
+        self.assertTrue(Transaction.objects.filter(id=confirmed_child.id).exists())
+
+    def test_idempotent(self):
+        self.make_txn('utxo_tx', spent=True, spending_txid='dropped_tx')
+        self.make_txn('dropped_tx', address=self.addr2)
+
+        reverse_dropped_transaction('dropped_tx')
+        reverse_dropped_transaction('dropped_tx')
+
+        self.assertFalse(Transaction.objects.filter(txid='dropped_tx').exists())
+
+    @patch.object(Transaction, 'delete', side_effect=ProtectedError('protected', []))
+    def test_protected_output_is_skipped(self, mock_delete):
+        self.make_txn('dropped_tx', address=self.addr2)
+
+        summary = reverse_dropped_transaction('dropped_tx')
+
+        self.assertEqual(summary['deleted_outputs'], 0)
+        self.assertTrue(summary['protected_output_ids'])
+        self.assertTrue(Transaction.objects.filter(txid='dropped_tx').exists())
+
+
+class TestRevertDroppedMempoolTransactions(DroppedTransactionTestBase):
+
+    def setUp(self):
+        super().setUp()
+
+        redis_patcher = patch('main.tasks.REDIS_STORAGE')
+        self.mock_redis = redis_patcher.start()
+        self.addCleanup(redis_patcher.stop)
+        self.mock_redis.zrange.return_value = []
+
+        node_patcher = patch('main.tasks.NODE.BCH.get_transaction')
+        self.mock_get_tx = node_patcher.start()
+        self.addCleanup(node_patcher.stop)
+
+        reverse_patcher = patch('main.tasks.reverse_dropped_transaction')
+        self.mock_reverse = reverse_patcher.start()
+        self.addCleanup(reverse_patcher.stop)
+
+    def run_sweeper(self, batch_size=10):
+        return revert_dropped_mempool_transactions.apply(
+            kwargs={'batch_size': batch_size}
+        ).get()
+
+    def test_reverses_tx_missing_from_node(self):
+        self.make_txn('dropped_tx', address=self.addr2)
+        self.mock_get_tx.return_value = None
+
+        result = self.run_sweeper()
+
+        self.assertIn('dropped_tx', result['reverted'])
+        self.mock_reverse.assert_called_once_with('dropped_tx')
+        self.mock_redis.zrem.assert_any_call('mempool:seen_txids', 'dropped_tx')
+
+    def test_keeps_tx_still_in_mempool(self):
+        self.make_txn('pending_tx', address=self.addr2)
+        self.mock_get_tx.return_value = {'confirmations': 0}
+
+        result = self.run_sweeper()
+
+        self.assertEqual(result['reverted'], [])
+        self.mock_reverse.assert_not_called()
+
+    def test_prunes_confirmed_tx_from_tracking(self):
+        self.make_txn('mined_tx', address=self.addr2)
+        self.mock_get_tx.return_value = {'confirmations': 3}
+        self.mock_redis.zrange.return_value = [b'mined_tx']
+
+        result = self.run_sweeper()
+
+        self.assertEqual(result['reverted'], [])
+        self.mock_reverse.assert_not_called()
+        self.mock_redis.zrem.assert_any_call('mempool:seen_txids', 'mined_tx')
+
+    def test_reverses_tracked_tx_without_db_output_rows(self):
+        # txid only exists in the Redis tracking set (all outputs untracked)
+        self.mock_redis.zrange.return_value = [b'dropped_tx']
+        self.mock_get_tx.return_value = None
+
+        result = self.run_sweeper()
+
+        self.assertIn('dropped_tx', result['reverted'])
+        self.mock_reverse.assert_called_once_with('dropped_tx')
+
+    def test_node_rpc_error_leaves_tx_for_later(self):
+        self.make_txn('dropped_tx', address=self.addr2)
+        self.mock_get_tx.side_effect = Exception('rpc unavailable')
+
+        result = self.run_sweeper()
+
+        self.assertEqual(result['reverted'], [])
+        self.mock_reverse.assert_not_called()
