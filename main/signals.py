@@ -24,7 +24,7 @@ from main.tasks import (
     transaction_post_save_task,
     update_wallet_history_currency,
 )
-from main.utils.cache import clear_wallet_history_cache, clear_wallet_balance_cache
+from main.utils.cache import clear_wallet_history_cache, clear_wallet_balance_cache, scan_keys
 from main.utils.address_validator import is_bch_address
 from main.utils.wallet_activity import activity_kind_for_history
 
@@ -117,7 +117,7 @@ def transaction_post_save(sender, instance=None, created=False, **kwargs):
 
         # delete cached wallet history
         asset_key = category or 'bch'
-        history_cache_keys = cache.keys(f'wallet:history:{wallet_hash}:{asset_key}:*')
+        history_cache_keys = scan_keys(cache, f'wallet:history:{wallet_hash}:{asset_key}:*')
         if history_cache_keys:
             cache.delete(*history_cache_keys)
 
