@@ -3193,8 +3193,8 @@ def process_mempool_transaction_fast(tx_hash, tx_hex=None, immediate=False):
     _process_mempool_transaction(tx_hash, tx_hex, immediate)
 
 
-@shared_task(bind=True, queue='get_utxos', max_retries=3)
-def revert_dropped_mempool_transactions(self, batch_size=200):
+@shared_task(bind=True, queue='query_transaction', max_retries=3)
+def revert_dropped_mempool_transactions(self, batch_size=100):
     """
     Detect mempool transactions that were dropped (neither in the mempool nor
     on-chain) and reverse their effects on the watchtower database.
