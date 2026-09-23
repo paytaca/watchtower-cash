@@ -6,7 +6,7 @@ redis_storage = settings.REDISKV
 
 
 def block_setter(number):
-    if b'PENDING-BLOCKS' not in redis_storage.keys('*'): redis_storage.set('PENDING-BLOCKS', json.dumps([]))
+    if not redis_storage.exists('PENDING-BLOCKS'): redis_storage.set('PENDING-BLOCKS', json.dumps([]))
     
     added = False
 
