@@ -40,7 +40,7 @@ from main.utils.push_notification import (
     send_wallet_history_push_notification,
     send_wallet_history_push_notification_nft
 )
-from main.utils.cache import clear_wallet_history_cache, clear_wallet_balance_cache, clear_cache_for_spent_transactions
+from main.utils.cache import clear_wallet_history_cache, clear_wallet_balance_cache, clear_cache_for_spent_transactions, scan_keys
 from django.db.utils import IntegrityError
 from django.conf import settings
 from django.utils import timezone, dateparse
@@ -844,9 +844,9 @@ def ready_to_accept(self, block_number, txs_count):
 
 @shared_task(bind=True, queue='manage_blocks')
 def manage_blocks(self):
-    if b'READY' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('READY', 1)
-    if b'ACTIVE-BLOCK' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('ACTIVE-BLOCK', '')
-    if b'PENDING-BLOCKS' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('PENDING-BLOCKS', json.dumps([]))
+    if not REDIS_STORAGE.exists('READY'): REDIS_STORAGE.set('READY', 1)
+    if not REDIS_STORAGE.exists('ACTIVE-BLOCK'): REDIS_STORAGE.set('ACTIVE-BLOCK', '')
+    if not REDIS_STORAGE.exists('PENDING-BLOCKS'): REDIS_STORAGE.set('PENDING-BLOCKS', json.dumps([]))
     
     pending_blocks = REDIS_STORAGE.get('PENDING-BLOCKS').decode()
     blocks = json.loads(pending_blocks)
@@ -2403,12 +2403,12 @@ def rescan_utxos(wallet_hash, full=False):
     cache.delete(bch_cache_key)
 
     # delete cached token balance
-    ct_cache_keys = cache.keys(f'wallet:balance:token:{wallet_hash}:*')
+    ct_cache_keys = scan_keys(cache, f'wallet:balance:token:{wallet_hash}:*')
     if ct_cache_keys:
         cache.delete(*ct_cache_keys)
 
     # delete cached wallet history
-    history_cache_keys = cache.keys(f'wallet:history:{wallet_hash}:*')
+    history_cache_keys = scan_keys(cache, f'wallet:history:{wallet_hash}:*')
     if history_cache_keys:
         cache.delete(*history_cache_keys)
 

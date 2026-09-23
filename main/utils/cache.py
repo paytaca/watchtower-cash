@@ -10,6 +10,21 @@ from main.models import Transaction, WalletHistory, Wallet
 from main.utils.address_validator import is_bch_address
 
 
+def scan_keys(cache, pattern, count=1000):
+    """
+    Non-blocking replacement for Redis KEYS using SCAN.
+
+    KEYS is O(N) over the entire keyspace and blocks Redis's single event
+    loop. The Celery broker shares this Redis instance, so a KEYS sweep
+    stalls task delivery on every queue. SCAN iterates incrementally and
+    never blocks other clients.
+
+    Returns a materialized list so callers can truthiness-check the result
+    and splat it into cache.delete() exactly as with cache.keys().
+    """
+    return list(cache.scan_iter(match=pattern, count=count))
+
+
 def clear_transaction_cache(transaction_instance):
     """
     Utility function to clear cache for a transaction.
@@ -52,7 +67,7 @@ def clear_transaction_cache(transaction_instance):
         
         # delete cached wallet history
         asset_key = category or 'bch'
-        history_cache_keys = cache.keys(f'wallet:history:{wallet_hash}:{asset_key}:*')
+        history_cache_keys = scan_keys(cache, f'wallet:history:{wallet_hash}:{asset_key}:*')
         if history_cache_keys:
             cache.delete(*history_cache_keys)
         
@@ -112,12 +127,12 @@ def clear_cache_for_spent_transactions(transaction_queryset):
             cache.delete(ct_cache_key)
         
         # Clear wallet history cache
-        history_cache_keys = cache.keys(f'wallet:history:{wallet_hash}:*')
+        history_cache_keys = scan_keys(cache, f'wallet:history:{wallet_hash}:*')
         if history_cache_keys:
             cache.delete(*history_cache_keys)
-        
+
         # Clear last address index cache since addresses received transactions
-        clear_last_address_index_cache(wallet_hash) 
+        clear_last_address_index_cache(wallet_hash)
 
 
 def clear_wallet_balance_cache(wallet_hash, token_categories=None):
@@ -139,7 +154,7 @@ def clear_wallet_balance_cache(wallet_hash, token_categories=None):
     # Clear token balance cache
     if token_categories is None:
         # Clear all token balance caches for this wallet
-        token_cache_keys = cache.keys(f'wallet:balance:token:{wallet_hash}:*')
+        token_cache_keys = scan_keys(cache, f'wallet:balance:token:{wallet_hash}:*')
         if token_cache_keys:
             cache.delete(*token_cache_keys)
     elif token_categories:
@@ -163,10 +178,10 @@ def clear_wallet_history_cache(wallet_hash, asset_key=None):
     
     if asset_key:
         # Clear cache for specific asset (all pages)
-        history_cache_keys = cache.keys(f'wallet:history:{wallet_hash}:{asset_key}:*')
+        history_cache_keys = scan_keys(cache, f'wallet:history:{wallet_hash}:{asset_key}:*')
     else:
         # Clear all history cache for the wallet (all assets, all pages)
-        history_cache_keys = cache.keys(f'wallet:history:{wallet_hash}:*')
+        history_cache_keys = scan_keys(cache, f'wallet:history:{wallet_hash}:*')
     
     if history_cache_keys:
         cache.delete(*history_cache_keys)
@@ -179,7 +194,7 @@ def clear_pos_wallet_history_cache(wallet_hash, posid):
 
     cache = settings.REDISKV
 
-    pos_history_cache_keys = cache.keys(f'wallet:history:{wallet_hash}:pos:*')
+    pos_history_cache_keys = scan_keys(cache, f'wallet:history:{wallet_hash}:pos:*')
     if not pos_history_cache_keys:
         return
 
@@ -222,27 +237,24 @@ def clear_last_address_index_cache(wallet_hash):
     """
     Clear the last address index cache for a given wallet hash.
     This should be called when addresses are created or updated.
-    
-    Performance Note: Uses Redis KEYS command which can be slow on large datasets.
-    However, this is acceptable because:
-    1. Cache key pattern is highly specific (wallet_hash scoped)
-    2. Typically returns at most 8-16 keys (4 boolean combinations × 2-4 posid variants)
-    3. Called infrequently (only when addresses are added/updated)
-    
+
+    Performance Note: Uses SCAN (via scan_keys) instead of KEYS so the shared
+    Redis event loop is never blocked. Typically matches at most 8-16 keys
+    (4 boolean combinations × 2-4 posid variants).
+
     Future optimization: If this becomes a bottleneck, consider:
-    - Using Redis SCAN instead of KEYS
     - Maintaining a Redis SET of cache keys per wallet for faster lookup
     - Using Redis Hash with HGETALL/HDEL for grouped invalidation
     """
     if not wallet_hash:
         return
-    
+
     cache = settings.REDISKV
-    
+
     # Clear all variations of last address index cache for this wallet
     # The cache key pattern is: wallet:last_address_index:{wallet_hash}:{with_tx}:{exclude_pos}:{posid}
     # This typically matches 8-16 keys: with_tx (True/False) × exclude_pos (True/False) × posid (None + specific IDs)
-    cache_keys = cache.keys(f'wallet:last_address_index:{wallet_hash}:*')
+    cache_keys = scan_keys(cache, f'wallet:last_address_index:{wallet_hash}:*')
     if cache_keys:
         cache.delete(*cache_keys)
 
@@ -385,8 +397,8 @@ def clear_wallet_history_cache_for_txid(wallet_hash, txid):
         for page, page_size in pages_to_clear:
             cache_key = f'wallet:history:{wallet_hash}:all:{page}:{page_size}'
             cache.delete(cache_key)
-            exclude_cache_keys = cache.keys(
-                f'wallet:history:{wallet_hash}:all:{page}:{page_size}:exclude:*'
+            exclude_cache_keys = scan_keys(
+                cache, f'wallet:history:{wallet_hash}:all:{page}:{page_size}:exclude:*'
             )
             if exclude_cache_keys:
                 cache.delete(*exclude_cache_keys)

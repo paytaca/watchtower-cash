@@ -561,7 +561,7 @@ class WalletAdmin(DynamicRawIDMixin, admin.ModelAdmin):
                 wallet_hash = form.cleaned_data['wallet_hash'].strip()
                 
                 try:
-                    from main.utils.cache import clear_wallet_balance_cache, clear_wallet_history_cache, clear_last_active
+                    from main.utils.cache import clear_wallet_balance_cache, clear_wallet_history_cache, clear_last_active, scan_keys
                     from nostr.models import NostrPubkey
                     from django.conf import settings
                     
@@ -575,8 +575,8 @@ class WalletAdmin(DynamicRawIDMixin, admin.ModelAdmin):
                     
                     # Count caches before clearing
                     bch_balance_key = f'wallet:balance:bch:{wallet_hash}'
-                    token_balance_keys = cache.keys(f'wallet:balance:token:{wallet_hash}:*')
-                    history_keys = cache.keys(f'wallet:history:{wallet_hash}:*')
+                    token_balance_keys = scan_keys(cache, f'wallet:balance:token:{wallet_hash}:*')
+                    history_keys = scan_keys(cache, f'wallet:history:{wallet_hash}:*')
                     
                     bch_balance_exists = cache.exists(bch_balance_key)
                     token_balance_count = len(token_balance_keys) if token_balance_keys else 0
@@ -592,8 +592,8 @@ class WalletAdmin(DynamicRawIDMixin, admin.ModelAdmin):
                     
                     # Verify caches were cleared
                     bch_balance_exists_after = cache.exists(bch_balance_key)
-                    token_balance_keys_after = cache.keys(f'wallet:balance:token:{wallet_hash}:*')
-                    history_keys_after = cache.keys(f'wallet:history:{wallet_hash}:*')
+                    token_balance_keys_after = scan_keys(cache, f'wallet:balance:token:{wallet_hash}:*')
+                    history_keys_after = scan_keys(cache, f'wallet:history:{wallet_hash}:*')
                     
                     token_balance_count_after = len(token_balance_keys_after) if token_balance_keys_after else 0
                     history_count_after = len(history_keys_after) if history_keys_after else 0
