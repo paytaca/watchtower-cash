@@ -40,7 +40,7 @@ from main.utils.push_notification import (
     send_wallet_history_push_notification,
     send_wallet_history_push_notification_nft
 )
-from main.utils.cache import clear_wallet_history_cache, clear_wallet_balance_cache, clear_cache_for_spent_transactions, scan_keys
+from main.utils.cache import clear_wallet_history_cache, clear_wallet_balance_cache, clear_cache_for_spent_transactions, clear_transaction_cache, scan_keys
 from django.db.utils import IntegrityError
 from django.conf import settings
 from django.utils import timezone, dateparse
@@ -979,11 +979,21 @@ def get_bch_utxos(self, address):
             if transaction_check.exists():
                 # Update existing transaction: mark as unspent, update value and blockheight
                 _txn = transaction_check.first()
-                if _txn.wallet == _txn.address.wallet:
-                    transaction_check.update(spent=False, value=value, blockheight=block)
-                else:
+                wallet_mismatch = _txn.wallet_id != _txn.address.wallet_id
+                changed = (
+                    _txn.spent
+                    or _txn.value != value
+                    or _txn.blockheight_id != block.id
+                    or wallet_mismatch
+                )
+                if wallet_mismatch:
                     transaction_check.update(wallet=_txn.address.wallet, spent=False, value=value, blockheight=block)
-                
+                else:
+                    transaction_check.update(spent=False, value=value, blockheight=block)
+                if changed:
+                    # .update() bypasses post_save signals; invalidate caches explicitly
+                    clear_transaction_cache(_txn)
+
                 for obj in transaction_check:
                     saved_utxo_ids.append(obj.id)
             else:
@@ -1131,11 +1141,16 @@ def get_slp_utxos(self, address):
                     # Also, Mark as unspent, just in case it's already marked spent
                     # and also update the blockheight
                     _txn = transaction_obj.first()
-                    if _txn.wallet == _txn.address.wallet:
-                        transaction_obj.update(spent=False, blockheight=block)
-                    else:
+                    wallet_mismatch = _txn.wallet_id != _txn.address.wallet_id
+                    changed = _txn.spent or _txn.blockheight_id != block.id or wallet_mismatch
+                    if wallet_mismatch:
                         transaction_obj.update(wallet=_txn.address.wallet, spent=False, blockheight=block)
-                    
+                    else:
+                        transaction_obj.update(spent=False, blockheight=block)
+                    if changed:
+                        # .update() bypasses post_save signals; invalidate caches explicitly
+                        clear_transaction_cache(_txn)
+
                     for obj in transaction_obj:
                         saved_utxo_ids.append(obj.id)
         
