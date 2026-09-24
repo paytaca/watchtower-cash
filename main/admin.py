@@ -13,7 +13,8 @@ from main.tasks import (
     get_token_meta_data,
     get_bch_utxos,
     get_slp_utxos,
-    parse_tx_wallet_histories
+    parse_tx_wallet_histories,
+    rescan_address_utxos
 )
 from main.management.commands.tx_fiat_amounts import get_tx_with_fiat_amounts
 
@@ -496,6 +497,14 @@ class AddressAdmin(DynamicRawIDMixin, admin.ModelAdmin):
         'wallet__wallet_hash',
         'address'
     ]
+
+    actions = [ 'scan_utxos' ]
+
+    def scan_utxos(self, request, queryset):
+        for address in queryset:
+            rescan_address_utxos.delay(address.address)
+        self.message_user(request, f'Queued UTXO scan for {queryset.count()} address(es).')
+    scan_utxos.short_description = 'Scan UTXOs'
 
 
 class LastBalanceCheckFilter(DateFieldListFilter):

@@ -30,7 +30,7 @@ from main.models import (
     Token,
     CashNonFungibleToken,
 )
-from main.tasks import rescan_utxos
+from main.tasks import rescan_utxos, rescan_address_utxos
 from main.throttles import ScanUtxoThrottle
 from main.utils.address_validator import *
 from main.utils.address_converter import *
@@ -376,4 +376,29 @@ class ScanUtxos(APIView):
             return Response({ "task_id": task.id }, status = status.HTTP_202_ACCEPTED)
 
         rescan_utxos(wallet.wallet_hash, full=True)
+        return Response(data={'success': True}, status=status.HTTP_200_OK)
+
+
+class ScanAddressUtxos(APIView):
+    throttle_classes = [ScanUtxoThrottle]
+
+    @swagger_auto_schema(
+        manual_parameters=[
+            openapi.Parameter(name="background", type=openapi.TYPE_BOOLEAN, in_=openapi.IN_QUERY, default=False),
+        ]
+    )
+    def get(self, request, *args, **kwargs):
+        address = kwargs.get('address', '')
+        background = request.query_params.get("background", None)
+        if isinstance(background, str) and background.lower() == "false":
+            background = False
+
+        if not (is_bch_address(address) or is_token_address(address) or is_slp_address(address)):
+            return Response(data={'error': 'invalid_address'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if background:
+            task = rescan_address_utxos.delay(address)
+            return Response({ "task_id": task.id }, status=status.HTTP_202_ACCEPTED)
+
+        rescan_address_utxos(address)
         return Response(data={'success': True}, status=status.HTTP_200_OK)

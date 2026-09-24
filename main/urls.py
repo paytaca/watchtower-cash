@@ -214,6 +214,11 @@ main_urls += [
         name="scan-utxos",
     ),
     re_path(
+        r"^utxo/address/(?P<address>[\w+:]+)/scan/$",
+        views.ScanAddressUtxos.as_view(),
+        name="scan-address-utxos",
+    ),
+    re_path(
         r"^utxo/wallet/(?P<wallethash>[\w+:]+)/$",
         views.UTXO.as_view(),
         name="wallet-utxo",

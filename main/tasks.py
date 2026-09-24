@@ -2471,6 +2471,42 @@ def rescan_utxos(wallet_hash, full=False):
         raise exc
 
 
+@shared_task(queue='rescan_utxos')
+def rescan_address_utxos(address):
+    scan_address = address
+    if is_token_address(address):
+        scan_address = bch_address_converter(address, to_token_addr=False)
+
+    cache = settings.REDISKV
+
+    # delete cached address balance
+    cache.delete(f'address:balance:bch:{scan_address}:False')
+    cache.delete(f'address:balance:bch:{scan_address}:True')
+
+    # delete cached wallet data if the address is linked to a wallet
+    address_obj = Address.objects.filter(address=scan_address).select_related('wallet').first()
+    if address_obj and address_obj.wallet:
+        wallet_hash = address_obj.wallet.wallet_hash
+
+        # delete cached bch balance
+        cache.delete(f'wallet:balance:bch:{wallet_hash}')
+
+        # delete cached token balance
+        ct_cache_keys = scan_keys(cache, f'wallet:balance:token:{wallet_hash}:*')
+        if ct_cache_keys:
+            cache.delete(*ct_cache_keys)
+
+        # delete cached wallet history
+        history_cache_keys = scan_keys(cache, f'wallet:history:{wallet_hash}:*')
+        if history_cache_keys:
+            cache.delete(*history_cache_keys)
+
+    if is_slp_address(scan_address):
+        get_slp_utxos(scan_address)
+    else:
+        get_bch_utxos(scan_address)
+
+
 def rebuild_address_wallet_history(address, tx_count_limit=30, ignore_txids=[]):
     data = get_bch_transactions(address, chipnet=settings.BCH_NETWORK == 'chipnet')
     if isinstance(data, list) and tx_count_limit:

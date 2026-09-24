@@ -9,7 +9,7 @@ class ScanUtxoThrottle(throttling.BaseThrottle):
     cache = settings.REDISKV
 
     def get_ident(self, request, view):
-        return view.kwargs.get("wallethash")
+        return view.kwargs.get("wallethash") or view.kwargs.get("address")
 
     def get_cache_key(self, request, view):
         identity = self.get_ident(request, view)
