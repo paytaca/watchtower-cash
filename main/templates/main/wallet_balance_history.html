@@ -94,7 +94,7 @@
           <div class="panel-heading"><h3 class="panel-title">{{ wallet_data.fiat_currency }} Value</h3></div>
           <div class="panel-body">
             {% if wallet_data.bch_fiat_balance is not None %}
-            <h4 style="margin: 0;">{{ wallet_data.fiat_currency }} {{ wallet_data.bch_fiat_balance|floatformat:2 }}</h4>
+            <h4 style="margin: 0;">{{ wallet_data.fiat_currency }} {{ wallet_data.bch_fiat_balance_display|default:wallet_data.bch_fiat_balance }}</h4>
             {% else %}<h4 style="margin: 0;">-</h4>{% endif %}
           </div>
         </div>
@@ -155,7 +155,7 @@
             <td>{{ record.display_timestamp|default:record.tx_timestamp|default:record.date_created }}</td>
             {% if wallet_data.has_fiat_prices %}
             <td style="text-align: right;">
-              {% if record.fiat_value is not None %}{{ wallet_data.fiat_currency }} {{ record.fiat_value|floatformat:2 }}{% else %}-{% endif %}
+              {% if record.fiat_value is not None %}{{ wallet_data.fiat_currency }} {{ record.fiat_value_display|default:record.fiat_value }}{% else %}-{% endif %}
             </td>
             {% endif %}
           </tr>

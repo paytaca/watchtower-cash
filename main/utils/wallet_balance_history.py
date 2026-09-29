@@ -172,7 +172,9 @@ def get_wallet_balance_history(wallet_hash, fiat_currency='PHP', page=1,
             current_fiat_price = float(current_price_log.price_value)
             wallet_data['current_fiat_price'] = current_fiat_price
             wallet_data['bch_fiat_balance'] = round(bch_balance * current_fiat_price, 2)
+            wallet_data['bch_fiat_balance_display'] = format_amount(round(bch_balance * current_fiat_price, 2), 2)
             wallet_data['bch_fiat_spendable'] = round(spendable * current_fiat_price, 2)
+            wallet_data['bch_fiat_spendable_display'] = format_amount(round(spendable * current_fiat_price, 2), 2)
         else:
             wallet_data['current_fiat_price'] = None
             wallet_data['bch_fiat_balance'] = None
@@ -280,8 +282,10 @@ def get_wallet_balance_history(wallet_hash, fiat_currency='PHP', page=1,
             'token_name': token_name.upper() if token_name else None,
             'cashtoken_category': record.cashtoken_ft.category if record.cashtoken_ft else None,
             'usd_price': float(record.usd_price) if record.usd_price else None,
+            'usd_price_display': format_amount(float(record.usd_price), 2) if record.usd_price else None,
             'fiat_price': float(record_fiat_price) if record_fiat_price else None,
             'fiat_value': round(float(record_fiat_price) * record.amount, 2) if record_fiat_price else None,
+            'fiat_value_display': format_amount(round(float(record_fiat_price) * record.amount, 2), 2) if record_fiat_price else None,
         })
 
     wallet_data['history'] = history_list

@@ -124,11 +124,11 @@
                     <div style="margin-top: 10px; font-size: 1em;">
                         <strong>Fiat Value ({{ wallet_data.fiat_currency }}):</strong>
                         <span style="color: #1976d2; font-weight: bold;">
-                            {{ wallet_data.fiat_currency }} {{ wallet_data.bch_fiat_balance|floatformat:2 }}
+                            {{ wallet_data.fiat_currency }} {{ wallet_data.bch_fiat_balance_display|default:wallet_data.bch_fiat_balance }}
                         </span>
                         {% if wallet_data.bch_fiat_spendable is not None %}
                         <span style="color: #666; font-size: 0.9em; margin-left: 5px;">
-                            (Spendable: {{ wallet_data.fiat_currency }} {{ wallet_data.bch_fiat_spendable|floatformat:2 }})
+                            (Spendable: {{ wallet_data.fiat_currency }} {{ wallet_data.bch_fiat_spendable_display|default:wallet_data.bch_fiat_spendable }})
                         </span>
                         {% endif %}
                     </div>
@@ -229,7 +229,7 @@
                             {% if wallet_data.has_usd_prices %}
                             <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">
                                 {% if record.usd_price %}
-                                    ${{ record.usd_price|floatformat:2 }}
+                                    ${{ record.usd_price_display|default:record.usd_price }}
                                 {% else %}
                                     -
                                 {% endif %}
@@ -238,7 +238,7 @@
                             {% if wallet_data.has_fiat_prices %}
                             <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">
                                 {% if record.fiat_value is not None %}
-                                    {{ wallet_data.fiat_currency }} {{ record.fiat_value|floatformat:2 }}
+                                    {{ wallet_data.fiat_currency }} {{ record.fiat_value_display|default:record.fiat_value }}
                                 {% else %}
                                     -
                                 {% endif %}
