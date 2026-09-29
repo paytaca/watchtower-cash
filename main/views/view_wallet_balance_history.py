@@ -1,7 +1,8 @@
 from django import forms
 from django.shortcuts import render
 
-from main.utils.wallet_balance_history import get_wallet_balance_history, DEFAULT_PER_PAGE
+from main.utils.wallet_balance_history import (
+    get_wallet_balance_history, DEFAULT_PER_PAGE, DEFAULT_TIMEZONE)
 
 
 FIAT_CURRENCY_CHOICES = [
@@ -19,6 +20,20 @@ FIAT_CURRENCY_CHOICES = [
     ('PHP', 'PHP - Philippine Peso'),
 ]
 
+TIMEZONE_CHOICES = [
+    ('Asia/Manila', 'Asia/Manila (PHT)'),
+    ('UTC', 'UTC'),
+    ('Asia/Singapore', 'Asia/Singapore'),
+    ('Asia/Hong_Kong', 'Asia/Hong Kong'),
+    ('Asia/Tokyo', 'Asia/Tokyo'),
+    ('Europe/London', 'Europe/London'),
+    ('Europe/Berlin', 'Europe/Berlin'),
+    ('America/New_York', 'America/New York'),
+    ('America/Chicago', 'America/Chicago'),
+    ('America/Los_Angeles', 'America/Los Angeles'),
+    ('Australia/Sydney', 'Australia/Sydney'),
+]
+
 
 class WalletBalanceHistoryForm(forms.Form):
     wallet_hash = forms.CharField(max_length=70, required=True)
@@ -27,11 +42,17 @@ class WalletBalanceHistoryForm(forms.Form):
         initial='PHP',
         required=False,
     )
+    date_timezone = forms.ChoiceField(
+        choices=TIMEZONE_CHOICES,
+        initial=DEFAULT_TIMEZONE,
+        required=False,
+    )
     page = forms.IntegerField(required=False, min_value=1)
 
 
 def wallet_balance_history_view(request):
-    form = WalletBalanceHistoryForm(initial={'fiat_currency': 'PHP'})
+    form = WalletBalanceHistoryForm(
+        initial={'fiat_currency': 'PHP', 'date_timezone': DEFAULT_TIMEZONE})
     wallet_data = None
     error = None
     submitted = False
@@ -42,6 +63,7 @@ def wallet_balance_history_view(request):
             submitted = True
             wallet_hash = form.cleaned_data['wallet_hash'].strip()
             fiat_currency = form.cleaned_data.get('fiat_currency') or 'PHP'
+            date_timezone = form.cleaned_data.get('date_timezone') or DEFAULT_TIMEZONE
             page = form.cleaned_data.get('page') or 1
 
             wallet_data, error = get_wallet_balance_history(
@@ -49,6 +71,7 @@ def wallet_balance_history_view(request):
                 fiat_currency=fiat_currency,
                 page=page,
                 per_page=DEFAULT_PER_PAGE,
+                date_timezone=date_timezone,
             )
 
     context = {
@@ -57,5 +80,6 @@ def wallet_balance_history_view(request):
         'error': error,
         'submitted': submitted,
         'fiat_choices': FIAT_CURRENCY_CHOICES,
+        'timezone_choices': TIMEZONE_CHOICES,
     }
     return render(request, 'main/wallet_balance_history.html', context)

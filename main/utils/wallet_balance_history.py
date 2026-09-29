@@ -1,4 +1,7 @@
 import logging
+from decimal import Decimal
+
+import pytz
 
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.db.models import Q, Sum, Max
@@ -11,6 +14,50 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_PER_PAGE = 20
 MAX_PER_PAGE = 100
+DEFAULT_TIMEZONE = 'Asia/Manila'
+
+
+def format_amount(amount, decimals=8):
+    """Format an amount with thousands separators and fixed decimals.
+
+    Truncates (does not round) to `decimals` places, e.g.
+    1000.84 with 8 decimals -> '1,000.84000000'.
+    """
+    if amount is None:
+        return None
+    decimals = max(int(decimals or 0), 0)
+    try:
+        quantized = Decimal(str(amount)).quantize(
+            Decimal(1).scaleb(-decimals), rounding='ROUND_DOWN')
+    except Exception:
+        return str(amount)
+    return '{:,.{decimals}f}'.format(quantized, decimals=decimals)
+
+
+def convert_to_timezone(dt, tz_name):
+    """Convert a datetime to the named timezone; None-safe.
+
+    Naive datetimes are assumed to be UTC.
+    """
+    if not dt:
+        return None
+    try:
+        tz = pytz.timezone(tz_name)
+    except (pytz.UnknownTimeZoneError, AttributeError, TypeError):
+        return dt
+    if timezone.is_naive(dt):
+        dt = timezone.make_aware(dt, pytz.utc)
+    return dt.astimezone(tz)
+
+
+def format_timestamp(dt, tz_name=None, fmt='%Y-%m-%d %H:%M:%S %Z'):
+    """Render a datetime in the requested timezone as a display string."""
+    if not dt:
+        return None
+    converted = convert_to_timezone(dt, tz_name)
+    if converted is None:
+        return None
+    return converted.strftime(fmt)
 
 
 def generate_reference_id(txid):
@@ -49,7 +96,8 @@ def _relative_time(dt):
     return 'just now'
 
 
-def get_wallet_balance_history(wallet_hash, fiat_currency='PHP', page=1, per_page=DEFAULT_PER_PAGE):
+def get_wallet_balance_history(wallet_hash, fiat_currency='PHP', page=1,
+                               per_page=DEFAULT_PER_PAGE, date_timezone=DEFAULT_TIMEZONE):
     """Build wallet balance + paginated history data.
 
     Returns (wallet_data, error). On error, wallet_data is None and error
@@ -72,6 +120,9 @@ def get_wallet_balance_history(wallet_hash, fiat_currency='PHP', page=1, per_pag
         'last_balance_check_relative': _relative_time(wallet.last_balance_check),
         'last_utxo_scan_succeeded': wallet.last_utxo_scan_succeeded,
         'fiat_currency': fiat_currency,
+        'date_timezone': date_timezone,
+        'date_created_display': format_timestamp(wallet.date_created, date_timezone),
+        'last_balance_check_display': format_timestamp(wallet.last_balance_check, date_timezone),
     }
 
     # Get latest subscribed address pair
@@ -152,8 +203,9 @@ def get_wallet_balance_history(wallet_hash, fiat_currency='PHP', page=1, per_pag
             token_balances.append({
                 'category': category,
                 'balance': balance,
+                'balance_display': format_amount(balance, decimals),
                 'name': data['info']['name'] if data['info'] else 'Unknown',
-                'symbol': data['info']['symbol'] if data['info'] else 'N/A',
+                'symbol': (data['info']['symbol'] if data['info'] else 'N/A').upper(),
                 'decimals': decimals,
             })
 
@@ -189,16 +241,43 @@ def get_wallet_balance_history(wallet_hash, fiat_currency='PHP', page=1, per_pag
         elif fiat_currency == 'USD' and record.usd_price:
             record_fiat_price = float(record.usd_price)
 
+        # Determine asset label (uppercase ticker) and display decimals.
+        # BCH records store amounts in BCH (8 decimals); CashToken records
+        # store amounts in base units, divided by 10^decimals.
+        if record.cashtoken_ft:
+            info = record.cashtoken_ft.info
+            token_name = (info.symbol or info.name or 'N/A') if info else 'N/A'
+            decimals = info.decimals if (info and info.decimals is not None) else 0
+            display_amount = record.amount / (10 ** decimals)
+        elif record.cashtoken_nft:
+            info = record.cashtoken_nft.info
+            token_name = (info.symbol or info.name or 'N/A') if info else 'N/A'
+            decimals = 0
+            display_amount = record.amount
+        elif record.token:
+            token_name = record.token.token_ticker or record.token.name or 'bch'
+            decimals = record.token.decimals if record.token.decimals is not None else 8
+            display_amount = record.amount
+        else:
+            token_name = 'BCH'
+            decimals = 8
+            display_amount = record.amount
+
+        display_timestamp = format_timestamp(record.tx_timestamp or record.date_created, date_timezone)
+
         history_list.append({
             'id': record.id,
             'txid': record.txid,
             'reference_id': generate_reference_id(record.txid),
             'record_type': record.record_type,
             'amount': record.amount,
+            'display_amount': format_amount(display_amount, decimals),
+            'decimals': decimals,
             'tx_fee': record.tx_fee,
             'tx_timestamp': record.tx_timestamp,
             'date_created': record.date_created,
-            'token_name': record.token.name if record.token else None,
+            'display_timestamp': display_timestamp,
+            'token_name': token_name.upper() if token_name else None,
             'cashtoken_category': record.cashtoken_ft.category if record.cashtoken_ft else None,
             'usd_price': float(record.usd_price) if record.usd_price else None,
             'fiat_price': float(record_fiat_price) if record_fiat_price else None,

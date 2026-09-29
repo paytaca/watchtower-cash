@@ -24,6 +24,16 @@
         </div>
       </div>
       <div class="form-group">
+        <label for="dateTimezone" class="col-sm-2 control-label">Date Timezone</label>
+        <div class="col-sm-4">
+          <select class="form-control" id="dateTimezone" name="date_timezone">
+            {% for choice in form.date_timezone.field.choices %}
+            <option value="{{ choice.0 }}" {% if choice.0 == form.date_timezone.value %}selected{% endif %}>{{ choice.1 }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
         <div class="col-sm-offset-2 col-sm-6">
           <button type="submit" class="btn btn-primary">
             <span class="glyphicon glyphicon-search"></span> View Wallet
@@ -44,8 +54,8 @@
           <tr><td><strong>Wallet Hash</strong></td><td style="font-family: monospace;">{{ wallet_data.wallet_hash }}</td></tr>
           <tr><td><strong>Type</strong></td><td>{{ wallet_data.wallet_type }}</td></tr>
           {% if wallet_data.project %}<tr><td><strong>Project</strong></td><td>{{ wallet_data.project }}</td></tr>{% endif %}
-          <tr><td><strong>Created</strong></td><td>{{ wallet_data.date_created }}</td></tr>
-          <tr><td><strong>Last Balance Check</strong></td><td>{{ wallet_data.last_balance_check }} {% if wallet_data.last_balance_check_relative %}({{ wallet_data.last_balance_check_relative }}){% endif %}</td></tr>
+          <tr><td><strong>Created</strong></td><td>{{ wallet_data.date_created_display|default:wallet_data.date_created }} {% if wallet_data.date_timezone %}<span class="text-muted">({{ wallet_data.date_timezone }})</span>{% endif %}</td></tr>
+          <tr><td><strong>Last Balance Check</strong></td><td>{{ wallet_data.last_balance_check_display|default:wallet_data.last_balance_check }} {% if wallet_data.last_balance_check_relative %}({{ wallet_data.last_balance_check_relative }}){% endif %}</td></tr>
           {% if wallet_data.latest_address_pair %}
           <tr>
             <td><strong>Latest Addresses</strong></td>
@@ -103,7 +113,7 @@
             <tr>
               <td>{{ token.name }}</td>
               <td>{{ token.symbol }}</td>
-              <td style="text-align: right; font-weight: bold;">{{ token.balance|floatformat:token.decimals }}</td>
+              <td style="text-align: right; font-weight: bold;">{{ token.balance_display|default:token.balance }}</td>
               <td style="font-family: monospace; font-size: 0.85em;">{{ token.category|truncatechars:20 }}</td>
             </tr>
             {% endfor %}
@@ -138,11 +148,11 @@
               <a href="https://bchexplorer.info/tx/{{ record.txid }}" target="_blank" title="{{ record.txid }}">{{ record.txid|truncatechars:20 }}</a>
             </td>
             <td class="{% if record.record_type == 'incoming' %}text-success{% else %}text-danger{% endif %}" style="font-weight: bold;">{{ record.record_type|upper }}</td>
-            <td style="text-align: right; font-weight: bold;">{{ record.amount|floatformat:8 }}</td>
+            <td style="text-align: right; font-weight: bold;">{{ record.display_amount|default:record.amount }}</td>
             <td>
-              {% if record.cashtoken_category %}{{ record.cashtoken_category|truncatechars:15 }}{% elif record.token_name %}{{ record.token_name }}{% else %}BCH{% endif %}
+              {% if record.cashtoken_category %}<span title="{{ record.cashtoken_category }}">{{ record.token_name|default:"N/A" }}</span>{% elif record.token_name %}{{ record.token_name }}{% else %}BCH{% endif %}
             </td>
-            <td>{{ record.tx_timestamp|default:record.date_created }}</td>
+            <td>{{ record.display_timestamp|default:record.tx_timestamp|default:record.date_created }}</td>
             {% if wallet_data.has_fiat_prices %}
             <td style="text-align: right;">
               {% if record.fiat_value is not None %}{{ wallet_data.fiat_currency }} {{ record.fiat_value|floatformat:2 }}{% else %}-{% endif %}
@@ -158,7 +168,7 @@
     <nav>
       <ul class="pagination">
         {% if wallet_data.pagination.has_previous %}
-        <li><a href="?wallet_hash={{ form.wallet_hash.value|urlencode }}&amp;fiat_currency={{ wallet_data.fiat_currency }}&amp;page={{ wallet_data.pagination.previous_page }}">&laquo;</a></li>
+        <li><a href="?wallet_hash={{ form.wallet_hash.value|urlencode }}&amp;fiat_currency={{ wallet_data.fiat_currency }}&amp;date_timezone={{ wallet_data.date_timezone|urlencode }}&amp;page={{ wallet_data.pagination.previous_page }}">&laquo;</a></li>
         {% else %}
         <li class="disabled"><span>&laquo;</span></li>
         {% endif %}
@@ -169,12 +179,12 @@
           {% elif p == wallet_data.pagination.page %}
             <li class="active"><span>{{ p }}</span></li>
           {% else %}
-            <li><a href="?wallet_hash={{ form.wallet_hash.value|urlencode }}&amp;fiat_currency={{ wallet_data.fiat_currency }}&amp;page={{ p }}">{{ p }}</a></li>
+            <li><a href="?wallet_hash={{ form.wallet_hash.value|urlencode }}&amp;fiat_currency={{ wallet_data.fiat_currency }}&amp;date_timezone={{ wallet_data.date_timezone|urlencode }}&amp;page={{ p }}">{{ p }}</a></li>
           {% endif %}
         {% endfor %}
 
         {% if wallet_data.pagination.has_next %}
-        <li><a href="?wallet_hash={{ form.wallet_hash.value|urlencode }}&amp;fiat_currency={{ wallet_data.fiat_currency }}&amp;page={{ wallet_data.pagination.next_page }}">&raquo;</a></li>
+        <li><a href="?wallet_hash={{ form.wallet_hash.value|urlencode }}&amp;fiat_currency={{ wallet_data.fiat_currency }}&amp;date_timezone={{ wallet_data.date_timezone|urlencode }}&amp;page={{ wallet_data.pagination.next_page }}">&raquo;</a></li>
         {% else %}
         <li class="disabled"><span>&raquo;</span></li>
         {% endif %}

@@ -73,12 +73,13 @@
             {% endif %}
             
             <div class="form-row">
-                <strong>Date Created:</strong> {{ wallet_data.date_created }}
+                <strong>Date Created:</strong> {{ wallet_data.date_created_display|default:wallet_data.date_created }}
+                {% if wallet_data.date_timezone %}<span style="color: #666; font-size: 0.9em;">({{ wallet_data.date_timezone }})</span>{% endif %}
             </div>
             
             {% if wallet_data.last_balance_check %}
             <div class="form-row">
-                <strong>Last Balance Check:</strong> {{ wallet_data.last_balance_check }}
+                <strong>Last Balance Check:</strong> {{ wallet_data.last_balance_check_display|default:wallet_data.last_balance_check }}
                 {% if wallet_data.last_balance_check_relative %}
                 <span style="color: #666; font-size: 0.9em;">({{ wallet_data.last_balance_check_relative }})</span>
                 {% endif %}
@@ -158,7 +159,7 @@
                             <td style="padding: 8px; border-bottom: 1px solid #ddd;">{{ token.category|truncatechars:20 }}</td>
                             <td style="padding: 8px; border-bottom: 1px solid #ddd;">{{ token.name }}</td>
                             <td style="padding: 8px; border-bottom: 1px solid #ddd;">{{ token.symbol }}</td>
-                            <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right; font-weight: bold;">{{ token.balance|floatformat:token.decimals }}</td>
+                            <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right; font-weight: bold;">{{ token.balance_display|default:token.balance }}</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -208,11 +209,11 @@
                                 </span>
                             </td>
                             <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right; font-weight: bold;">
-                                {{ record.amount|floatformat:8 }}
+                                {{ record.display_amount|default:record.amount }}
                             </td>
                             <td style="padding: 8px; border-bottom: 1px solid #ddd;">
                                 {% if record.cashtoken_category %}
-                                    {{ record.cashtoken_category|truncatechars:15 }}
+                                    <span title="{{ record.cashtoken_category }}">{{ record.token_name|default:"N/A" }}</span>
                                 {% elif record.token_name %}
                                     {{ record.token_name }}
                                 {% else %}
@@ -220,10 +221,9 @@
                                 {% endif %}
                             </td>
                             <td style="padding: 8px; border-bottom: 1px solid #ddd;">
-                                {% if record.tx_timestamp %}
-                                    {{ record.tx_timestamp }}
-                                {% else %}
-                                    {{ record.date_created }}
+                                {{ record.display_timestamp|default:record.tx_timestamp|default:record.date_created }}
+                                {% if wallet_data.date_timezone %}
+                                <div style="color: #999; font-size: 0.85em;">{{ wallet_data.date_timezone }}</div>
                                 {% endif %}
                             </td>
                             {% if wallet_data.has_usd_prices %}
@@ -256,6 +256,7 @@
                         <input type="hidden" name="wallet_hash" value="{{ form.wallet_hash.value|default:'' }}">
                         <input type="hidden" name="history_limit" value="{{ wallet_data.pagination.per_page }}">
                         <input type="hidden" name="fiat_currency" value="{{ wallet_data.fiat_currency }}">
+                        <input type="hidden" name="date_timezone" value="{{ wallet_data.date_timezone }}">
                         <input type="hidden" name="page" value="{{ wallet_data.pagination.previous_page }}">
                         <button type="submit" class="button">&laquo; Prev</button>
                     </form>
@@ -273,6 +274,7 @@
                             <input type="hidden" name="wallet_hash" value="{{ form.wallet_hash.value|default:'' }}">
                             <input type="hidden" name="history_limit" value="{{ wallet_data.pagination.per_page }}">
                             <input type="hidden" name="fiat_currency" value="{{ wallet_data.fiat_currency }}">
+                        <input type="hidden" name="date_timezone" value="{{ wallet_data.date_timezone }}">
                             <input type="hidden" name="page" value="{{ p }}">
                             <button type="submit" class="button">{{ p }}</button>
                         </form>
@@ -284,6 +286,7 @@
                         <input type="hidden" name="wallet_hash" value="{{ form.wallet_hash.value|default:'' }}">
                         <input type="hidden" name="history_limit" value="{{ wallet_data.pagination.per_page }}">
                         <input type="hidden" name="fiat_currency" value="{{ wallet_data.fiat_currency }}">
+                        <input type="hidden" name="date_timezone" value="{{ wallet_data.date_timezone }}">
                         <input type="hidden" name="page" value="{{ wallet_data.pagination.next_page }}">
                         <button type="submit" class="button">Next &raquo;</button>
                     </form>

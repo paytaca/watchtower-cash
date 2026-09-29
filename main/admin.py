@@ -17,6 +17,7 @@ from main.tasks import (
     rescan_address_utxos
 )
 from main.management.commands.tx_fiat_amounts import get_tx_with_fiat_amounts
+from main.utils.wallet_balance_history import DEFAULT_TIMEZONE
 
 from dynamic_raw_id.admin import DynamicRawIDMixin
 from django.utils.html import format_html, mark_safe
@@ -129,6 +130,20 @@ FIAT_CURRENCY_CHOICES = [
     ('PHP', 'PHP - Philippine Peso'),
 ]
 
+TIMEZONE_CHOICES = [
+    ('Asia/Manila', 'Asia/Manila (PHT)'),
+    ('UTC', 'UTC'),
+    ('Asia/Singapore', 'Asia/Singapore'),
+    ('Asia/Hong_Kong', 'Asia/Hong Kong'),
+    ('Asia/Tokyo', 'Asia/Tokyo'),
+    ('Europe/London', 'Europe/London'),
+    ('Europe/Berlin', 'Europe/Berlin'),
+    ('America/New_York', 'America/New York'),
+    ('America/Chicago', 'America/Chicago'),
+    ('America/Los_Angeles', 'America/Los Angeles'),
+    ('Australia/Sydney', 'Australia/Sydney'),
+]
+
 class ViewWalletBalanceHistoryForm(forms.Form):
     wallet_hash = forms.CharField(
         label="Wallet Hash",
@@ -149,6 +164,13 @@ class ViewWalletBalanceHistoryForm(forms.Form):
         choices=FIAT_CURRENCY_CHOICES,
         initial='PHP',
         help_text="Select fiat currency for conversion",
+        required=True
+    )
+    date_timezone = forms.ChoiceField(
+        label="Date Timezone",
+        choices=TIMEZONE_CHOICES,
+        initial=DEFAULT_TIMEZONE,
+        help_text="Timezone used to display date/time values",
         required=True
     )
 
@@ -636,9 +658,9 @@ class WalletAdmin(DynamicRawIDMixin, admin.ModelAdmin):
         return render(request, 'admin/main/clear_wallet_caches.html', context)
 
     def view_wallet_balance_history_view(self, request):
-        from main.utils.wallet_balance_history import get_wallet_balance_history
+        from main.utils.wallet_balance_history import get_wallet_balance_history, DEFAULT_TIMEZONE
 
-        form = ViewWalletBalanceHistoryForm()
+        form = ViewWalletBalanceHistoryForm(initial={'date_timezone': DEFAULT_TIMEZONE})
         wallet_data = None
         error = None
 
@@ -648,6 +670,7 @@ class WalletAdmin(DynamicRawIDMixin, admin.ModelAdmin):
                 wallet_hash = form.cleaned_data['wallet_hash'].strip()
                 history_limit = form.cleaned_data['history_limit']
                 fiat_currency = form.cleaned_data.get('fiat_currency', 'PHP')
+                date_timezone = form.cleaned_data.get('date_timezone', DEFAULT_TIMEZONE)
 
                 try:
                     try:
@@ -659,6 +682,7 @@ class WalletAdmin(DynamicRawIDMixin, admin.ModelAdmin):
                         fiat_currency=fiat_currency,
                         page=page,
                         per_page=history_limit,
+                        date_timezone=date_timezone,
                     )
                     if error:
                         messages.error(request, f'Error viewing wallet: {error}')
