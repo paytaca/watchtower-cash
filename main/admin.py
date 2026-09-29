@@ -636,6 +636,8 @@ class WalletAdmin(DynamicRawIDMixin, admin.ModelAdmin):
         return render(request, 'admin/main/clear_wallet_caches.html', context)
 
     def view_wallet_balance_history_view(self, request):
+        from main.utils.wallet_balance_history import get_wallet_balance_history
+
         form = ViewWalletBalanceHistoryForm()
         wallet_data = None
         error = None
@@ -646,161 +648,20 @@ class WalletAdmin(DynamicRawIDMixin, admin.ModelAdmin):
                 wallet_hash = form.cleaned_data['wallet_hash'].strip()
                 history_limit = form.cleaned_data['history_limit']
                 fiat_currency = form.cleaned_data.get('fiat_currency', 'PHP')
-                
+
                 try:
-                    from django.db.models import Q, Sum, F
-                    from django.db.models.functions import Coalesce
-                    from main.utils.tx_fee import get_tx_fee_sats, bch_to_satoshi, satoshi_to_bch
-                    from main.tasks import get_latest_bch_price
-                    from django.conf import settings
-                    import json
-                    
-                    # Get wallet
                     try:
-                        wallet = Wallet.objects.get(wallet_hash=wallet_hash)
-                    except Wallet.DoesNotExist:
-                        error = f'Wallet not found: {wallet_hash}'
-                        wallet_data = None
-                    else:
-                        wallet_data = {
-                            'wallet_hash': wallet.wallet_hash,
-                            'wallet_type': wallet.wallet_type,
-                            'project': str(wallet.project) if wallet.project else None,
-                            'date_created': wallet.date_created,
-                            'last_balance_check': wallet.last_balance_check,
-                            'last_balance_check_relative': self._relative_time(wallet.last_balance_check),
-                            'last_utxo_scan_succeeded': wallet.last_utxo_scan_succeeded,
-                            'fiat_currency': fiat_currency,
-                        }
-                        
-                        # Get latest subscribed address pair
-                        from django.db.models import Max
-                        addresses = Address.objects.filter(wallet=wallet).values_list('address_path', flat=True)
-                        max_index = None
-                        for addr_path in addresses:
-                            if addr_path and '/' in addr_path:
-                                try:
-                                    _, idx = addr_path.split('/')
-                                    idx = int(idx)
-                                    if max_index is None or idx > max_index:
-                                        max_index = idx
-                                except (ValueError, IndexError):
-                                    continue
-                        
-                        if max_index is not None:
-                            receiving_path = f'0/{max_index}'
-                            change_path = f'1/{max_index}'
-                            receiving_addr = Address.objects.filter(wallet=wallet, address_path=receiving_path).first()
-                            change_addr = Address.objects.filter(wallet=wallet, address_path=change_path).first()
-                            wallet_data['latest_address_pair'] = {
-                                'index': max_index,
-                                'receiving': receiving_addr.address if receiving_addr else None,
-                                'change': change_addr.address if change_addr else None,
-                            }
-                        
-                        # Get BCH balance
-                        if wallet.wallet_type == 'bch':
-                            query = Q(wallet=wallet) & Q(spent=False) & Q(token__name__iexact='bch')
-                            qs_balance = Transaction.objects.filter(query).aggregate(
-                                balance=Coalesce(Sum('value'), 0)
-                            )
-                            bch_balance = (qs_balance['balance'] or 0) / (10 ** 8)
-                            qs_count = Transaction.objects.filter(query).count()
-                            
-                            spendable = int(bch_to_satoshi(bch_balance)) - get_tx_fee_sats(p2pkh_input_count=qs_count)
-                            spendable = satoshi_to_bch(spendable)
-                            spendable = max(spendable, 0)
-                            
-                            wallet_data['bch_balance'] = round(bch_balance, 8)
-                            wallet_data['bch_spendable'] = round(spendable, 8)
-                            wallet_data['bch_utxo_count'] = qs_count
-                            
-                            # Get current fiat price for balance conversion
-                            current_price_log = get_latest_bch_price(fiat_currency)
-                            if current_price_log:
-                                current_fiat_price = float(current_price_log.price_value)
-                                wallet_data['current_fiat_price'] = current_fiat_price
-                                wallet_data['bch_fiat_balance'] = round(bch_balance * current_fiat_price, 2)
-                                wallet_data['bch_fiat_spendable'] = round(spendable * current_fiat_price, 2)
-                            else:
-                                wallet_data['current_fiat_price'] = None
-                                wallet_data['bch_fiat_balance'] = None
-                                wallet_data['bch_fiat_spendable'] = None
-                            
-                            # Get token balances
-                            token_balances = []
-                            token_query = Q(wallet=wallet) & Q(spent=False) & Q(cashtoken_ft__isnull=False)
-                            token_transactions = Transaction.objects.filter(token_query).select_related('cashtoken_ft', 'cashtoken_ft__info')
-                            
-                            # Group by category
-                            from collections import defaultdict
-                            token_groups = defaultdict(lambda: {'amount': 0, 'info': None})
-                            
-                            for tx in token_transactions:
-                                if tx.cashtoken_ft:
-                                    category = tx.cashtoken_ft.category
-                                    token_groups[category]['amount'] += tx.amount
-                                    if not token_groups[category]['info'] and tx.cashtoken_ft.info:
-                                        token_groups[category]['info'] = {
-                                            'name': tx.cashtoken_ft.info.name,
-                                            'symbol': tx.cashtoken_ft.info.symbol,
-                                            'decimals': tx.cashtoken_ft.info.decimals,
-                                        }
-                            
-                            for category, data in token_groups.items():
-                                decimals = data['info']['decimals'] if data['info'] else 0
-                                balance = round(data['amount'], decimals)
-                                token_balances.append({
-                                    'category': category,
-                                    'balance': balance,
-                                    'name': data['info']['name'] if data['info'] else 'Unknown',
-                                    'symbol': data['info']['symbol'] if data['info'] else 'N/A',
-                                    'decimals': decimals,
-                                })
-                            
-                            wallet_data['token_balances'] = token_balances
-                            
-                            # Sum BCH locked in CashToken UTXOs (diagnostic)
-                            cashtoken_bch_query = Q(wallet=wallet) & Q(spent=False) & Q(cashtoken_ft__isnull=False)
-                            cashtoken_bch_balance = Transaction.objects.filter(cashtoken_bch_query).aggregate(
-                                total=Coalesce(Sum('value'), 0)
-                            )['total'] or 0
-                            wallet_data['cashtoken_locked_bch'] = round(cashtoken_bch_balance / (10 ** 8), 8)
-                        
-                        # Get wallet history
-                        history = WalletHistory.objects.filter(wallet=wallet).exclude(amount=0).order_by(
-                            '-tx_timestamp', '-date_created'
-                        )[:history_limit].select_related('token', 'cashtoken_ft', 'cashtoken_nft')
-                        
-                        history_list = []
-                        for record in history:
-                            # Get fiat price at time of transaction
-                            record_fiat_price = None
-                            if record.market_prices and record.market_prices.get(fiat_currency):
-                                record_fiat_price = record.market_prices[fiat_currency]
-                            elif fiat_currency == 'USD' and record.usd_price:
-                                record_fiat_price = float(record.usd_price)
-                            
-                            history_list.append({
-                                'id': record.id,
-                                'txid': record.txid,
-                                'record_type': record.record_type,
-                                'amount': record.amount,
-                                'tx_fee': record.tx_fee,
-                                'tx_timestamp': record.tx_timestamp,
-                                'date_created': record.date_created,
-                                'token_name': record.token.name if record.token else None,
-                                'cashtoken_category': record.cashtoken_ft.category if record.cashtoken_ft else None,
-                                'usd_price': float(record.usd_price) if record.usd_price else None,
-                                'fiat_price': float(record_fiat_price) if record_fiat_price else None,
-                                'fiat_value': round(float(record_fiat_price) * record.amount, 2) if record_fiat_price else None,
-                            })
-                        
-                        wallet_data['history'] = history_list
-                        wallet_data['history_count'] = len(history_list)
-                        wallet_data['total_history_count'] = WalletHistory.objects.filter(wallet=wallet).exclude(amount=0).count()
-                        wallet_data['has_fiat_prices'] = any(record.get('fiat_price') for record in history_list)
-                        
+                        page = int(request.POST.get('page', 1))
+                    except (TypeError, ValueError):
+                        page = 1
+                    wallet_data, error = get_wallet_balance_history(
+                        wallet_hash,
+                        fiat_currency=fiat_currency,
+                        page=page,
+                        per_page=history_limit,
+                    )
+                    if error:
+                        messages.error(request, f'Error viewing wallet: {error}')
                 except Exception as e:
                     error = str(e)
                     messages.error(request, f"Error viewing wallet: {error}")

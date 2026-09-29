@@ -173,6 +173,7 @@
                 <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
                     <thead>
                         <tr>
+                            <th style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd; background-color: #f5f5f5;">Reference ID</th>
                             <th style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd; background-color: #f5f5f5;">TXID</th>
                             <th style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd; background-color: #f5f5f5;">Type</th>
                             <th style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd; background-color: #f5f5f5;">Amount</th>
@@ -189,6 +190,13 @@
                     <tbody>
                         {% for record in wallet_data.history %}
                         <tr>
+                            <td style="padding: 8px; border-bottom: 1px solid #ddd;">
+                                {% if record.reference_id %}
+                                    <code>{{ record.reference_id }}</code>
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </td>
                             <td style="padding: 8px; border-bottom: 1px solid #ddd;">
                                 <a href="{% url 'admin:main_transaction_changelist' %}?q={{ record.txid }}" target="_blank" style="color: #417690;">
                                     {{ record.txid|truncatechars:20 }}
@@ -240,6 +248,52 @@
                         {% endfor %}
                     </tbody>
                 </table>
+
+                {% if wallet_data.pagination and wallet_data.pagination.num_pages > 1 %}
+                <div style="margin-top: 15px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                    {% if wallet_data.pagination.has_previous %}
+                    <form method="post" style="display: inline;">{% csrf_token %}
+                        <input type="hidden" name="wallet_hash" value="{{ form.wallet_hash.value|default:'' }}">
+                        <input type="hidden" name="history_limit" value="{{ wallet_data.pagination.per_page }}">
+                        <input type="hidden" name="fiat_currency" value="{{ wallet_data.fiat_currency }}">
+                        <input type="hidden" name="page" value="{{ wallet_data.pagination.previous_page }}">
+                        <button type="submit" class="button">&laquo; Prev</button>
+                    </form>
+                    {% else %}
+                    <span class="button" style="opacity: 0.5;">&laquo; Prev</span>
+                    {% endif %}
+
+                    {% for p in wallet_data.pagination.page_range %}
+                        {% if p is None %}
+                            <span style="color: #999;">&hellip;</span>
+                        {% elif p == wallet_data.pagination.page %}
+                            <span class="button" style="background-color: #417690; color: #fff; border-color: #417690;">{{ p }}</span>
+                        {% else %}
+                        <form method="post" style="display: inline;">{% csrf_token %}
+                            <input type="hidden" name="wallet_hash" value="{{ form.wallet_hash.value|default:'' }}">
+                            <input type="hidden" name="history_limit" value="{{ wallet_data.pagination.per_page }}">
+                            <input type="hidden" name="fiat_currency" value="{{ wallet_data.fiat_currency }}">
+                            <input type="hidden" name="page" value="{{ p }}">
+                            <button type="submit" class="button">{{ p }}</button>
+                        </form>
+                        {% endif %}
+                    {% endfor %}
+
+                    {% if wallet_data.pagination.has_next %}
+                    <form method="post" style="display: inline;">{% csrf_token %}
+                        <input type="hidden" name="wallet_hash" value="{{ form.wallet_hash.value|default:'' }}">
+                        <input type="hidden" name="history_limit" value="{{ wallet_data.pagination.per_page }}">
+                        <input type="hidden" name="fiat_currency" value="{{ wallet_data.fiat_currency }}">
+                        <input type="hidden" name="page" value="{{ wallet_data.pagination.next_page }}">
+                        <button type="submit" class="button">Next &raquo;</button>
+                    </form>
+                    {% else %}
+                    <span class="button" style="opacity: 0.5;">Next &raquo;</span>
+                    {% endif %}
+
+                    <span style="margin-left: 10px; color: #666;">Page {{ wallet_data.pagination.page }} of {{ wallet_data.pagination.num_pages }} ({{ wallet_data.pagination.total }} records)</span>
+                </div>
+                {% endif %}
             </div>
             {% endif %}
         </div>

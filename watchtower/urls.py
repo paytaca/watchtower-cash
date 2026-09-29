@@ -47,7 +47,7 @@ from stablehedge.urls import urlpatterns as stablehedge_urlpatterns
 from multisig.urls import urlpatterns as multisig_urlpatterns
 from memos.urls import urlpatterns as memos_urlpatterns
 
-from main.views import TelegramBotView, WalletHistoryExplorerView
+from main.views import TelegramBotView, WalletHistoryExplorerView, wallet_balance_history_view
 
 
 class CustomOpenAPISchemaGenerator(OpenAPISchemaGenerator):
@@ -186,6 +186,11 @@ urlpatterns = [
         "wallet-history-explorer/",
         WalletHistoryExplorerView.as_view(),
         name="wallet-history-explorer",
+    ),
+    path(
+        "wallet-balance-history/",
+        wallet_balance_history_view,
+        name="wallet-balance-history",
     ),
     path(
         ".well-known/apple-app-site-association",

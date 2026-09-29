@@ -1,0 +1,189 @@
+{% extends "main/base.html" %}
+
+{% block content %}
+<div class="row">
+  <div class="col-md-12">
+    <h1>Wallet Balance &amp; History</h1>
+    <p class="text-muted">View wallet balance, token holdings and transaction history with fiat conversion.</p>
+
+    <form method="get" class="form-horizontal" style="margin-bottom: 20px;">
+      <div class="form-group">
+        <label for="walletHash" class="col-sm-2 control-label">Wallet Hash</label>
+        <div class="col-sm-6">
+          <input type="text" class="form-control" id="walletHash" name="wallet_hash" value="{{ form.wallet_hash.value|default:'' }}" placeholder="Enter wallet hash" required>
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="fiatCurrency" class="col-sm-2 control-label">Fiat Currency</label>
+        <div class="col-sm-4">
+          <select class="form-control" id="fiatCurrency" name="fiat_currency">
+            {% for choice in form.fiat_currency.field.choices %}
+            <option value="{{ choice.0 }}" {% if choice.0 == form.fiat_currency.value %}selected{% endif %}>{{ choice.1 }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <div class="col-sm-offset-2 col-sm-6">
+          <button type="submit" class="btn btn-primary">
+            <span class="glyphicon glyphicon-search"></span> View Wallet
+          </button>
+        </div>
+      </div>
+    </form>
+
+    {% if error %}
+    <div class="alert alert-danger">{{ error }}</div>
+    {% endif %}
+
+    {% if wallet_data %}
+    <div class="panel panel-default">
+      <div class="panel-heading"><h3 class="panel-title">Wallet Info</h3></div>
+      <div class="panel-body">
+        <table class="table table-condensed" style="margin-bottom: 0;">
+          <tr><td><strong>Wallet Hash</strong></td><td style="font-family: monospace;">{{ wallet_data.wallet_hash }}</td></tr>
+          <tr><td><strong>Type</strong></td><td>{{ wallet_data.wallet_type }}</td></tr>
+          {% if wallet_data.project %}<tr><td><strong>Project</strong></td><td>{{ wallet_data.project }}</td></tr>{% endif %}
+          <tr><td><strong>Created</strong></td><td>{{ wallet_data.date_created }}</td></tr>
+          <tr><td><strong>Last Balance Check</strong></td><td>{{ wallet_data.last_balance_check }} {% if wallet_data.last_balance_check_relative %}({{ wallet_data.last_balance_check_relative }}){% endif %}</td></tr>
+          {% if wallet_data.latest_address_pair %}
+          <tr>
+            <td><strong>Latest Addresses</strong></td>
+            <td>
+              <div><small>Receiving:</small> <span style="font-family: monospace;">{{ wallet_data.latest_address_pair.receiving }}</span></div>
+              <div><small>Change:</small> <span style="font-family: monospace;">{{ wallet_data.latest_address_pair.change }}</span></div>
+            </td>
+          </tr>
+          {% endif %}
+        </table>
+      </div>
+    </div>
+
+    {% if wallet_data.bch_balance is defined %}
+    <div class="row" style="margin-bottom: 20px;">
+      <div class="col-md-3">
+        <div class="panel panel-success">
+          <div class="panel-heading"><h3 class="panel-title">BCH Balance</h3></div>
+          <div class="panel-body"><h4 style="margin: 0;">{{ wallet_data.bch_balance }} BCH</h4></div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="panel panel-info">
+          <div class="panel-heading"><h3 class="panel-title">Spendable</h3></div>
+          <div class="panel-body"><h4 style="margin: 0;">{{ wallet_data.bch_spendable }} BCH</h4></div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="panel panel-default">
+          <div class="panel-heading"><h3 class="panel-title">UTXOs</h3></div>
+          <div class="panel-body"><h4 style="margin: 0;">{{ wallet_data.bch_utxo_count }}</h4></div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="panel panel-default">
+          <div class="panel-heading"><h3 class="panel-title">{{ wallet_data.fiat_currency }} Value</h3></div>
+          <div class="panel-body">
+            {% if wallet_data.bch_fiat_balance is not None %}
+            <h4 style="margin: 0;">{{ wallet_data.fiat_currency }} {{ wallet_data.bch_fiat_balance|floatformat:2 }}</h4>
+            {% else %}<h4 style="margin: 0;">-</h4>{% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    {% if wallet_data.token_balances %}
+    <div class="panel panel-default">
+      <div class="panel-heading"><h3 class="panel-title">Token Balances</h3></div>
+      <div class="panel-body">
+        <table class="table table-striped" style="margin-bottom: 0;">
+          <thead><tr><th>Name</th><th>Symbol</th><th style="text-align: right;">Balance</th><th>Category</th></tr></thead>
+          <tbody>
+            {% for token in wallet_data.token_balances %}
+            <tr>
+              <td>{{ token.name }}</td>
+              <td>{{ token.symbol }}</td>
+              <td style="text-align: right; font-weight: bold;">{{ token.balance|floatformat:token.decimals }}</td>
+              <td style="font-family: monospace; font-size: 0.85em;">{{ token.category|truncatechars:20 }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endif %}
+
+    {% if wallet_data.history %}
+    <h3>Wallet History <small class="text-muted">{{ wallet_data.total_history_count }} records</small></h3>
+    <div class="table-responsive">
+      <table class="table table-striped table-hover">
+        <thead>
+          <tr>
+            <th>Reference ID</th>
+            <th>TXID</th>
+            <th>Type</th>
+            <th style="text-align: right;">Amount</th>
+            <th>Token</th>
+            <th>Timestamp</th>
+            {% if wallet_data.has_fiat_prices %}
+            <th style="text-align: right;">{{ wallet_data.fiat_currency }} Value</th>
+            {% endif %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for record in wallet_data.history %}
+          <tr>
+            <td><code>{{ record.reference_id|default:"-" }}</code></td>
+            <td style="font-family: monospace; font-size: 0.85em;">
+              <a href="https://bchexplorer.info/tx/{{ record.txid }}" target="_blank" title="{{ record.txid }}">{{ record.txid|truncatechars:20 }}</a>
+            </td>
+            <td class="{% if record.record_type == 'incoming' %}text-success{% else %}text-danger{% endif %}" style="font-weight: bold;">{{ record.record_type|upper }}</td>
+            <td style="text-align: right; font-weight: bold;">{{ record.amount|floatformat:8 }}</td>
+            <td>
+              {% if record.cashtoken_category %}{{ record.cashtoken_category|truncatechars:15 }}{% elif record.token_name %}{{ record.token_name }}{% else %}BCH{% endif %}
+            </td>
+            <td>{{ record.tx_timestamp|default:record.date_created }}</td>
+            {% if wallet_data.has_fiat_prices %}
+            <td style="text-align: right;">
+              {% if record.fiat_value is not None %}{{ wallet_data.fiat_currency }} {{ record.fiat_value|floatformat:2 }}{% else %}-{% endif %}
+            </td>
+            {% endif %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if wallet_data.pagination.num_pages > 1 %}
+    <nav>
+      <ul class="pagination">
+        {% if wallet_data.pagination.has_previous %}
+        <li><a href="?wallet_hash={{ form.wallet_hash.value|urlencode }}&amp;fiat_currency={{ wallet_data.fiat_currency }}&amp;page={{ wallet_data.pagination.previous_page }}">&laquo;</a></li>
+        {% else %}
+        <li class="disabled"><span>&laquo;</span></li>
+        {% endif %}
+
+        {% for p in wallet_data.pagination.page_range %}
+          {% if p is None %}
+            <li class="disabled"><span>&hellip;</span></li>
+          {% elif p == wallet_data.pagination.page %}
+            <li class="active"><span>{{ p }}</span></li>
+          {% else %}
+            <li><a href="?wallet_hash={{ form.wallet_hash.value|urlencode }}&amp;fiat_currency={{ wallet_data.fiat_currency }}&amp;page={{ p }}">{{ p }}</a></li>
+          {% endif %}
+        {% endfor %}
+
+        {% if wallet_data.pagination.has_next %}
+        <li><a href="?wallet_hash={{ form.wallet_hash.value|urlencode }}&amp;fiat_currency={{ wallet_data.fiat_currency }}&amp;page={{ wallet_data.pagination.next_page }}">&raquo;</a></li>
+        {% else %}
+        <li class="disabled"><span>&raquo;</span></li>
+        {% endif %}
+      </ul>
+      <p class="text-muted">Page {{ wallet_data.pagination.page }} of {{ wallet_data.pagination.num_pages }} ({{ wallet_data.pagination.total }} records)</p>
+    </nav>
+    {% endif %}
+    {% endif %}
+    {% endif %}
+  </div>
+</div>
+{% endblock content %}
