@@ -92,16 +92,7 @@ class PaymentMethodViewSet(viewsets.GenericViewSet):
                 # create payment method
                 payment_method = models.PaymentMethod.objects.create(**data)
                 # create payment method fields
-                for field in fields:
-                    field_ref = models.PaymentTypeField.objects.get(
-                        id=field["field_reference"]
-                    )
-                    data = {
-                        "payment_method": payment_method,
-                        "field_reference": field_ref,
-                        "value": field["value"],
-                    }
-                    models.PaymentMethodField.objects.create(**data)
+                self._save_fields(payment_method, payment_type, fields)
 
             serializer = serializers.PaymentMethodSerializer(payment_method)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -129,22 +120,38 @@ class PaymentMethodViewSet(viewsets.GenericViewSet):
 
             for field in data.get("fields"):
                 field_id = field.get("id")
+                field_ref = None
                 if field_id:
                     payment_method_field = models.PaymentMethodField.objects.get(
                         id=field_id
                     )
-                    payment_method_field.value = field.get("value")
-                    payment_method_field.save()
-                elif field.get("value") and field.get("field_reference"):
+                    field_ref = payment_method_field.field_reference
+                elif field.get("field_reference"):
                     field_ref = models.PaymentTypeField.objects.get(
                         id=field.get("field_reference")
                     )
-                    data = {
-                        "payment_method": payment_method,
-                        "field_reference": field_ref,
-                        "value": field.get("value"),
-                    }
-                    models.PaymentMethodField.objects.create(**data)
+
+                if field_ref is None:
+                    continue
+
+                if self._is_empty(field.get("value")):
+                    if field_ref.required:
+                        raise ValidationError(
+                            f"Field '{field_ref.fieldname}' is required"
+                        )
+                    if field_id:
+                        payment_method_field.delete()
+                    continue
+
+                if field_id:
+                    payment_method_field.value = field.get("value")
+                    payment_method_field.save()
+                else:
+                    models.PaymentMethodField.objects.create(
+                        payment_method=payment_method,
+                        field_reference=field_ref,
+                        value=field.get("value"),
+                    )
 
             serializer = serializers.PaymentMethodSerializer(payment_method)
             return Response(serializer.data, status=status.HTTP_200_OK)
@@ -200,6 +207,49 @@ class PaymentMethodViewSet(viewsets.GenericViewSet):
         """Throws an error if wallet_hash is not the owner of payment_method."""
         if wallet_hash != payment_method.owner.wallet_hash:
             raise ValidationError("User not allowed to access this payment method.")
+
+    @staticmethod
+    def _is_empty(value):
+        """Returns True when value is None or an empty/whitespace-only string."""
+        if value is None:
+            return True
+        if isinstance(value, str) and value.strip() == "":
+            return True
+        return False
+
+    def _save_fields(self, payment_method, payment_type, fields):
+        """Validates required payment type fields and creates the
+        PaymentMethodField records. Non-required fields with empty values
+        are skipped instead of being persisted."""
+        required_fields = models.PaymentTypeField.objects.filter(
+            payment_type=payment_type, required=True
+        )
+        submitted = {
+            str(field.get("field_reference")): field.get("value")
+            for field in fields
+            if field.get("field_reference") is not None
+        }
+        missing = [
+            field.fieldname
+            for field in required_fields
+            if self._is_empty(submitted.get(str(field.id)))
+        ]
+        if missing:
+            raise ValidationError(
+                f"Missing required field(s): {', '.join(missing)}"
+            )
+
+        for field in fields:
+            if self._is_empty(field.get("value")):
+                continue
+            field_ref = models.PaymentTypeField.objects.get(
+                id=field.get("field_reference")
+            )
+            models.PaymentMethodField.objects.create(
+                payment_method=payment_method,
+                field_reference=field_ref,
+                value=field.get("value"),
+            )
 
 
 class OrderPaymentViewSet(viewsets.GenericViewSet):
