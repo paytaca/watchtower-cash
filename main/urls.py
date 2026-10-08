@@ -349,6 +349,17 @@ main_urls += [
     ),
     re_path("app-setting/auth/", TokenObtainPairView.as_view(), name="memo-auth"),
     re_path("app-setting/refresh/", TokenRefreshView.as_view(), name="refresh-auth"),
+    # Wallet lookup keys
+    re_path(
+        "wallet/lookup-keys/",
+        views.WalletLookupKeyView.as_view(),
+        name="wallet-lookup-keys",
+    ),
+    re_path(
+        "wallet/lookup-keys/balances/",
+        views.WalletLookupKeyBalanceView.as_view(),
+        name="wallet-lookup-key-balances",
+    ),
 ]
 
 test_urls = [
