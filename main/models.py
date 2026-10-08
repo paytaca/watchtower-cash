@@ -1248,3 +1248,31 @@ class WalletActivity(PostgresModel):
 
     def __str__(self):
         return f"{self.kind} {self.wallet.wallet_hash[:16]}... on {self.activity_date}"
+
+
+class WalletLookupKey(models.Model):
+    """
+    Maps an opaque bearer key to a wallet, so a trusted backend can read a
+    wallet's balances without holding that wallet's auth token.
+
+    Only an HMAC digest of the key is stored: the raw key is returned exactly
+    once, in the response to the POST that mints it, and is unrecoverable
+    afterwards. Revocation is a hard delete.
+    """
+    key_hash = models.CharField(max_length=64, unique=True, db_index=True)
+    wallet = models.OneToOneField(
+        Wallet,
+        on_delete=models.CASCADE,
+        related_name='lookup_key'
+    )
+    label = models.CharField(max_length=100, blank=True, default='')
+    date_created = models.DateTimeField(auto_now_add=True)
+    last_used_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "Wallet Lookup Key"
+        verbose_name_plural = "Wallet Lookup Keys"
+        ordering = ['-date_created']
+
+    def __str__(self):
+        return f"{self.label or 'lookup-key'} ({self.wallet.wallet_hash[:16]}...)"
