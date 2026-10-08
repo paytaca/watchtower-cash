@@ -118,3 +118,22 @@ class WebhookSecretThrottle(throttling.SimpleRateThrottle):
             'scope': self.scope,
             'ident': self.get_ident(request),
         }
+
+
+class WalletLookupKeyThrottle(throttling.SimpleRateThrottle):
+    """
+    Throttle for the lookup-key endpoints, which authenticate with a bearer
+    key in the X-Api-Key header. Rate configured via
+    DEFAULT_THROTTLE_RATES['wallet_lookup_key'] in settings.
+
+    The caller is a trusted backend rather than a browser, so the rate is set
+    generously; the bucket is still keyed by IP, so all keys behind one egress
+    IP share a bucket.
+    """
+    scope = 'wallet_lookup_key'
+
+    def get_cache_key(self, request, view):
+        return self.cache_format % {
+            'scope': self.scope,
+            'ident': self.get_ident(request),
+        }

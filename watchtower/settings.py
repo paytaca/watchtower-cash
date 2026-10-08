@@ -483,6 +483,7 @@ REST_FRAMEWORK = {
     "DEFAULT_FILTER_BACKENDS": ["django_filters.rest_framework.DjangoFilterBackend"],
     "DEFAULT_THROTTLE_RATES": {
         "webhook_secret": "10/min",
+        "wallet_lookup_key": "600/min",
     },
 }
 
