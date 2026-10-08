@@ -664,9 +664,13 @@ class LookupKeyTestMixin:
 class TestParseAssetId(TestCase):
     """Asset id grammar. Pure, so no DB or cache needed."""
 
-    def test_bch_aliases(self):
+    def test_bch_is_not_a_requestable_asset_id(self):
+        # The BCH balance is always returned in the top-level `bch` field, so
+        # there is nothing to request. Rejected rather than silently ignored.
         for value in ('bch', 'BCH', 'Bch', ' bch '):
-            self.assertEqual(parse_asset_id(value)['type'], 'bch')
+            with self.assertRaises(InvalidAssetId) as ctx:
+                parse_asset_id(value)
+            self.assertIn('always returned in the "bch" field', str(ctx.exception))
 
     def test_fungible_token(self):
         parsed = parse_asset_id(f'ct/{_CATEGORY}')
@@ -696,12 +700,16 @@ class TestParseAssetId(TestCase):
                 parse_asset_id(value)
 
     def test_assets_param_split(self):
+        # parse_assets_param only splits; parse_asset_id is what validates.
+        other = 'c' * 64
         self.assertEqual(parse_assets_param(''), [])
         self.assertEqual(parse_assets_param(None), [])
-        self.assertEqual(parse_assets_param('bch'), ['bch'])
+        self.assertEqual(parse_assets_param(f'ct/{_CATEGORY}'), [f'ct/{_CATEGORY}'])
         self.assertEqual(
-            parse_assets_param(f'bch, ct/{_CATEGORY}'), ['bch', f'ct/{_CATEGORY}']
+            parse_assets_param(f'ct/{_CATEGORY},ct/{other}'),
+            [f'ct/{_CATEGORY}', f'ct/{other}'],
         )
+        self.assertEqual(parse_assets_param('  '), [])
 
 
 @override_settings(FERNET_KEY=_TEST_LOOKUP_FERNET_KEY)
@@ -881,11 +889,17 @@ class TestWalletLookupKeyBalances(LookupKeyTestMixin, TestCase):
             [f'ct/{_CATEGORY}', f'ct/{"c" * 64}'],
         )
 
-    def test_bch_can_be_requested_as_an_asset(self):
-        resp = self._get(assets='bch')
+    def test_bch_is_always_returned_without_being_requested(self):
+        resp = self._get()
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual(len(resp.data['assets']), 1)
-        self.assertEqual(resp.data['assets'][0]['asset_id'], 'bch')
+        self.assertIn('balance', resp.data['bch'])
+        self.assertEqual(resp.data['assets'], [])
+
+    def test_requesting_bch_as_an_asset_returns_400(self):
+        # BCH is not an asset id -- it is always in the `bch` field.
+        resp = self._get(assets='bch')
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn('always returned in the "bch" field', resp.data['error'])
 
     def test_unknown_asset_returns_zero_not_an_error(self):
         resp = self._get(assets=f'ct/{_CATEGORY}')

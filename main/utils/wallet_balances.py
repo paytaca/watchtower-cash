@@ -97,9 +97,7 @@ def _get_bch_balance(query, include_token_sats=False, exclude_dust=True):
 # Cashtoken categories are 64 hex chars, so the id has more slashes in it than
 # the "ct/<category>/<txid>/<index>" split suggests. Splitting on the fixed
 # prefix and taking the tail handles that.
-FT_PREFIX = 'ct/'
-NFT_PREFIX = 'ct/'
-BCH_ALIASES = ('bch',)
+CT_PREFIX = 'ct/'
 
 
 class InvalidAssetId(ValueError):
@@ -116,9 +114,12 @@ def parse_asset_id(asset_id: str) -> dict:
     Parse an asset id into a descriptor.
 
     Accepts:
-        bch
         ct/<category>
         ct/<category>/<txid>/<index>
+
+    The BCH balance is NOT an asset id -- it is returned unconditionally in the
+    response's top-level `bch` field on every request, so there is nothing to
+    request. Passing 'bch' here is rejected rather than silently ignored.
     """
     if not isinstance(asset_id, str):
         raise InvalidAssetId(f'Invalid asset id: {asset_id}')
@@ -128,19 +129,18 @@ def parse_asset_id(asset_id: str) -> dict:
     if not value:
         raise InvalidAssetId('Asset id cannot be empty')
 
-    if value.lower() in BCH_ALIASES:
-        return {'type': 'bch', 'asset_id': 'bch'}
-
     if value.lower().startswith('slp/'):
         raise InvalidAssetId(
             'SLP assets are no longer supported. Use a CashToken id '
-            '(ct/<category>) or "bch".'
+            '(ct/<category>). The BCH balance is always returned in the "bch" '
+            'field and does not need to be requested.'
         )
 
-    if not value.lower().startswith(FT_PREFIX):
+    if not value.lower().startswith(CT_PREFIX):
         raise InvalidAssetId(
-            f'Invalid asset id: {asset_id}. Expected "bch", "ct/<category>", '
-            'or "ct/<category>/<txid>/<index>".'
+            f'Invalid asset id: {asset_id}. Expected "ct/<category>" or '
+            '"ct/<category>/<txid>/<index>". The BCH balance is always '
+            'returned in the "bch" field and does not need to be requested.'
         )
 
     parts = value.split('/')
@@ -283,7 +283,11 @@ def get_asset_balance(wallet, asset_id: str) -> dict:
 
 def get_wallet_balances(wallet, asset_ids) -> dict:
     """
-    BCH balance plus one entry per requested CashToken asset, in request order.
+    The wallet's BCH balance plus one entry per requested CashToken asset, in
+    request order.
+
+    The BCH balance is always returned in the top-level `bch` field; `assets`
+    only adds CashTokens on top of it.
     """
     asset_ids = list(asset_ids or [])
 
@@ -303,14 +307,10 @@ def get_wallet_balances(wallet, asset_ids) -> dict:
     }
 
     for descriptor in descriptors:
-        entry = {'asset_id': descriptor['asset_id']}
-
-        if descriptor['type'] == 'bch':
-            entry.update(data['bch'])
-        else:
-            entry.update(get_asset_balance(wallet, descriptor['asset_id']))
-
-        data['assets'].append(entry)
+        data['assets'].append({
+            'asset_id': descriptor['asset_id'],
+            **get_asset_balance(wallet, descriptor['asset_id']),
+        })
 
     return data
 

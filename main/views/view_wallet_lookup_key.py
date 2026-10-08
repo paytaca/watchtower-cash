@@ -214,7 +214,9 @@ class WalletLookupKeyBalanceView(WalletLookupKeyBaseView):
     @swagger_auto_schema(
         operation_description=(
             "Resolve an X-Api-Key header to a wallet and return its BCH and "
-            "CashToken balances. SLP assets are not supported."
+            "CashToken balances. The BCH balance is always returned in the "
+            "`bch` field; `assets` only adds CashTokens on top of it. SLP "
+            "assets are not supported."
         ),
         manual_parameters=[
             openapi.Parameter(
@@ -223,9 +225,11 @@ class WalletLookupKeyBalanceView(WalletLookupKeyBaseView):
                 in_=openapi.IN_QUERY,
                 required=False,
                 description=(
-                    "Comma-separated asset ids: 'bch', 'ct/<category>', or "
-                    "'ct/<category>/<txid>/<index>'. Defaults to BCH only. Max "
-                    "20 assets per request."
+                    "Optional comma-separated CashToken ids: "
+                    "'ct/<category>' or 'ct/<category>/<txid>/<index>'. Omit "
+                    "for BCH only. The BCH balance never needs to be listed "
+                    "here -- it is always in the `bch` field, and passing "
+                    "'bch' is rejected. Max 20 assets per request."
                 ),
             ),
         ],

@@ -64,20 +64,25 @@ curl -X POST https://watchtower.cash/api/wallet/lookup-keys/ \
 
 Auth: `X-Api-Key` header.
 
+The **BCH balance is always returned** in the top-level `bch` field on every
+request. It is not an asset id and never needs to be requested — `assets` only
+adds CashTokens on top of it.
+
 | Param | Required | Description |
 |---|---|---|
-| `assets` | no | Comma-separated asset ids. Defaults to BCH only. Max 20. |
+| `assets` | no | Comma-separated CashToken ids. Omit for BCH only. Max 20. |
 
 Accepted asset ids:
 
 | Id | Meaning |
 |---|---|
-| `bch` (or `BCH`) | BCH balance |
 | `ct/<category>` | CashToken fungible balance |
 | `ct/<category>/<txid>/<index>` | CashToken NFT — `1` if held, else `0` |
 
+Passing `bch` is rejected with a `400` rather than silently ignored.
+
 ```bash
-curl 'https://watchtower.cash/api/wallet/lookup-keys/balances/?assets=bch,ct/9f2a...c4' \
+curl 'https://watchtower.cash/api/wallet/lookup-keys/balances/?assets=ct/9f2a...c4,ct/1e8b...07' \
   -H 'X-Api-Key: <lookup_key>'
 ```
 
@@ -104,7 +109,7 @@ Status codes:
 | Code | When |
 |---|---|
 | `200` | Success |
-| `400` | Malformed asset id, or an `slp/...` id |
+| `400` | Malformed asset id, an `slp/...` id, or `bch` |
 | `401` | Missing, unknown, or revoked `X-Api-Key` |
 
 **Unknown assets are not errors.** A category that does not exist in our database
@@ -127,7 +132,7 @@ with an explicit message rather than a silent zero balance.
 
 Note that **BCH balance is wallet_type-agnostic** — it filters on
 `token.name == 'bch'`, so wallets of type `slp` or `sbch` still get a correct BCH
-balance. They simply cannot request token balances.
+balance in the `bch` field. They simply cannot request token balances.
 
 ## Rotation is two calls
 
@@ -203,7 +208,7 @@ by IP, so all keys behind one egress IP share it.
 
 | Class | Covers |
 |---|---|
-| `TestParseAssetId` | Asset id grammar, incl. explicit SLP rejection |
+| `TestParseAssetId` | Asset id grammar, incl. explicit SLP and `bch` rejection |
 | `TestHashKey` | Digest determinism, uniqueness, raw key never stored |
 | `TestWalletLookupKeyMint` | `201`, `409`, digest never returned, auth required, one-row-per-wallet |
 | `TestWalletLookupKeyRevoke` | `204`, `404`, ownership scoping, rotation |
