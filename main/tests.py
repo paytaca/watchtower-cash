@@ -1,15 +1,20 @@
 import hashlib
 import hmac
 import json
+from io import StringIO
 from unittest.mock import patch, MagicMock
 
 import requests as requests_lib
 from cryptography.fernet import Fernet, InvalidToken
+from django.contrib.auth.models import User
+from django.core.management import call_command
 from django.db.models import ProtectedError
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework.test import APIClient
 
+from authentication.models import AuthToken
 from main.models import (
     Recipient,
     Transaction,
@@ -18,11 +23,23 @@ from main.models import (
     Token,
     BlockHeight,
     WalletHistory,
+    WalletLookupKey,
 )
 from main.tasks import revert_dropped_mempool_transactions
 from main.throttles import WebhookSecretThrottle
 from main.utils.recipient_handler import RecipientHandler, WebhookOwnershipRequired, WebhookSecretRegistrationRequired
 from main.utils.transaction_processing import reverse_dropped_transaction
+from main.utils.wallet_balances import (
+    InvalidAssetId,
+    MAX_ASSETS_PER_REQUEST,
+    parse_asset_id,
+    parse_assets_param,
+)
+from main.utils.wallet_lookup_key import (
+    generate_raw_key,
+    hash_key,
+    resolve_key,
+)
 from main.utils.webhook import encrypt_webhook_secret, decrypt_webhook_secret, send_webhook
 
 # Fixed Fernet key used across all webhook tests — never use in production
@@ -582,3 +599,397 @@ class TestRevertDroppedMempoolTransactions(DroppedTransactionTestBase):
 
         self.assertEqual(result['reverted'], [])
         self.mock_reverse.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Wallet lookup keys
+# ---------------------------------------------------------------------------
+
+_TEST_LOOKUP_FERNET_KEY = Fernet.generate_key().decode()
+_LOOKUP_URL = '/api/wallet/lookup-keys/'
+_LOOKUP_BALANCES_URL = '/api/wallet/lookup-keys/balances/'
+
+_CATEGORY = 'a' * 64
+_TXID = 'b' * 64
+
+
+class LookupKeyTestMixin:
+    """Helpers for standing up a wallet with a valid WalletAuthentication token."""
+
+    def _make_wallet(self, wallet_hash, wallet_type='bch'):
+        wallet = Wallet.objects.create(
+            wallet_hash=wallet_hash,
+            wallet_type=wallet_type,
+            version=1,
+        )
+        self._make_auth_token(wallet, 'token-for-' + wallet_hash)
+        return wallet
+
+    def _make_auth_token(self, wallet, raw_token):
+        cipher = Fernet(_TEST_LOOKUP_FERNET_KEY)
+        auth_token = AuthToken.objects.create(
+            wallet_hash=wallet.wallet_hash,
+            key=cipher.encrypt(raw_token.encode()).decode(),
+            key_expires_at=timezone.now() + timezone.timedelta(days=1),
+        )
+        self.wallet_tokens[wallet.wallet_hash] = raw_token
+        return auth_token
+
+    def setUp(self):
+        super().setUp()
+        self.wallet_tokens = {}
+        self.fake_redis = MagicMock()
+        self.fake_redis.get.return_value = None
+        self.fake_redis.set.return_value = True
+        self.fake_redis.delete.return_value = True
+        self.fake_redis.scan_iter.return_value = iter([])
+
+    def _auth(self, wallet_hash):
+        # WSGI-style META keys: Django's HttpHeaders resolves 'wallet-hash' and
+        # 'wallet_hash' both to HTTP_WALLET_HASH.
+        return {
+            'HTTP_WALLET_HASH': wallet_hash,
+            'HTTP_AUTHORIZATION': f"Token {self.wallet_tokens[wallet_hash]}",
+        }
+
+    def _mint(self, wallet_hash, label=''):
+        resp = self.client.post(
+            _LOOKUP_URL, {'label': label}, format='json', **self._auth(wallet_hash)
+        )
+        self.assertEqual(resp.status_code, 201, resp.data)
+        return resp.data['lookup_key']
+
+
+@override_settings(FERNET_KEY=_TEST_LOOKUP_FERNET_KEY)
+class TestParseAssetId(TestCase):
+    """Asset id grammar. Pure, so no DB or cache needed."""
+
+    def test_bch_aliases(self):
+        for value in ('bch', 'BCH', 'Bch', ' bch '):
+            self.assertEqual(parse_asset_id(value)['type'], 'bch')
+
+    def test_fungible_token(self):
+        parsed = parse_asset_id(f'ct/{_CATEGORY}')
+        self.assertEqual(parsed['type'], 'ft')
+        self.assertEqual(parsed['category'], _CATEGORY)
+        self.assertEqual(parsed['asset_id'], f'ct/{_CATEGORY}')
+
+    def test_non_fungible_token(self):
+        parsed = parse_asset_id(f'ct/{_CATEGORY}/{_TXID}/3')
+        self.assertEqual(parsed['type'], 'nft')
+        self.assertEqual(parsed['category'], _CATEGORY)
+        self.assertEqual(parsed['txid'], _TXID)
+        self.assertEqual(parsed['index'], 3)
+
+    def test_slp_rejected_explicitly(self):
+        # A clear error beats a silent zero balance.
+        for value in ('slp/abc123', 'SLP/abc123'):
+            with self.assertRaises(InvalidAssetId) as ctx:
+                parse_asset_id(value)
+            self.assertIn('no longer supported', str(ctx.exception))
+
+    def test_malformed_rejected(self):
+        for value in ('', '   ', 'nonsense', 'ct/', f'ct/{_CATEGORY}/{_TXID}',
+                      f'ct/{_CATEGORY}/{_TXID}/1/2',
+                      f'ct/{_CATEGORY}/{_TXID}/notanint', None, 123):
+            with self.assertRaises(InvalidAssetId):
+                parse_asset_id(value)
+
+    def test_assets_param_split(self):
+        self.assertEqual(parse_assets_param(''), [])
+        self.assertEqual(parse_assets_param(None), [])
+        self.assertEqual(parse_assets_param('bch'), ['bch'])
+        self.assertEqual(
+            parse_assets_param(f'bch, ct/{_CATEGORY}'), ['bch', f'ct/{_CATEGORY}']
+        )
+
+
+@override_settings(FERNET_KEY=_TEST_LOOKUP_FERNET_KEY)
+class TestHashKey(TestCase):
+
+    def test_digest_differs_from_raw_key(self):
+        raw = generate_raw_key()
+        self.assertNotEqual(hash_key(raw), raw)
+        self.assertEqual(len(hash_key(raw)), 64)
+
+    def test_deterministic_and_unique(self):
+        self.assertEqual(hash_key('abc'), hash_key('abc'))
+        self.assertNotEqual(hash_key('abc'), hash_key('abd'))
+
+    def test_generated_keys_are_distinct(self):
+        keys = {generate_raw_key() for _ in range(50)}
+        self.assertEqual(len(keys), 50)
+
+
+@override_settings(FERNET_KEY=_TEST_LOOKUP_FERNET_KEY)
+class TestWalletLookupKeyMint(LookupKeyTestMixin, TestCase):
+
+    def setUp(self):
+        super().setUp()
+        self.wallet = self._make_wallet('wallet-hash-1')
+
+    def test_mint_returns_201_and_raw_key_once(self):
+        raw_key = self._mint('wallet-hash-1', label='partner-server')
+
+        self.assertTrue(raw_key)
+        row = WalletLookupKey.objects.get()
+        self.assertEqual(row.label, 'partner-server')
+        # Only the digest is persisted.
+        self.assertNotEqual(row.key_hash, raw_key)
+        self.assertEqual(row.key_hash, hash_key(raw_key))
+
+    def test_create_response_does_not_leak_digest(self):
+        resp = self.client.post(
+            _LOOKUP_URL, {'label': 'x'}, format='json',
+            **self._auth('wallet-hash-1')
+        )
+        self.assertEqual(resp.status_code, 201)
+        self.assertNotIn('key_hash', resp.data)
+        self.assertIn('lookup_key', resp.data)
+
+    def test_second_mint_returns_409_and_keeps_original_key(self):
+        first = self._mint('wallet-hash-1')
+
+        resp = self.client.post(
+            _LOOKUP_URL, {'label': 'second'}, format='json',
+            **self._auth('wallet-hash-1')
+        )
+
+        self.assertEqual(resp.status_code, 409)
+        self.assertEqual(WalletLookupKey.objects.count(), 1)
+        # The existing key must still resolve.
+        self.assertIsNotNone(resolve_key(first))
+
+    def test_mint_without_token_is_rejected(self):
+        # wallet-hash header alone must not be enough to mint a credential.
+        resp = self.client.post(
+            _LOOKUP_URL, {'label': 'x'}, format='json',
+            HTTP_WALLET_HASH='wallet-hash-1',
+        )
+        self.assertIn(resp.status_code, (401, 403))
+        self.assertEqual(WalletLookupKey.objects.count(), 0)
+
+    def test_mint_without_wallet_hash_is_rejected(self):
+        resp = self.client.post(_LOOKUP_URL, {'label': 'x'}, format='json')
+        self.assertIn(resp.status_code, (401, 403))
+        self.assertEqual(WalletLookupKey.objects.count(), 0)
+
+    def test_cannot_bind_key_to_another_wallet(self):
+        self._make_wallet('wallet-hash-2')
+        resp = self.client.post(
+            _LOOKUP_URL,
+            {'label': 'x', 'wallet': 'wallet-hash-2'},
+            format='json',
+            **self._auth('wallet-hash-1'),
+        )
+        self.assertEqual(resp.status_code, 201)
+        row = WalletLookupKey.objects.get()
+        self.assertEqual(row.wallet.wallet_hash, 'wallet-hash-1')
+
+    def test_one_row_per_wallet_enforced_by_db(self):
+        self._mint('wallet-hash-1')
+        from django.db import IntegrityError, transaction
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                WalletLookupKey.objects.create(
+                    wallet=self.wallet, key_hash=hash_key('other')
+                )
+
+
+@override_settings(FERNET_KEY=_TEST_LOOKUP_FERNET_KEY)
+class TestWalletLookupKeyRevoke(LookupKeyTestMixin, TestCase):
+
+    def setUp(self):
+        super().setUp()
+        self.wallet = self._make_wallet('wallet-hash-1')
+        self.key = self._mint('wallet-hash-1')
+
+    def test_revoke_returns_204_and_removes_key(self):
+        resp = self.client.delete(_LOOKUP_URL, **self._auth('wallet-hash-1'))
+        self.assertEqual(resp.status_code, 204)
+        self.assertEqual(WalletLookupKey.objects.count(), 0)
+        self.assertIsNone(resolve_key(self.key))
+
+    def test_second_revoke_returns_404(self):
+        # Makes a blind DELETE-then-POST rotation safe to retry.
+        self.client.delete(_LOOKUP_URL, **self._auth('wallet-hash-1'))
+        resp = self.client.delete(_LOOKUP_URL, **self._auth('wallet-hash-1'))
+        self.assertEqual(resp.status_code, 404)
+
+    def test_revoke_without_key_returns_404(self):
+        other = self._make_wallet('wallet-hash-2')
+        resp = self.client.delete(_LOOKUP_URL, **self._auth('wallet-hash-2'))
+        self.assertEqual(resp.status_code, 404)
+        # And it must not have touched anyone else's key.
+        self.assertEqual(WalletLookupKey.objects.count(), 1)
+        self.assertIsNotNone(resolve_key(self.key))
+
+    def test_cannot_revoke_another_wallets_key(self):
+        self._make_wallet('wallet-hash-2')
+        resp = self.client.delete(_LOOKUP_URL, **self._auth('wallet-hash-2'))
+        self.assertEqual(resp.status_code, 404)
+        self.assertEqual(WalletLookupKey.objects.count(), 1)
+
+    def test_revoke_without_token_is_rejected(self):
+        resp = self.client.delete(_LOOKUP_URL, HTTP_WALLET_HASH='wallet-hash-1')
+        self.assertIn(resp.status_code, (401, 403))
+        self.assertEqual(WalletLookupKey.objects.count(), 1)
+
+    def test_rotation_yields_a_working_new_key(self):
+        self.client.delete(_LOOKUP_URL, **self._auth('wallet-hash-1'))
+        new_key = self._mint('wallet-hash-1', label='rotated')
+        self.assertNotEqual(new_key, self.key)
+        self.assertIsNone(resolve_key(self.key))
+        self.assertIsNotNone(resolve_key(new_key))
+
+
+@override_settings(FERNET_KEY=_TEST_LOOKUP_FERNET_KEY)
+class TestWalletLookupKeyBalances(LookupKeyTestMixin, TestCase):
+
+    def setUp(self):
+        super().setUp()
+        self.wallet = self._make_wallet('wallet-hash-1')
+        self.key = self._mint('wallet-hash-1')
+        self.redis_patcher = patch(
+            'main.utils.wallet_balances.settings.REDISKV', self.fake_redis
+        )
+        self.redis_patcher.start()
+
+    def tearDown(self):
+        self.redis_patcher.stop()
+        super().tearDown()
+
+    def _get(self, assets=None, key=None):
+        params = {'assets': assets} if assets else {}
+        return self.client.get(
+            _LOOKUP_BALANCES_URL, params,
+            HTTP_X_API_KEY=key if key is not None else self.key
+        )
+
+    def test_returns_bch_balance_and_wallet_hash(self):
+        resp = self._get()
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['wallet_hash'], 'wallet-hash-1')
+        self.assertIn('balance', resp.data['bch'])
+        self.assertEqual(resp.data['assets'], [])
+
+    def test_returns_requested_asset_in_order(self):
+        resp = self._get(assets=f'ct/{_CATEGORY},ct/{"c" * 64}')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(
+            [a['asset_id'] for a in resp.data['assets']],
+            [f'ct/{_CATEGORY}', f'ct/{"c" * 64}'],
+        )
+
+    def test_bch_can_be_requested_as_an_asset(self):
+        resp = self._get(assets='bch')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(len(resp.data['assets']), 1)
+        self.assertEqual(resp.data['assets'][0]['asset_id'], 'bch')
+
+    def test_unknown_asset_returns_zero_not_an_error(self):
+        resp = self._get(assets=f'ct/{_CATEGORY}')
+        self.assertEqual(resp.status_code, 200)
+        entry = resp.data['assets'][0]
+        self.assertEqual(entry['balance'], 0)
+        self.assertFalse(entry['found'])
+
+    def test_slp_asset_returns_400(self):
+        resp = self._get(assets='slp/abc123')
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn('no longer supported', resp.data['error'])
+
+    def test_malformed_asset_returns_400(self):
+        resp = self._get(assets='nonsense')
+        self.assertEqual(resp.status_code, 400)
+
+    def test_missing_header_returns_401(self):
+        resp = self.client.get(_LOOKUP_BALANCES_URL)
+        self.assertEqual(resp.status_code, 401)
+
+    def test_unknown_key_returns_401(self):
+        resp = self._get(key='not-a-real-key')
+        self.assertEqual(resp.status_code, 401)
+
+    def test_revoked_key_returns_401(self):
+        self.client.delete(_LOOKUP_URL, **self._auth('wallet-hash-1'))
+        resp = self._get()
+        self.assertEqual(resp.status_code, 401)
+
+    def test_too_many_assets_returns_400(self):
+        many = ','.join(f'ct/{i:064x}' for i in range(MAX_ASSETS_PER_REQUEST + 1))
+        resp = self._get(assets=many)
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn('Too many', resp.data['error'])
+
+    def test_read_updates_last_used_at(self):
+        self.assertIsNone(WalletLookupKey.objects.get().last_used_at)
+        self._get()
+        self.assertIsNotNone(WalletLookupKey.objects.get().last_used_at)
+
+
+@override_settings(FERNET_KEY=_TEST_LOOKUP_FERNET_KEY)
+class TestWalletLookupKeyAdmin(LookupKeyTestMixin, TestCase):
+
+    def setUp(self):
+        super().setUp()
+        self.wallet = self._make_wallet('wallet-hash-1')
+        self.key = self._mint('wallet-hash-1')
+        self.admin_user = User.objects.create_superuser(
+            username='admin', email='admin@example.com', password='pw'
+        )
+        self.client.force_login(self.admin_user)
+
+    def test_admin_can_delete_a_key_for_a_locked_out_wallet(self):
+        pk = WalletLookupKey.objects.get().pk
+        resp = self.client.post(
+            reverse('admin:main_walletlookupkey_delete', args=[pk]),
+            {'post': 'yes'},
+            follow=True,
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(WalletLookupKey.objects.count(), 0)
+        self.assertIsNone(resolve_key(self.key))
+
+    def test_admin_changelist_searches_by_wallet_hash(self):
+        resp = self.client.get(
+            reverse('admin:main_walletlookupkey_changelist') + '?q=wallet-hash-1'
+        )
+        self.assertEqual(resp.status_code, 200)
+
+
+@override_settings(FERNET_KEY=_TEST_LOOKUP_FERNET_KEY)
+class TestRevokeLookupKeyCommand(LookupKeyTestMixin, TestCase):
+
+    def setUp(self):
+        super().setUp()
+        self.wallet = self._make_wallet('wallet-hash-1')
+        self.key = self._mint('wallet-hash-1')
+
+    def _run(self, *args, **kwargs):
+        out = StringIO()
+        call_command('revoke_lookup_key', *args, stdout=out, **kwargs)
+        return out.getvalue()
+
+    def test_revokes_by_wallet_hash(self):
+        output = self._run('wallet-hash-1')
+        self.assertIn('revoked', output)
+        self.assertEqual(WalletLookupKey.objects.count(), 0)
+        self.assertIsNone(resolve_key(self.key))
+
+    def test_dry_run_leaves_the_key_in_place(self):
+        output = self._run('wallet-hash-1', dry_run=True)
+        self.assertIn('would revoke', output)
+        self.assertEqual(WalletLookupKey.objects.count(), 1)
+
+    def test_reports_wallet_without_a_key(self):
+        self._make_wallet('wallet-hash-2')
+        output = self._run('wallet-hash-2')
+        self.assertIn('no lookup key', output)
+        self.assertEqual(WalletLookupKey.objects.count(), 1)
+
+    def test_handles_multiple_wallet_hashes(self):
+        self._make_wallet('wallet-hash-2')
+        self._mint('wallet-hash-2')
+        self._run('wallet-hash-1', 'wallet-hash-2')
+        self.assertEqual(WalletLookupKey.objects.count(), 0)
