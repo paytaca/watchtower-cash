@@ -112,6 +112,13 @@ Status codes:
 | `400` | Malformed asset id, an `slp/...` id, or `bch` |
 | `401` | Missing, unknown, or revoked `X-Api-Key` |
 
+All failures return `401` with `WWW-Authenticate: X-Api-Key` — including a
+completely missing header. `LookupKeyAuthentication` raises rather than
+returning `None` in that case on purpose: it is the only authenticator on the
+view, so returning `None` would leave `request.user` as `AnonymousUser` and push
+the failure into the handler, turning a missing header into a `500`.
+`IsAuthenticatedLookupKey` backs this up as a second line of defence.
+
 **Unknown assets are not errors.** A category that does not exist in our database
 returns `balance: 0, found: false` so one bad id in a batch does not fail the
 whole read.

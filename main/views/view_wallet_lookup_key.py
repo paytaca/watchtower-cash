@@ -7,7 +7,7 @@ from drf_yasg.utils import swagger_auto_schema
 
 from rest_framework.authentication import BaseAuthentication
 from rest_framework.exceptions import AuthenticationFailed
-from rest_framework.permissions import AllowAny, BasePermission
+from rest_framework.permissions import BasePermission
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.views import APIView
@@ -66,6 +66,19 @@ class IsAuthenticatedWallet(BasePermission):
         )
 
 
+class IsAuthenticatedLookupKey(BasePermission):
+    """
+    Require that authentication produced a WalletLookupKey.
+
+    Defence in depth behind LookupKeyAuthentication: if that class ever fails
+    open and leaves request.user as AnonymousUser, this denies the request
+    rather than letting the handler dereference it.
+    """
+
+    def has_permission(self, request, view):
+        return isinstance(request.user, WalletLookupKey)
+
+
 class LookupKeyAuthentication(BaseAuthentication):
     """
     Authenticate via the X-Api-Key header.
@@ -73,13 +86,18 @@ class LookupKeyAuthentication(BaseAuthentication):
     Returns (lookup_key_instance, raw_key). Raises AuthenticationFailed when
     the header is missing or the key is unknown -- a revoked key is simply
     absent from the table.
+
+    Note this deliberately raises rather than returning None when the header is
+    absent. It is the only authenticator on the view, so returning None would
+    leave request.user as AnonymousUser and defer the failure to the handler,
+    which turns a missing header into a 500 rather than a 401.
     """
 
     def authenticate(self, request):
         raw_key = get_lookup_key_from_request(request)
 
         if not raw_key:
-            return None
+            raise AuthenticationFailed('Missing lookup key')
 
         lookup_key = resolve_key(raw_key)
 
@@ -94,7 +112,11 @@ class LookupKeyAuthentication(BaseAuthentication):
 
 
 class WalletLookupKeyBaseView(APIView):
-    permission_classes = [AllowAny]
+    # Every subclass supplies its own authentication and permission classes:
+    # this endpoint has no anonymous use case, so leaving the DRF default
+    # AllowAny here would let a subclass reach its handler with an
+    # AnonymousUser if its authenticator returned None.
+    permission_classes = [IsAuthenticatedWallet]
     throttle_classes = [WalletLookupKeyThrottle]
 
 
@@ -210,6 +232,7 @@ class WalletLookupKeyBalanceView(WalletLookupKeyBaseView):
     """
 
     authentication_classes = [LookupKeyAuthentication]
+    permission_classes = [IsAuthenticatedLookupKey]
 
     @swagger_auto_schema(
         operation_description=(
