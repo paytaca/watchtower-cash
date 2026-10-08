@@ -613,6 +613,42 @@ _CATEGORY = 'a' * 64
 _TXID = 'b' * 64
 
 
+class FakeRedis:
+    """
+    Minimal in-memory Redis stand-in.
+
+    A MagicMock with `get.return_value = None` can never exercise a cache *hit*,
+    which is exactly the path where the two balance endpoints used to collide.
+    This actually stores values and honours SCAN, so cross-endpoint cache
+    contamination is observable.
+    """
+
+    def __init__(self):
+        self.store = {}
+
+    def get(self, key, default=None):
+        return self.store.get(key, default)
+
+    def set(self, key, value, ex=None):
+        self.store[key] = value
+        return True
+
+    def delete(self, *keys):
+        for key in keys:
+            self.store.pop(key, None)
+        return True
+
+    def scan_iter(self, match=None, count=None):
+        keys = list(self.store)
+        if match:
+            import fnmatch
+            keys = [k for k in keys if fnmatch.fnmatch(k, match)]
+        return iter(keys)
+
+    def keys(self, pattern='*'):
+        return list(self.scan_iter(match=pattern))
+
+
 class LookupKeyTestMixin:
     """Helpers for standing up a wallet with a valid WalletAuthentication token."""
 
@@ -638,11 +674,9 @@ class LookupKeyTestMixin:
     def setUp(self):
         super().setUp()
         self.wallet_tokens = {}
-        self.fake_redis = MagicMock()
-        self.fake_redis.get.return_value = None
-        self.fake_redis.set.return_value = True
-        self.fake_redis.delete.return_value = True
-        self.fake_redis.scan_iter.return_value = iter([])
+        # A real (if tiny) store, not a MagicMock, so cache hits and the
+        # cross-endpoint contamination they used to cause are observable.
+        self.fake_redis = FakeRedis()
 
     def _auth(self, wallet_hash):
         # WSGI-style META keys: Django's HttpHeaders resolves 'wallet-hash' and
@@ -878,8 +912,13 @@ class TestWalletLookupKeyBalances(LookupKeyTestMixin, TestCase):
         resp = self._get()
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.data['wallet_hash'], 'wallet-hash-1')
-        self.assertIn('balance', resp.data['bch'])
         self.assertEqual(resp.data['assets'], [])
+        # Assert the whole key set, not just that 'balance' is present: a
+        # shape regression here would otherwise pass silently.
+        self.assertEqual(
+            set(resp.data['bch']),
+            {'balance', 'spendable', 'valid'},
+        )
 
     def test_returns_requested_asset_in_order(self):
         resp = self._get(assets=f'ct/{_CATEGORY},ct/{"c" * 64}')
@@ -940,6 +979,103 @@ class TestWalletLookupKeyBalances(LookupKeyTestMixin, TestCase):
         self.assertIsNone(WalletLookupKey.objects.get().last_used_at)
         self._get()
         self.assertIsNotNone(WalletLookupKey.objects.get().last_used_at)
+
+
+@override_settings(FERNET_KEY=_TEST_LOOKUP_FERNET_KEY)
+class TestWalletLookupKeyCacheIsolation(LookupKeyTestMixin, TestCase):
+    """
+    The lookup-key balance endpoint and the pre-existing /api/balance/wallet/
+    endpoint used to share Redis keys while writing *different* payload shapes.
+    Both replace their entire response with whatever they read back, so a
+    lookup-key read could silently strip fields from the balance endpoint and
+    vice versa. These tests pin the isolation.
+    """
+
+    # What the pre-existing balance endpoint puts in its cache and returns.
+    LEGACY_BCH_KEYS = {'valid', 'wallet', 'spendable', 'balance', 'yield'}
+    LEGACY_TOKEN_KEYS = {'valid', 'wallet', 'balance', 'spendable', 'token_id'}
+
+    def setUp(self):
+        super().setUp()
+        self.wallet = self._make_wallet('wallet-hash-1')
+        self.key = self._mint('wallet-hash-1')
+        self.redis_patcher = patch(
+            'main.utils.wallet_balances.settings.REDISKV', self.fake_redis
+        )
+        self.redis_patcher.start()
+
+    def tearDown(self):
+        self.redis_patcher.stop()
+        super().tearDown()
+
+    def test_lookup_writes_its_own_namespace(self):
+        self.client.get(_LOOKUP_BALANCES_URL, HTTP_X_API_KEY=self.key)
+        written = list(self.fake_redis.keys())
+        self.assertTrue(written, 'expected the lookup read to populate the cache')
+        for key in written:
+            self.assertTrue(
+                key.startswith('lookup:balance:'),
+                f'lookup endpoint wrote outside its namespace: {key}',
+            )
+
+    def test_does_not_write_legacy_balance_keys(self):
+        self.client.get(
+            _LOOKUP_BALANCES_URL,
+            {'assets': f'ct/{_CATEGORY}'},
+            HTTP_X_API_KEY=self.key,
+        )
+        for key in self.fake_redis.keys():
+            self.assertFalse(
+                key.startswith('wallet:balance:'),
+                f'lookup endpoint polluted the balance endpoint cache: {key}',
+            )
+
+    def test_legacy_warm_does_not_strip_lookup_fields(self):
+        """
+        Reverse direction: if the balance endpoint's payload is what we read
+        back, `found` and `decimals` would vanish from the asset entry.
+        """
+        self.fake_redis.store['lookup:balance:ft:wallet-hash-1:' + _CATEGORY] = \
+            json.dumps({'balance': 5.0, 'spendable': 5.0, 'token_id': _CATEGORY,
+                        'valid': True})
+
+        resp = self.client.get(
+            _LOOKUP_BALANCES_URL,
+            {'assets': f'ct/{_CATEGORY}'},
+            HTTP_X_API_KEY=self.key,
+        )
+
+        self.assertEqual(resp.status_code, 200)
+        entry = resp.data['assets'][0]
+        # The lookup contract promises these regardless of who warmed the cache.
+        self.assertIn('found', entry)
+        self.assertIn('decimals', entry)
+
+    def test_two_nfts_in_one_category_do_not_collide(self):
+        """
+        Keying the NFT cache by category alone makes every NFT in a category
+        share one slot, so the second read returns the first NFT's balance.
+        """
+        txid2 = 'd' * 64
+        id1 = f'ct/{_CATEGORY}/{_TXID}/0'
+        id2 = f'ct/{_CATEGORY}/{txid2}/1'
+
+        first = self.client.get(
+            _LOOKUP_BALANCES_URL, {'assets': id1}, HTTP_X_API_KEY=self.key
+        )
+        self.assertEqual(first.status_code, 200)
+
+        # Warm the slot for NFT #1, then request NFT #2 from the same category.
+        second = self.client.get(
+            _LOOKUP_BALANCES_URL, {'assets': id2}, HTTP_X_API_KEY=self.key
+        )
+        self.assertEqual(second.status_code, 200)
+
+        self.assertEqual(second.data['assets'][0]['asset_id'],
+                         f'ct/{_CATEGORY}/{txid2}/1')
+
+        keys = [k for k in self.fake_redis.keys() if 'nft' in k]
+        self.assertEqual(len(keys), 2, f'NFTs shared a cache slot: {keys}')
 
 
 @override_settings(FERNET_KEY=_TEST_LOOKUP_FERNET_KEY)

@@ -2,6 +2,7 @@ from django.core.management.base import BaseCommand
 
 from main.models import WalletLookupKey
 from main.utils.cache import scan_keys
+from main.utils.wallet_balances import LOOKUP_CACHE_PREFIX
 from django.conf import settings
 
 
@@ -62,7 +63,7 @@ class Command(BaseCommand):
     def _clear_wallet_balance_cache(self, wallet_hash):
         cache = settings.REDISKV
         try:
-            keys = scan_keys(cache, f'wallet:balance:*:{wallet_hash}*')
+            keys = scan_keys(cache, f'{LOOKUP_CACHE_PREFIX}:*:{wallet_hash}*')
             if keys:
                 cache.delete(*keys)
         except Exception as exc:

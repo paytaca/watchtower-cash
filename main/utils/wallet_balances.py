@@ -99,6 +99,19 @@ def _get_bch_balance(query, include_token_sats=False, exclude_dust=True):
 # prefix and taking the tail handles that.
 CT_PREFIX = 'ct/'
 
+# Cache namespace for this module. Deliberately NOT shared with
+# main/views/view_balance.py's `wallet:balance:*` keys.
+#
+# The two readers want different payload shapes: this endpoint needs `decimals`
+# and `found` (to distinguish "unknown category" from "zero balance"), while the
+# balance endpoint needs `token_id`, `spendable`, `wallet` and `yield`. Both
+# replace their whole response with whatever they read back
+# (`data = json.loads(cached_data)`), so sharing a key would let one endpoint
+# silently strip fields from the other in both directions. Namespacing keeps them
+# independent; the cost is one extra aggregate query per endpoint per TTL window,
+# which is negligible.
+LOOKUP_CACHE_PREFIX = 'lookup:balance'
+
 
 class InvalidAssetId(ValueError):
     """Raised when an asset id cannot be parsed."""
@@ -107,6 +120,28 @@ class InvalidAssetId(ValueError):
 def get_cache_ttl():
     # Same TTL policy as view_balance.Balance
     return 60 if settings.BCH_NETWORK != 'mainnet' else 60 * 5
+
+
+def get_bch_cache_key(wallet) -> str:
+    return f'{LOOKUP_CACHE_PREFIX}:bch:{wallet.wallet_hash}'
+
+
+def get_asset_cache_key(wallet, descriptor) -> str:
+    """
+    Cache key for one asset.
+
+    NFTs are keyed by category *and* token identity. Keying by category alone --
+    as view_balance.Balance does -- makes every NFT in a category share one slot,
+    so reading NFT #1 then NFT #2 would return NFT #1's balance.
+    """
+    if descriptor['type'] == 'nft':
+        return (
+            f'{LOOKUP_CACHE_PREFIX}:nft:{wallet.wallet_hash}:'
+            f'{descriptor["category"]}:{descriptor["txid"]}:{descriptor["index"]}'
+        )
+    return (
+        f'{LOOKUP_CACHE_PREFIX}:ft:{wallet.wallet_hash}:{descriptor["category"]}'
+    )
 
 
 def parse_asset_id(asset_id: str) -> dict:
@@ -184,7 +219,7 @@ def get_bch_balance(wallet) -> dict:
     wallet.last_balance_check and never enqueues a rescan.
     """
     cache = settings.REDISKV
-    cache_key = f'wallet:balance:bch:{wallet.wallet_hash}'
+    cache_key = get_bch_cache_key(wallet)
     cached_data = cache.get(cache_key)
 
     if cached_data:
@@ -222,7 +257,7 @@ def get_asset_balance(wallet, asset_id: str) -> dict:
     category = descriptor['category']
 
     cache = settings.REDISKV
-    cache_key = f'wallet:balance:token:{wallet.wallet_hash}:{category}'
+    cache_key = get_asset_cache_key(wallet, descriptor)
     cached_data = cache.get(cache_key)
 
     if cached_data:

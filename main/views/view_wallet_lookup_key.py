@@ -22,6 +22,7 @@ from main.serializers import (
 from main.throttles import WalletLookupKeyThrottle
 from main.utils.wallet_balances import (
     InvalidAssetId,
+    LOOKUP_CACHE_PREFIX,
     get_wallet_balances,
     parse_assets_param,
 )
@@ -213,10 +214,9 @@ class WalletLookupKeyView(WalletLookupKeyBaseView):
     def _clear_wallet_cache(self, wallet_hash):
         cache = settings.REDISKV
         try:
-            # Only the BCH and per-category keys matter here; scan_keys avoids
-            # blocking Redis with KEYS.
+            # scan_keys avoids blocking Redis with KEYS.
             from main.utils.cache import scan_keys
-            keys = scan_keys(cache, f'wallet:balance:*:{wallet_hash}*')
+            keys = scan_keys(cache, f'{LOOKUP_CACHE_PREFIX}:*:{wallet_hash}*')
             if keys:
                 cache.delete(*keys)
         except Exception as exc:

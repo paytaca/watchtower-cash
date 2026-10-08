@@ -201,9 +201,24 @@ by IP, so all keys behind one egress IP share it.
   `main/views/view_balance.py`, but `main/utils/` needed them and importing up
   into `views/` inverted the layering. `view_balance.py` re-exports them, so its
   behaviour is unchanged.
-- **Reuses the existing Redis cache keys** — `wallet:balance:bch:{wallet_hash}`
-  and `wallet:balance:token:{wallet_hash}:{category}` — so reads through this
-  endpoint warm the cache for the normal balance endpoint too.
+- **Uses its own Redis namespace** — `lookup:balance:*`, deliberately separate
+  from the balance endpoint's `wallet:balance:*`.
+
+  An earlier draft shared those keys on the theory that reads here would warm the
+  other endpoint's cache. That does not work, because both readers replace their
+  *entire* response with whatever they read back
+  (`data = json.loads(cached_data)`) and the two endpoints want different
+  payload shapes. Sharing meant a lookup read silently stripped `wallet`, `yield`,
+  `spendable` and `token_id` from the balance endpoint's responses — and, in the
+  other direction, stripped `decimals` and `found` from this one. Namespacing
+  costs one extra aggregate query per endpoint per TTL window; the sharing was
+  the liability, not the feature.
+
+- **NFT cache entries are keyed by token identity**, not by category alone.
+  `view_balance.Balance` keys by category, which makes every NFT in a category
+  share one slot, so reading NFT #1 then NFT #2 returns NFT #1's balance. This
+  endpoint keys NFTs as `lookup:balance:nft:{hash}:{category}:{txid}:{index}`,
+  avoiding that. (The pre-existing collision in `view_balance.py` is untouched.)
 - **One aggregate query per asset**, capped at 20. Multi-token batching is
   unreliable on `psqlextra`'s `PostgresModel` manager; see the note on
   `_get_slp_balance` in `main/utils/wallet_balances.py` and
@@ -211,7 +226,7 @@ by IP, so all keys behind one egress IP share it.
 
 ## Tests
 
-`main/tests.py`, 39 tests across 7 classes:
+`main/tests.py`, 44 tests across 8 classes:
 
 | Class | Covers |
 |---|---|
@@ -222,6 +237,12 @@ by IP, so all keys behind one egress IP share it.
 | `TestWalletLookupKeyBalances` | Balance reads, `401`s, `400`s, `last_used_at`, revoked key |
 | `TestWalletLookupKeyAdmin` | Admin delete for a locked-out wallet |
 | `TestRevokeLookupKeyCommand` | Bulk revoke, `--dry-run`, no-key reporting |
+| `TestWalletLookupKeyCacheIsolation` | Cache namespace separation from the balance endpoint, and NFT key collisions |
+
+`TestWalletLookupKeyCacheIsolation` uses an in-memory `FakeRedis` rather than a
+`MagicMock`, because a mock whose `get()` always returns `None` can never
+exercise a cache *hit* — which is precisely the path where the two endpoints used
+to collide.
 
 Run with:
 
