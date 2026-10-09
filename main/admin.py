@@ -1292,3 +1292,49 @@ class AddressBookAddressAdmin(admin.ModelAdmin):
     list_filter = [
         'address_type'
     ]
+
+
+@admin.register(WalletLookupKey)
+class WalletLookupKeyAdmin(DynamicRawIDMixin, admin.ModelAdmin):
+    # Delete is granted by Django's default ModelAdmin.has_delete_permission,
+    # so registering the model gives admins both a delete button and bulk
+    # "delete selected". That is the escape hatch for wallets whose owner has
+    # lost access and can no longer revoke their own key.
+    list_display = [
+        'id',
+        'wallet',
+        'label',
+        'truncated_key_hash',
+        'date_created',
+        'last_used_at',
+    ]
+
+    # Admins cannot search by the raw key since only its digest is stored.
+    # wallet__wallet_hash is the practical handle.
+    search_fields = [
+        'wallet__wallet_hash',
+        'label',
+        'key_hash',
+    ]
+
+    readonly_fields = [
+        'key_hash',
+        'date_created',
+        'last_used_at',
+    ]
+
+    # Without this the change form renders a <select> of every Wallet row.
+    # Wallet is not readonly here, because binding a key to a wallet is
+    # exactly the admin-side recovery path when a wallet owner has lost access
+    # and can no longer revoke their own key.
+    #
+    # Note AddressBookAdmin has the same wallet FK without the mixin. Left as
+    # found: it predates this branch and is not ours to change here.
+    dynamic_raw_id_fields = [
+        'wallet',
+    ]
+
+    def truncated_key_hash(self, obj):
+        return f'{obj.key_hash[:12]}...'
+
+    truncated_key_hash.short_description = 'Key hash'

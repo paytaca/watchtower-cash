@@ -3,6 +3,7 @@ from django.db.models.functions import Coalesce
 from rest_framework import serializers, exceptions
 
 from main.models import AssetSetting, Token, Transaction, Wallet
+from main.utils.tx_fee import truncate
 
 class TokenSerializer(serializers.ModelSerializer):
     id = serializers.CharField(read_only=True, source="info_id")
@@ -53,25 +54,7 @@ class SlpFungibleTokenSerializer(serializers.ModelSerializer):
         ]
 
     def truncate(self, num, decimals):
-        """
-        Truncate instead of rounding off.
-        Rounding off sometimes results to a value greater than the actual balance.
-        """
-        # Preformat first if it it's in scientific notation form
-        if "e-" in str(num):
-            num, power = str(num).split("e-")
-            power = int(power)
-            num = num.replace(".", "")
-            left_pad = (power - 1) * "0"
-            sp = "0." + left_pad + num
-        else:
-            sp = str(num)
-        # Proceed to truncate
-        sp = sp.split(".")
-        if len(sp) == 2:
-            return float(".".join([sp[0], sp[1][:decimals]]))
-        else:
-            return num
+        return truncate(num, decimals)
 
     def get_balance(self, obj):
         """

@@ -35,3 +35,4 @@ from main.views.view_wallet_history_explorer import *
 from main.views.view_wallet_balance_history import *
 from main.views.view_growth_report import *
 from main.views.view_wallet_activity_report import *
+from main.views.view_wallet_lookup_key import *

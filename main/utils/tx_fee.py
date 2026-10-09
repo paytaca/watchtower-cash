@@ -125,3 +125,26 @@ def get_tx_fee_bch(**kwargs):
     return satoshi_to_bch(
         get_tx_fee_sats(**kwargs)
     )
+
+
+def truncate(num, decimals):
+    """
+    Truncate instead of rounding off.
+
+    Rounding off sometimes results in a value greater than the actual balance.
+    """
+    # Preformat first if it's in scientific notation form
+    if 'e-' in str(num):
+        num, power = str(num).split('e-')
+        power = int(power)
+        num = num.replace('.', '')
+        left_pad = (power - 1) * '0'
+        sp = '0.' + left_pad + num
+    else:
+        sp = str(num)
+    # Proceed to truncate
+    sp = sp.split('.')
+    if len(sp) == 2:
+        return float('.'.join([sp[0], sp[1][:decimals]]))
+    else:
+        return num

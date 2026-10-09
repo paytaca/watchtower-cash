@@ -1,10 +1,8 @@
 from django.conf import settings
 from drf_yasg.utils import swagger_auto_schema
 from main.models import Transaction, Wallet, Token, CashFungibleToken, CashNonFungibleToken
-from django.db.models import Q, Sum, F, Count
+from django.db.models import Q
 from django.utils import timezone
-from django.db.models.functions import Coalesce
-from django.db import models
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.views import APIView
@@ -16,7 +14,15 @@ from main.tasks import rescan_utxos
 from main.utils.tx_fee import (
     get_tx_fee_sats,
     bch_to_satoshi,
-    satoshi_to_bch
+    satoshi_to_bch,
+    truncate,
+)
+# The aggregation primitives live in main/utils/wallet_balances.py so that
+# main/utils/ can use them too without importing up into views/.
+from main.utils.wallet_balances import (
+    _get_bch_balance,
+    _get_ct_balance,
+    _get_slp_balance,
 )
 
 
@@ -27,86 +33,10 @@ from django.core.exceptions import ObjectDoesNotExist
 LOGGER = logging.getLogger(__name__)
 
 
-def _get_slp_balance(query, multiple_tokens=False):
-    qs = Transaction.objects.filter(query)
-    if multiple_tokens:
-        # TODO: This is not working as expected in PostgresModel manager
-        # I created a github issue for this here:
-        # https://github.com/SectorLabs/django-postgres-extra/issues/143
-        # Multiple tokens balance will be disabled til that issue is resolved
-        qs_balance = qs.annotate(
-            _token=F('token__tokenid'),
-            token_name=F('token__name'),
-            token_ticker=F('token__token_ticker'),
-            token_type=F('token__token_type')
-        ).rename_annotations(
-            _token='token_id'
-        ).values(
-            'token_id',
-            'token_name',
-            'token_ticker',
-            'token_type'
-        ).annotate(
-            balance=Coalesce(Sum('amount'), 0)
-        )
-    else:
-        qs_balance = qs.aggregate(Sum('amount'))
-    return qs_balance
-
-
-def _get_ct_balance(query, multiple_tokens=False):
-    return _get_slp_balance(query, multiple_tokens)
-
-
-def _get_bch_balance(query, include_token_sats=False, exclude_dust=True):
-    # Exclude dust amounts as they're likely to be SLP transactions
-    # TODO: Needs another more sure way to exclude SLP transactions
-    dust = 546 # / (10 ** 8)
-    if include_token_sats:
-        if exclude_dust:
-            query = query & Q(value__gt=dust)
-        # Use select_related to optimize the query
-        qs = Transaction.objects.filter(query).select_related('address', 'token')
-    else:
-        if exclude_dust:
-            query = query & Q(value__gt=dust) & Q(token__name__iexact='bch')
-        else:
-            query = query & Q(token__name__iexact='bch')
-        # Use select_related to optimize the token join
-        qs = Transaction.objects.filter(query).select_related('address', 'token')
-    
-    # Get both count and sum in a single query using annotations
-    # This avoids executing the query twice
-    qs_annotated = qs.aggregate(
-        balance=Coalesce(Sum('value'), 0),
-        count=Count('id')
-    )
-    qs_count = qs_annotated.get('count', 0)
-    qs_balance = {'balance': qs_annotated.get('balance', 0)}
-    return qs_balance, qs_count
-
 class Balance(APIView):
 
     def truncate(self, num, decimals):
-        """
-        Truncate instead of rounding off
-        Rounding off sometimes results to a value greater than the actual balance
-        """
-        # Preformat first if it it's in scientific notation form
-        if 'e-' in str(num):
-            num, power = str(num).split('e-')
-            power = int(power)
-            num = num.replace('.', '')
-            left_pad = (power - 1) * '0'
-            sp = '0.' + left_pad + num
-        else:
-            sp = str(num)
-        # Proceed to truncate
-        sp = sp.split('.')
-        if len(sp) == 2:
-            return float('.'.join([sp[0], sp[1][:decimals]]))
-        else:
-            return num
+        return truncate(num, decimals)
 
     def get(self, request, *args, **kwargs):
         slpaddress = kwargs.get('slpaddress', '')
