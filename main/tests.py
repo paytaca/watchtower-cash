@@ -876,12 +876,16 @@ class TestWalletLookupKeyMint(LookupKeyTestMixin, TestCase):
             _LOOKUP_URL, {'label': 'x'}, format='json',
             HTTP_WALLET_HASH='wallet-hash-1',
         )
-        self.assertIn(resp.status_code, (401, 403))
+        self.assertEqual(resp.status_code, 403)
         self.assertEqual(WalletLookupKey.objects.count(), 0)
 
     def test_mint_without_wallet_hash_is_rejected(self):
+        # 403, not 401: WalletAuthentication defines no authenticate_header, so
+        # DRF has no challenge to send and renders PermissionDenied as 403.
+        # Note this means these two read as "forbidden" when they are really
+        # "unauthenticated" -- see the note on the revoke test below.
         resp = self.client.post(_LOOKUP_URL, {'label': 'x'}, format='json')
-        self.assertIn(resp.status_code, (401, 403))
+        self.assertEqual(resp.status_code, 403)
         self.assertEqual(WalletLookupKey.objects.count(), 0)
 
     def test_cannot_bind_key_to_another_wallet(self):
@@ -941,8 +945,15 @@ class TestWalletLookupKeyRevoke(LookupKeyTestMixin, TestCase):
         self.assertEqual(WalletLookupKey.objects.count(), 1)
 
     def test_revoke_without_token_is_rejected(self):
+        # The 403 here (and in the two mint tests above) is arguably the wrong
+        # code: no token was presented, so per RFC 7235 this should be 401 with a
+        # WWW-Authenticate challenge. WalletAuthentication never defines
+        # authenticate_header, and PermissionDenied stays 403 regardless of it,
+        # so the fix belongs in that shared class -- which every wallet endpoint
+        # uses, not just this one. Left alone deliberately; pinned here so the
+        # current behaviour is explicit rather than incidental.
         resp = self.client.delete(_LOOKUP_URL, HTTP_WALLET_HASH='wallet-hash-1')
-        self.assertIn(resp.status_code, (401, 403))
+        self.assertEqual(resp.status_code, 403)
         self.assertEqual(WalletLookupKey.objects.count(), 1)
 
     def test_rotation_yields_a_working_new_key(self):
