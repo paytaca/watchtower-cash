@@ -147,19 +147,42 @@ class WalletLookupKeyThrottle(throttling.SimpleRateThrottle):
     (GET /api/wallet/lookup-keys/balances/). Rate configured via
     DEFAULT_THROTTLE_RATES['wallet_lookup_key'] in settings.
 
-    The caller is a trusted backend rather than a browser, so the rate is set
-    generously; the bucket is still keyed by IP, so all keys behind one egress
-    IP share a bucket.
+    The bucket is keyed by lookup key, not by IP. DRF runs authentication before
+    check_throttles(), so by the time this is reached request.user is already the
+    resolved WalletLookupKey and its identity is a better bucket key than the
+    address: two partners behind one egress IP (which in production means "any
+    two partners at all", since they sit behind nginx) each get their own budget
+    instead of sharing one.
 
-    Note what this does and does not do: DRF runs authentication and permission
-    checks before check_throttles(), so requests that fail auth are never
-    metered. This bounds legitimate partner traffic, not credential guessing --
-    the key is 256 bits of HMAC output and is not brute-forceable.
+    Keyed by primary key, not key_hash -- the digest is a credential-derived
+    secret and has no business in a cache key name that may be logged or dumped.
+
+    Note what this does and does not do: requests that fail authentication never
+    reach check_throttles() at all, so they are never metered. This bounds
+    legitimate partner traffic, not credential guessing -- the key is 256 bits of
+    HMAC output and is not brute-forceable.
     """
     scope = 'wallet_lookup_key'
+
+    def get_ident(self, request, view):
+        # Imported here rather than at module scope to keep this file free of
+        # model imports and any load-order coupling.
+        from main.models import WalletLookupKey
+
+        user = getattr(request, 'user', None)
+        # isinstance, not an is_authenticated check: LookupKeyAuthentication
+        # returns a WalletLookupKey and never sets is_authenticated on it (only
+        # WalletAuthentication does that, on Wallet), so the attribute-based
+        # check silently fails and every request falls back to the IP bucket.
+        if isinstance(user, WalletLookupKey):
+            return f'key{user.pk}'
+        # Unreachable via the view (authentication failures 401 before
+        # throttling), but a bare request in a test must still be rate-limited
+        # rather than silently exempted.
+        return f'ip{super().get_ident(request)}'
 
     def get_cache_key(self, request, view):
         return self.cache_format % {
             'scope': self.scope,
-            'ident': self.get_ident(request),
+            'ident': self.get_ident(request, view),
         }

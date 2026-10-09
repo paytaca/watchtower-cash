@@ -1198,11 +1198,14 @@ _THROTTLE_TEST_CACHES = {
 )
 class TestWalletLookupKeyThrottleScopes(LookupKeyTestMixin, TestCase):
     """
-    Mint/revoke and balance reads must not share a throttle bucket.
+    Mint/revoke and balance reads must not share a throttle bucket, and the read
+    bucket must be keyed per lookup key rather than per IP.
 
-    Both buckets are keyed by IP, so a shared scope let a partner server polling
-    balances at the read limit throttle a user trying to revoke their own key --
-    on exactly the lockout path that admin-side revocation exists to solve.
+    A shared scope let a partner server polling balances at the read limit
+    throttle a user trying to revoke their own key -- on exactly the lockout
+    path that admin-side revocation exists to solve. An IP-keyed read bucket has
+    the same problem across partners: in production they are all behind nginx, so
+    "same IP" means "same egress for everyone".
     """
 
     def setUp(self):
@@ -1221,6 +1224,25 @@ class TestWalletLookupKeyThrottleScopes(LookupKeyTestMixin, TestCase):
     def _flush_throttle_cache(self):
         from django.core.cache import cache
         cache.clear()
+
+    def _second_key(self):
+        """A second wallet's key, which will be used from the same client IP."""
+        self._make_wallet('wallet-hash-2')
+        return self._mint('wallet-hash-2')
+
+    def _drain_read_bucket(self, key):
+        """Burn a key's whole read budget; return True once it is exhausted."""
+        throttle = WalletLookupKeyThrottle()
+        num_requests, _ = throttle.parse_rate(throttle.get_rate())
+        for _ in range(num_requests):
+            self.assertTrue(
+                self.client.get(
+                    _LOOKUP_BALANCES_URL, HTTP_X_API_KEY=key
+                ).status_code == 200
+            )
+        return self.client.get(
+            _LOOKUP_BALANCES_URL, HTTP_X_API_KEY=key
+        ).status_code == 429
 
     def test_mint_and_read_use_different_scopes(self):
         manage = WalletLookupKeyManageThrottle()
@@ -1244,18 +1266,63 @@ class TestWalletLookupKeyThrottleScopes(LookupKeyTestMixin, TestCase):
         Burns the read bucket to exhaustion -- a single shared token would not
         prove anything, since 600/min is far more than one request.
         """
-        read = WalletLookupKeyThrottle()
         self._flush_throttle_cache()
-        num_requests, duration = read.parse_rate(read.get_rate())
-        for _ in range(num_requests):
-            self.assertTrue(read.allow_request(_fake_request(), None))
-        # The read bucket is now empty.
-        self.assertFalse(read.allow_request(_fake_request(), None))
+        self.assertTrue(self._drain_read_bucket(self.key))
+
         # The revoke path is untouched.
-        self.assertTrue(
-            WalletLookupKeyManageThrottle().allow_request(_fake_request(), None),
+        resp = self.client.delete(_LOOKUP_URL, **self._auth('wallet-hash-1'))
+        self.assertEqual(
+            resp.status_code, 204,
             'revoke path was throttled by balance-read traffic',
         )
+
+    def test_one_keys_budget_does_not_throttle_another(self):
+        """
+        The IP-keying regression: two partners behind one egress IP must not
+        share a read budget. In production every partner shares an IP, so this
+        was the common case, not an edge one.
+        """
+        self._flush_throttle_cache()
+        key2 = self._second_key()
+
+        self.assertTrue(self._drain_read_bucket(self.key))
+
+        # Same client IP, different key: unaffected.
+        resp = self.client.get(_LOOKUP_BALANCES_URL, HTTP_X_API_KEY=key2)
+        self.assertEqual(resp.status_code, 200)
+
+    def test_cache_key_identifies_the_key_not_the_address(self):
+        """Bucket identity must come from the key, and never leak the digest."""
+        wallet_lookup_key = WalletLookupKey.objects.get()
+        request = APIRequestFactory().get('/')
+        request.user = wallet_lookup_key
+        ident = WalletLookupKeyThrottle().get_ident(request, None)
+        self.assertIn(str(wallet_lookup_key.pk), ident)
+        self.assertNotIn(wallet_lookup_key.key_hash, ident)
+
+    def test_ident_is_derived_from_the_key_type_not_an_attribute(self):
+        """
+        WalletLookupKey has no is_authenticated attribute -- only Wallet gets
+        one, set dynamically by WalletAuthentication. An attribute-based check
+        therefore silently falls through to the IP bucket for every read,
+        which is the bug this guards.
+        """
+        wallet_lookup_key = WalletLookupKey.objects.get()
+        self.assertFalse(hasattr(wallet_lookup_key, 'is_authenticated'))
+        request = APIRequestFactory().get('/')
+        request.user = wallet_lookup_key
+        self.assertTrue(WalletLookupKeyThrottle().get_ident(request, None)
+                        .startswith('key'))
+
+    def test_unauthenticated_request_still_gets_a_bucket(self):
+        """
+        Authentication failures 401 before throttling, so this path is
+        unreachable via the view -- but a bare request must be rate-limited
+        rather than silently exempted by a None ident.
+        """
+        request = APIRequestFactory().get('/')
+        ident = WalletLookupKeyThrottle().get_ident(request, None)
+        self.assertIsNotNone(ident)
 
 
 @override_settings(FERNET_KEY=_TEST_LOOKUP_FERNET_KEY)
