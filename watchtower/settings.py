@@ -50,6 +50,24 @@ def decipher(value):
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = "g7+b)g5r@ugo4&ix$mto0b(u*^9_51p5a5-j#_@t)1g!fv&j99"
 
+# HMAC key for wallet lookup keys. Deliberately separate from SECRET_KEY:
+# rotating SECRET_KEY would otherwise invalidate every issued lookup key,
+# silently 401ing every partner integration with no way to recover the raw
+# keys. Falls back to SECRET_KEY so existing deployments need no config; set
+# LOOKUP_KEY_SECRET in the environment to actually decouple them.
+LOOKUP_KEY_SECRET = config("LOOKUP_KEY_SECRET", default=SECRET_KEY)
+
+if LOOKUP_KEY_SECRET == SECRET_KEY:
+    # Not fatal -- this is the pre-existing behaviour and it works. But it means
+    # rotating SECRET_KEY would invalidate every issued lookup key, so say so
+    # once at startup rather than leaving it to be discovered during an incident.
+    import logging
+    logging.getLogger(__name__).warning(
+        'LOOKUP_KEY_SECRET is unset; falling back to SECRET_KEY. Wallet lookup '
+        'keys are coupled to SECRET_KEY and will all 401 if it is rotated. Set '
+        'LOOKUP_KEY_SECRET in the environment to decouple them.'
+    )
+
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = False
 DEPLOYMENT_INSTANCE = config("DEPLOYMENT_INSTANCE", default="prod")

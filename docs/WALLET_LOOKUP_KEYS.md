@@ -26,10 +26,29 @@ wallet from ever minting a new key.
 
 - Keys are **server-generated**: 40 chars from `get_random_string`, matching
   `Wallet.auth_token` entropy.
-- Only `HMAC-SHA256(raw_key, SECRET_KEY)` is persisted. The raw key is returned
-  **exactly once**, in the `POST` response, and is unrecoverable afterwards.
-- HMAC is keyed with `SECRET_KEY`, so a database leak on its own is not enough to
-  mount a lookup attack against the digests.
+- Only `HMAC-SHA256(raw_key, LOOKUP_KEY_SECRET)` is persisted. The raw key is
+  returned **exactly once**, in the `POST` response, and is unrecoverable
+  afterwards.
+- HMAC is keyed with `LOOKUP_KEY_SECRET`, so a database leak on its own is not
+  enough to mount a lookup attack against the digests.
+
+### Rotating the secrets
+
+`LOOKUP_KEY_SECRET` is deliberately **not** `SECRET_KEY`. `SECRET_KEY` is also
+Django's signing key for sessions and CSRF tokens, so rotating it is disruptive
+in its own right — but if lookup keys were keyed with it, a routine rotation
+would invalidate every issued key at once: each digest changes, every partner
+integration starts returning `401`, and because only the digest is stored **the
+raw keys cannot be recovered**. There is no dual-key acceptance path, so every
+wallet owner would have to re-mint and re-distribute.
+
+Rotating `LOOKUP_KEY_SECRET` does the same thing — deliberately, and only to the
+lookup keys. That is the trade: a key you *can* rotate independently, instead of
+one coupled to Django's.
+
+Set it in the environment; it falls back to `SECRET_KEY` so nothing breaks if it
+is absent. When it is absent, `settings.py` logs a warning at startup, because
+the fallback re-couples the two and that should not be silent.
 
 ## Endpoints
 
@@ -275,12 +294,12 @@ Two caveats worth knowing:
 
 ## Tests
 
-`main/tests.py`, 66 tests across 11 classes:
+`main/tests.py`, 69 tests across 11 classes:
 
 | Class | Covers |
 |---|---|
 | `TestParseAssetId` | Asset id grammar, incl. explicit SLP and `bch` rejection |
-| `TestHashKey` | Digest determinism, uniqueness, raw key never stored |
+| `TestHashKey` | Digest determinism, uniqueness, raw key never stored, independence from `SECRET_KEY` |
 | `TestWalletLookupKeyMint` | `201`, `409`, digest never returned, auth required, one-row-per-wallet |
 | `TestWalletLookupKeyRevoke` | `204`, `404`, ownership scoping, rotation |
 | `TestWalletLookupKeyBalances` | Balance reads, `401`s, `400`s, `last_used_at`, revoked key, NFTs with and without BCMR metadata, NFT-only `commitment`/`capability`, schema/response field parity |

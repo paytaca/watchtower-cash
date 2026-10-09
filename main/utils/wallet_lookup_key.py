@@ -20,12 +20,19 @@ def hash_key(raw_key: str) -> str:
     """
     Derive the stored digest for a raw key.
 
-    HMAC keyed with SECRET_KEY rather than a bare SHA-256, so that a database
-    leak on its own is not enough to mount an offline lookup attack against
-    anything but the digests.
+    HMAC keyed with LOOKUP_KEY_SECRET rather than a bare SHA-256, so that a
+    database leak on its own is not enough to mount an offline lookup attack
+    against anything but the digests.
+
+    LOOKUP_KEY_SECRET is a separate setting from SECRET_KEY on purpose.
+    SECRET_KEY is also Django's signing key for sessions and CSRF tokens, so
+    rotating it is disruptive in its own right; coupling durable credentials to
+    it would mean a rotation silently invalidates every issued key, and since
+    only the digest is stored the raw keys could not be recovered. See
+    docs/WALLET_LOOKUP_KEYS.md.
     """
     return hmac.new(
-        settings.SECRET_KEY.encode(),
+        settings.LOOKUP_KEY_SECRET.encode(),
         raw_key.encode(),
         hashlib.sha256
     ).hexdigest()

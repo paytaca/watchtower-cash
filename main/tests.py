@@ -835,6 +835,45 @@ class TestHashKey(TestCase):
         keys = {generate_raw_key() for _ in range(50)}
         self.assertEqual(len(keys), 50)
 
+    def test_digest_survives_a_secret_key_rotation(self):
+        """
+        The regression this guards.
+
+        Only the digest is stored, so a raw key cannot be re-derived after
+        being lost. If the digest were keyed with SECRET_KEY, rotating it --
+        routine for a Django signing key -- would invalidate every issued key
+        at once and 401 every partner integration, with no way to recover.
+        LOOKUP_KEY_SECRET exists to keep that off SECRET_KEY.
+        """
+        baseline = hash_key('a-raw-key')
+
+        with override_settings(SECRET_KEY='a-rotated-django-secret'):
+            self.assertEqual(
+                hash_key('a-raw-key'), baseline,
+                'rotating SECRET_KEY changed the lookup key digest',
+            )
+
+    def test_digest_follows_the_lookup_key_secret(self):
+        """
+        The flip side: rotating LOOKUP_KEY_SECRET *should* invalidate keys,
+        which is the property that makes it safe to rotate independently of
+        Django's signing key.
+        """
+        baseline = hash_key('a-raw-key')
+
+        with override_settings(LOOKUP_KEY_SECRET='a-rotated-lookup-secret'):
+            self.assertNotEqual(hash_key('a-raw-key'), baseline)
+
+    def test_lookup_key_secret_defaults_to_secret_key(self):
+        """
+        Environments that set nothing keep working, and the coupling stays
+        visible via the startup warning rather than being silent.
+        """
+        from django.conf import settings as dj_settings
+        self.assertTrue(dj_settings.LOOKUP_KEY_SECRET)
+        # Under the test settings it is unset, so it resolves to SECRET_KEY.
+        self.assertEqual(dj_settings.LOOKUP_KEY_SECRET, dj_settings.SECRET_KEY)
+
 
 @override_settings(FERNET_KEY=_TEST_LOOKUP_FERNET_KEY)
 class TestWalletLookupKeyMint(LookupKeyTestMixin, TestCase):
