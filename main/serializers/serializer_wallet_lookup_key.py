@@ -50,6 +50,13 @@ class WalletLookupKeyAssetBalanceSerializer(serializers.Serializer):
     found = serializers.BooleanField(read_only=True, required=False)
     name = serializers.CharField(read_only=True, required=False)
     symbol = serializers.CharField(read_only=True, required=False)
+    # NFT-only. The balance helpers set these on the NFT branch
+    # (_get_nft_balance in main/utils/wallet_balances.py) and omit them for
+    # fungible tokens, hence required=False -- same as name/symbol above.
+    # Declared so they appear in the generated schema; they are always absent
+    # from an FT response and only ever present on an NFT one.
+    commitment = serializers.CharField(read_only=True, required=False)
+    capability = serializers.CharField(read_only=True, required=False)
 
 
 class WalletLookupKeyBalanceSerializer(serializers.Serializer):

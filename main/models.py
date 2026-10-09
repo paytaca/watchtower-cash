@@ -1259,6 +1259,15 @@ class WalletLookupKey(models.Model):
     once, in the response to the POST that mints it, and is unrecoverable
     afterwards. Revocation is a hard delete.
     """
+    # db_index=True is redundant next to unique=True and is kept deliberately.
+    # Django's _field_should_be_indexed() returns `field.db_index and not
+    # field.unique`, so it never produces a second index here; verified against
+    # the Postgres schema editor, which emits byte-identical DDL either way.
+    # (Postgres does add a separate `varchar_pattern_ops` index for LIKE
+    # queries on varchar columns, but that is triggered by unique alone.)
+    # Removing it would change nothing in the database and emit an AlterField
+    # for no gain, while making this the odd one out among the unique+indexed
+    # columns in this file (Block, Address, AssetSetting all carry both).
     key_hash = models.CharField(max_length=64, unique=True, db_index=True)
     wallet = models.OneToOneField(
         Wallet,

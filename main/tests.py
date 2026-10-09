@@ -1148,6 +1148,59 @@ class TestWalletLookupKeyBalances(LookupKeyTestMixin, TestCase):
         self.assertEqual(entry['decimals'], 0)
         self.assertEqual(entry['commitment'], 'abc123')
 
+    def test_nft_entry_carries_commitment_and_capability(self):
+        """
+        Both are emitted by the NFT branch but were undocumented, so the
+        generated schema did not describe the real response.
+        """
+        nft = self._make_nft(_CATEGORY, _TXID, 0, with_metadata=False)
+        self._make_nft_txn(nft)
+
+        resp = self._get(assets=f'ct/{_CATEGORY}/{_TXID}/0')
+
+        self.assertEqual(resp.status_code, 200, resp.data)
+        entry = resp.data['assets'][0]
+        self.assertEqual(entry['commitment'], 'abc123')
+        self.assertIn('capability', entry)
+
+    def test_ft_entry_omits_commitment_and_capability(self):
+        """
+        The other half of the pair: they are NFT-only, so an FT entry must not
+        carry empty ones. Asserting absence is what keeps them required=False in
+        the serializer rather than silently becoming always-present.
+        """
+        self._make_ft(_CATEGORY, with_metadata=True)
+
+        resp = self._get(assets=f'ct/{_CATEGORY}')
+
+        self.assertEqual(resp.status_code, 200, resp.data)
+        entry = resp.data['assets'][0]
+        self.assertTrue(entry['found'])
+        self.assertNotIn('commitment', entry)
+        self.assertNotIn('capability', entry)
+
+    def test_asset_serializer_documents_every_emitted_field(self):
+        """
+        The serializer is schema-only for this response -- the view returns a
+        raw dict -- so a field emitted by the helpers but absent here is
+        invisible to anyone generating a client from the docs. This pins the
+        two field sets together.
+        """
+        from main.serializers.serializer_wallet_lookup_key import (
+            WalletLookupKeyAssetBalanceSerializer,
+        )
+
+        nft = self._make_nft(_CATEGORY, _TXID, 0, with_metadata=True)
+        self._make_nft_txn(nft)
+        resp = self._get(assets=f'ct/{_CATEGORY}/{_TXID}/0')
+        nft_keys = set(resp.data['assets'][0])
+
+        self.assertTrue(
+            nft_keys <= set(WalletLookupKeyAssetBalanceSerializer().fields),
+            f'undocumented NFT fields: '
+            f'{sorted(nft_keys - set(WalletLookupKeyAssetBalanceSerializer().fields))}',
+        )
+
     def test_nft_with_metadata_reports_name_and_symbol(self):
         """The guard must not swallow metadata when it exists."""
         nft = self._make_nft(_CATEGORY, _TXID, 0, with_metadata=True)
