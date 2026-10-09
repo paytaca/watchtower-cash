@@ -55,7 +55,14 @@ SECRET_KEY = "g7+b)g5r@ugo4&ix$mto0b(u*^9_51p5a5-j#_@t)1g!fv&j99"
 # silently 401ing every partner integration with no way to recover the raw
 # keys. Falls back to SECRET_KEY so existing deployments need no config; set
 # LOOKUP_KEY_SECRET in the environment to actually decouple them.
-LOOKUP_KEY_SECRET = config("LOOKUP_KEY_SECRET", default=SECRET_KEY)
+#
+# The `or SECRET_KEY` is load-bearing, not a style choice. decouple returns ''
+# for a variable that is present but empty and only uses `default` when the
+# variable is absent, so `LOOKUP_KEY_SECRET=` in the environment would otherwise
+# HMAC every key with the empty string -- and because '' != SECRET_KEY the
+# warning below would stay silent. An empty secret is a far worse outcome than a
+# coupled one, so catch it here. Do not "simplify" this away.
+LOOKUP_KEY_SECRET = config("LOOKUP_KEY_SECRET", default="") or SECRET_KEY
 
 if LOOKUP_KEY_SECRET == SECRET_KEY:
     # Not fatal -- this is the pre-existing behaviour and it works. But it means

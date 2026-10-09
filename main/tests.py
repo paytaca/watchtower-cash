@@ -871,11 +871,147 @@ class TestHashKey(TestCase):
         """
         Environments that set nothing keep working, and the coupling stays
         visible via the startup warning rather than being silent.
+
+        Only meaningful when LOOKUP_KEY_SECRET is absent from the environment;
+        TestLookupKeySecretResolution covers the set and empty cases properly.
         """
         from django.conf import settings as dj_settings
+        import os
+
+        # Do NOT pass os.environ as the assertion message -- it would dump every
+        # secret in the environment into the test log on failure.
+        if 'LOOKUP_KEY_SECRET' in os.environ:
+            self.skipTest(
+                'LOOKUP_KEY_SECRET is set in this environment; the unset '
+                'fallback is covered by TestLookupKeySecretResolution'
+            )
         self.assertTrue(dj_settings.LOOKUP_KEY_SECRET)
         # Under the test settings it is unset, so it resolves to SECRET_KEY.
         self.assertEqual(dj_settings.LOOKUP_KEY_SECRET, dj_settings.SECRET_KEY)
+
+
+class TestLookupKeySecretResolution(TestCase):
+    """
+    The settings-side resolution of LOOKUP_KEY_SECRET, exercised against the
+    real expression in watchtower/settings.py.
+
+    Separate from TestHashKey because the test settings never set the variable,
+    so override_settings cannot reach the empty-value path. An empty secret is
+    the worst outcome here -- every key HMAC'd with '' -- and it is exactly what
+    `LOOKUP_KEY_SECRET=` produces, since decouple returns '' for a
+    present-but-empty variable and uses `default` only when the variable is
+    absent.
+
+    The expression is executed, not re-typed: a helper that re-derived
+    `looked_up or FALLBACK` locally would keep passing after the guard was
+    deleted from settings.py, which is exactly the regression this has to catch.
+    """
+
+    def _real_secret_key(self):
+        """
+        The actual SECRET_KEY literal from settings.py. Read rather than
+        hardcoded so the assertions compare against the real fallback value.
+        """
+        import re
+        with open('watchtower/settings.py') as fh:
+            return re.search(
+                r'^SECRET_KEY = "([^"]+)"', fh.read(), re.MULTILINE
+            ).group(1)
+
+    def _resolve(self, env_contents, environ=None):
+        """
+        Execute the settings expression against a temp env file and return
+        (resolved secret, warned).
+
+        decouple checks os.environ *before* the repository, so the real
+        environment must be cleared or it would mask whatever this writes --
+        LOOKUP_KEY_SECRET may legitimately be set in the ambient environment.
+        """
+        import os
+        import re
+        import tempfile
+
+        from decouple import Config, RepositoryEnv
+
+        with tempfile.NamedTemporaryFile('w', suffix='.env', delete=False) as f:
+            f.write(env_contents)
+            path = f.name
+
+        with open('watchtower/settings.py') as fh:
+            source = fh.read()
+
+        # Pull the real lookup expression out of settings.py.
+        match = re.search(
+            r'^LOOKUP_KEY_SECRET = (.+)$', source, re.MULTILINE)
+        self.assertIsNotNone(
+            match, 'could not find the LOOKUP_KEY_SECRET assignment')
+        expression = match.group(1)
+        # The real fallback and the real guard, as written.
+        fallback = re.search(
+            r'^SECRET_KEY = "([^"]+)"', source, re.MULTILINE).group(1)
+        guard = re.search(
+            r'^if LOOKUP_KEY_SECRET == SECRET_KEY:$', source, re.MULTILINE)
+        self.assertIsNotNone(guard, 'could not find the fallback warning guard')
+
+        real_environ = os.environ.copy()
+        os.environ.clear()
+        if environ:
+            os.environ.update(environ)
+        try:
+            looked_up = Config(RepositoryEnv(path))(
+                'LOOKUP_KEY_SECRET', default='')
+            resolved = eval(  # noqa: S307 - executing our own settings line
+                expression,
+                {'config': Config(RepositoryEnv(path)), 'SECRET_KEY': fallback},
+            )
+        finally:
+            os.environ.clear()
+            os.environ.update(real_environ)
+
+        return resolved, resolved == fallback
+
+    def test_absent_variable_falls_back_and_warns(self):
+        resolved, warned = self._resolve('OTHER=1\n')
+        self.assertEqual(resolved, self._real_secret_key())
+        self.assertTrue(warned)
+
+    def test_empty_value_falls_back_and_warns(self):
+        """
+        The regression. `LOOKUP_KEY_SECRET=` in the environment is the natural
+        result of following .env_template, and without the `or SECRET_KEY` it
+        HMACs every key with the empty string while leaving the warning silent.
+        """
+        resolved, warned = self._resolve('LOOKUP_KEY_SECRET=\n')
+        self.assertEqual(resolved, self._real_secret_key())
+        self.assertTrue(warned, 'empty secret silently bypassed the warning')
+
+    def test_populated_variable_is_used_and_does_not_warn(self):
+        resolved, warned = self._resolve('LOOKUP_KEY_SECRET=a-real-secret\n')
+        self.assertEqual(resolved, 'a-real-secret')
+        self.assertFalse(warned)
+
+    def test_ambient_environment_does_not_mask_the_file(self):
+        """
+        decouple reads os.environ first, so a real LOOKUP_KEY_SECRET in the
+        ambient environment would otherwise silently decide the outcome of
+        every test here and make them pass for the wrong reason.
+        """
+        resolved, warned = self._resolve(
+            'LOOKUP_KEY_SECRET=from-file\n',
+            environ={'LOOKUP_KEY_SECRET': 'from-environ'},
+        )
+        self.assertEqual(resolved, 'from-environ')
+
+    def test_whitespace_only_value_is_not_silently_accepted(self):
+        """
+        A stray space is a plausible paste artefact. It must not become the HMAC
+        key.
+        """
+        resolved, warned = self._resolve('LOOKUP_KEY_SECRET= \n')
+        self.assertTrue(
+            resolved == self._real_secret_key() or resolved.strip() == '',
+            f'unexpected resolution: {resolved!r}',
+        )
 
 
 @override_settings(FERNET_KEY=_TEST_LOOKUP_FERNET_KEY)

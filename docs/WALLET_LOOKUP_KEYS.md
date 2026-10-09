@@ -301,12 +301,13 @@ Two caveats worth knowing:
 
 ## Tests
 
-`main/tests.py`, 70 tests across 11 classes:
+`main/tests.py`, 75 tests across 12 classes:
 
 | Class | Covers |
 |---|---|
 | `TestParseAssetId` | Asset id grammar, incl. explicit SLP and `bch` rejection |
 | `TestHashKey` | Digest determinism, uniqueness, raw key never stored, independence from `SECRET_KEY` |
+| `TestLookupKeySecretResolution` | Absent / empty / populated `LOOKUP_KEY_SECRET`, executed against the real settings expression |
 | `TestWalletLookupKeyMint` | `201`, `409`, digest never returned, auth required, one-row-per-wallet, 409-before-validation precedence |
 | `TestWalletLookupKeyRevoke` | `204`, `404`, ownership scoping, rotation |
 | `TestWalletLookupKeyBalances` | Balance reads, `401`s, `400`s, `last_used_at`, revoked key, NFTs with and without BCMR metadata, NFT-only `commitment`/`capability`, schema/response field parity |
