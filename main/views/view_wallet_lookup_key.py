@@ -179,9 +179,12 @@ class WalletLookupKeyView(WalletLookupKeyBaseView):
                 status=status.HTTP_409_CONFLICT
             )
 
-        response_serializer = WalletLookupKeyCreatedSerializer(
-            instance, context={'lookup_key': raw_key}
-        )
+        # `lookup_key` is declared on the serializer but is not a model field,
+        # so there is no instance attribute for it to read and DRF omits the
+        # key from the output entirely -- verified, not inferred. The raw value
+        # therefore has to be injected here; there is no serializer path that
+        # can supply it. This is the single response where it appears at all.
+        response_serializer = WalletLookupKeyCreatedSerializer(instance)
         data = dict(response_serializer.data)
         data['lookup_key'] = raw_key
 

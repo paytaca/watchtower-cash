@@ -30,25 +30,17 @@ class WalletLookupKeyCreatedSerializer(serializers.ModelSerializer):
     """
     The create response. This is the ONLY place the raw key appears -- it is
     never stored, so it cannot be retrieved again.
+
+    `lookup_key` is declared here for documentation and schema purposes only.
+    It is not a model field, so serializing an instance yields no `lookup_key`
+    key at all and this serializer alone cannot render the raw value. The view
+    injects it into the response dict after `.data`; see the mint handler.
     """
     lookup_key = serializers.CharField(read_only=True)
 
     class Meta:
         model = WalletLookupKey
         fields = ['id', 'lookup_key', 'label', 'date_created']
-
-
-class WalletLookupKeySerializer(serializers.ModelSerializer):
-    """Read-only representation. The digest is truncated for display."""
-
-    key_hash = serializers.SerializerMethodField()
-
-    class Meta:
-        model = WalletLookupKey
-        fields = ['id', 'label', 'key_hash', 'date_created', 'last_used_at']
-
-    def get_key_hash(self, obj):
-        return f'{obj.key_hash[:8]}...'
 
 
 class WalletLookupKeyAssetBalanceSerializer(serializers.Serializer):
