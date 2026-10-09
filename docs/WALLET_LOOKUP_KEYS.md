@@ -60,6 +60,11 @@ curl -X POST https://watchtower.cash/api/wallet/lookup-keys/ \
 
 `409` if the wallet already has a key. The existing key keeps working.
 
+The request body accepts **`label` only**. There is no `wallet` field: the key is
+always bound to the wallet authenticated by the `wallet-hash` + `Authorization`
+headers, so a caller cannot bind a key to somebody else's wallet by sending one.
+Any `wallet` value in the body is ignored.
+
 ### `GET /api/wallet/lookup-keys/balances/` — read
 
 Auth: `X-Api-Key` header.

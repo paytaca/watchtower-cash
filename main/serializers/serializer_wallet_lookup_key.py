@@ -7,21 +7,23 @@ class WalletLookupKeyCreateSerializer(serializers.ModelSerializer):
     """
     Mint a lookup key for the authenticated wallet.
 
-    `wallet` is read_only, not merely optional. A plain `required=False` field
-    would still be *validated* if the caller sent one, and as a
-    PrimaryKeyRelatedField it rejects a wallet_hash string with
-    "Incorrect type. Expected pk value, received str" -- a 400 that tells the
-    caller nothing about the real rule. read_only drops the body value entirely,
-    so the field matches its docstring: the view injects request.user and a
-    caller cannot bind a key to somebody else's wallet, whatever they send.
+    `wallet` is deliberately absent from `fields`. It is not an optional input:
+    the view always binds `request.user`'s wallet via serializer.save(), so the
+    field can never legitimately be supplied.
+
+    Declaring it as `required=False` would not work. That means "may be absent",
+    not "ignore if present" -- as a PrimaryKeyRelatedField (Wallet's PK is the
+    auto integer id) it would still *validate* a supplied value and reject the
+    wallet_hash string callers actually send, with "Incorrect type. Expected pk
+    value, received str". Marking it read_only has the same problem in the
+    generated schema, where the field keeps showing up in the request body.
+
+    Omitting it entirely is the honest expression: the field cannot be set here.
     """
 
     class Meta:
         model = WalletLookupKey
-        fields = ['label', 'wallet']
-        extra_kwargs = {
-            'wallet': {'read_only': True},
-        }
+        fields = ['label']
 
 
 class WalletLookupKeyCreatedSerializer(serializers.ModelSerializer):
