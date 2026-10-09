@@ -226,7 +226,7 @@ by IP, so all keys behind one egress IP share it.
 
 ## Tests
 
-`main/tests.py`, 44 tests across 8 classes:
+`main/tests.py`, 48 tests across 9 classes:
 
 | Class | Covers |
 |---|---|
@@ -238,6 +238,16 @@ by IP, so all keys behind one egress IP share it.
 | `TestWalletLookupKeyAdmin` | Admin delete for a locked-out wallet |
 | `TestRevokeLookupKeyCommand` | Bulk revoke, `--dry-run`, no-key reporting |
 | `TestWalletLookupKeyCacheIsolation` | Cache namespace separation from the balance endpoint, and NFT key collisions |
+| `TestWalletLookupKeyRouting` | URL resolution for both routes, and unknown subpaths 404ing |
+
+`TestWalletLookupKeyRouting` needs no DB, so it runs even without Postgres.
+It exists because both URL patterns were originally unanchored: `re_path` matches
+with `re.search` semantics and discards the unconsumed remainder, so
+`wallet/lookup-keys/` prefix-matched `wallet/lookup-keys/balances/` and, being
+registered first, swallowed it. Balance requests landed on the mint view and
+failed its wallet authentication with `403` rather than `404` — indistinguishable
+from correct auth behaviour to a suite that only asserted `200`s and auth
+failures. Both patterns are now anchored.
 
 `TestWalletLookupKeyCacheIsolation` uses an in-memory `FakeRedis` rather than a
 `MagicMock`, because a mock whose `get()` always returns `None` can never

@@ -349,14 +349,19 @@ main_urls += [
     ),
     re_path("app-setting/auth/", TokenObtainPairView.as_view(), name="memo-auth"),
     re_path("app-setting/refresh/", TokenRefreshView.as_view(), name="refresh-auth"),
-    # Wallet lookup keys
+    # Wallet lookup keys.
+    # Anchored deliberately. re_path matches with re.search semantics and ignores
+    # any unconsumed remainder, so an unanchored "wallet/lookup-keys/" also
+    # prefix-matches ".../balances/" and swallows it -- the mint route is
+    # registered first, so the balances endpoint was unreachable and every
+    # request 403'd on the mint view's wallet authentication instead.
     re_path(
-        "wallet/lookup-keys/",
+        r"^wallet/lookup-keys/$",
         views.WalletLookupKeyView.as_view(),
         name="wallet-lookup-keys",
     ),
     re_path(
-        "wallet/lookup-keys/balances/",
+        r"^wallet/lookup-keys/balances/$",
         views.WalletLookupKeyBalanceView.as_view(),
         name="wallet-lookup-key-balances",
     ),

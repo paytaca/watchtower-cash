@@ -10,7 +10,7 @@ from django.contrib.auth.models import User
 from django.core.management import call_command
 from django.db.models import ProtectedError
 from django.test import TestCase, override_settings
-from django.urls import reverse
+from django.urls import Resolver404, resolve, reverse
 from django.utils import timezone
 from rest_framework.test import APIClient
 
@@ -27,6 +27,10 @@ from main.models import (
 )
 from main.tasks import revert_dropped_mempool_transactions
 from main.throttles import WebhookSecretThrottle
+from main.views.view_wallet_lookup_key import (
+    WalletLookupKeyBalanceView,
+    WalletLookupKeyView,
+)
 from main.utils.recipient_handler import RecipientHandler, WebhookOwnershipRequired, WebhookSecretRegistrationRequired
 from main.utils.transaction_processing import reverse_dropped_transaction
 from main.utils.wallet_balances import (
@@ -695,6 +699,52 @@ class LookupKeyTestMixin:
 
 
 @override_settings(FERNET_KEY=_TEST_LOOKUP_FERNET_KEY)
+class TestWalletLookupKeyRouting(TestCase):
+    """
+    URL routing for the lookup-key endpoints. No DB or cache needed, so this
+    runs in environments without Postgres.
+
+    This exists because the balance endpoint was unreachable and every test
+    still passed: unanchored re_path patterns match with re.search semantics and
+    discard the unconsumed remainder, so "wallet/lookup-keys/" prefix-matched
+    ".../balances/". The mint route is registered first, so balance requests
+    landed on the mint view and failed its wallet authentication with 403 --
+    indistinguishable from correct auth behaviour to any test that only ever
+    asserted 200s and auth failures.
+    """
+
+    def test_mint_url_resolves_to_mint_view(self):
+        match = resolve(reverse('wallet-lookup-keys'))
+        self.assertEqual(match.func.view_class, WalletLookupKeyView)
+
+    def test_balances_url_resolves_to_balance_view(self):
+        # The regression: this resolved to WalletLookupKeyView (the mint view).
+        match = resolve(reverse('wallet-lookup-key-balances'))
+        self.assertEqual(match.func.view_class, WalletLookupKeyBalanceView)
+
+    def test_balances_path_is_not_shadowed_by_the_mint_pattern(self):
+        self.assertEqual(
+            reverse('wallet-lookup-keys'),
+            '/api/wallet/lookup-keys/',
+        )
+        self.assertEqual(
+            reverse('wallet-lookup-key-balances'),
+            '/api/wallet/lookup-keys/balances/',
+        )
+        self.assertNotEqual(
+            reverse('wallet-lookup-keys'),
+            reverse('wallet-lookup-key-balances'),
+        )
+
+    def test_unknown_subpath_under_the_prefix_is_not_routed(self):
+        """
+        With unanchored patterns, /balances/extra/ also resolved to the mint
+        view -- junk under the prefix reached a wallet-authenticated endpoint.
+        """
+        with self.assertRaises(Resolver404):
+            resolve('/api/wallet/lookup-keys/balances/extra/')
+
+
 class TestParseAssetId(TestCase):
     """Asset id grammar. Pure, so no DB or cache needed."""
 
