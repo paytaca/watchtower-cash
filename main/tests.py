@@ -36,6 +36,9 @@ from main.throttles import (
     WalletLookupKeyThrottle,
     WebhookSecretThrottle,
 )
+from main.serializers.serializer_wallet_lookup_key import (
+    WalletLookupKeyCreateSerializer,
+)
 from main.views.view_wallet_lookup_key import (
     WalletLookupKeyBalanceView,
     WalletLookupKeyView,
@@ -900,6 +903,32 @@ class TestWalletLookupKeyMint(LookupKeyTestMixin, TestCase):
         self.assertEqual(resp.status_code, 201)
         self.assertNotIn('key_hash', resp.data)
         self.assertIn('lookup_key', resp.data)
+
+    def test_existing_key_takes_precedence_over_body_validation(self):
+        """
+        The existence check runs before is_valid(), so a wallet that already
+        has a key gets 409 even for a body that would otherwise be rejected.
+
+        This is deliberate: checking existence first is what guarantees a bad
+        request cannot disturb a live key. It is pinned here so a later
+        reordering of the two checks is a conscious choice rather than a
+        drive-by refactor -- the caller still learns why, and gets the 400 on
+        a retry after revoking.
+        """
+        self._mint('wallet-hash-1')
+
+        resp = self.client.post(
+            _LOOKUP_URL, {'label': 'x' * 200}, format='json',
+            **self._auth('wallet-hash-1')
+        )
+
+        self.assertEqual(resp.status_code, 409)
+        # The body really is invalid -- this is a precedence result, not the
+        # serializer accepting an oversized label.
+        serializer = WalletLookupKeyCreateSerializer(data={'label': 'x' * 200})
+        self.assertFalse(serializer.is_valid())
+        # And the existing key is untouched.
+        self.assertEqual(WalletLookupKey.objects.count(), 1)
 
     def test_second_mint_returns_409_and_keeps_original_key(self):
         first = self._mint('wallet-hash-1')

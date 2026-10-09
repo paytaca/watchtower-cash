@@ -79,6 +79,13 @@ curl -X POST https://watchtower.cash/api/wallet/lookup-keys/ \
 
 `409` if the wallet already has a key. The existing key keeps working.
 
+The existence check runs **before** body validation, so a wallet that already has
+a key gets `409` even when the body would have been rejected. That ordering is
+deliberate — it is what guarantees a malformed request cannot disturb a live key.
+A caller who hits it will get the real validation error on a retry after
+revoking. In practice the invalid surface is small, since `label` is the only
+input field.
+
 The request body accepts **`label` only**. There is no `wallet` field: the key is
 always bound to the wallet authenticated by the `wallet-hash` + `Authorization`
 headers, so a caller cannot bind a key to somebody else's wallet by sending one.
@@ -294,13 +301,13 @@ Two caveats worth knowing:
 
 ## Tests
 
-`main/tests.py`, 69 tests across 11 classes:
+`main/tests.py`, 70 tests across 11 classes:
 
 | Class | Covers |
 |---|---|
 | `TestParseAssetId` | Asset id grammar, incl. explicit SLP and `bch` rejection |
 | `TestHashKey` | Digest determinism, uniqueness, raw key never stored, independence from `SECRET_KEY` |
-| `TestWalletLookupKeyMint` | `201`, `409`, digest never returned, auth required, one-row-per-wallet |
+| `TestWalletLookupKeyMint` | `201`, `409`, digest never returned, auth required, one-row-per-wallet, 409-before-validation precedence |
 | `TestWalletLookupKeyRevoke` | `204`, `404`, ownership scoping, rotation |
 | `TestWalletLookupKeyBalances` | Balance reads, `401`s, `400`s, `last_used_at`, revoked key, NFTs with and without BCMR metadata, NFT-only `commitment`/`capability`, schema/response field parity |
 | `TestWalletLookupKeyAdmin` | Admin delete for a locked-out wallet |
