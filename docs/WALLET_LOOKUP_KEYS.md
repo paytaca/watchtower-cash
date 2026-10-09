@@ -191,10 +191,30 @@ would be revoked without deleting.
 
 ## Rate limiting
 
-`WalletLookupKeyThrottle`, scope `wallet_lookup_key`, default `600/min`
-(`DEFAULT_THROTTLE_RATES` in `watchtower/settings.py`). Set generously because
-the caller is a trusted backend rather than a browser — but the bucket is keyed
-by IP, so all keys behind one egress IP share it.
+Two separate scopes, configured via `DEFAULT_THROTTLE_RATES` in
+`watchtower/settings.py`:
+
+| Scope | Throttle | Rate | Covers |
+|---|---|---|---|
+| `wallet_lookup_key` | `WalletLookupKeyThrottle` | `600/min` | `GET .../balances/` — a server-to-server partner polling on a schedule |
+| `wallet_lookup_key_manage` | `WalletLookupKeyManageThrottle` | `60/min` | `POST` / `DELETE` — a human clicking a button |
+
+They are deliberately separate buckets. Both are keyed by IP, so a shared scope
+let a partner server polling at the read limit throttle a user trying to revoke
+their own key — on exactly the lockout path that admin-side revocation exists to
+solve. Separate scopes mean read traffic can never starve the recovery path.
+
+Two caveats worth knowing:
+
+- **The bucket is keyed by IP, not by key.** All keys behind one egress IP share
+  a budget. In production that IP is behind nginx, so `get_ident()` reads
+  whatever `X-Forwarded-For` the proxy supplies rather than the true client.
+- **This is not a brute-force control.** DRF runs authentication and permission
+  checks *before* `check_throttles()`, so requests that fail auth are never
+  metered — verified: unauthenticated and bad-key requests write no throttle
+  keys at all. These limits bound *legitimate* traffic; they do nothing against
+  credential guessing, which is not a practical threat against a 256-bit key
+  anyway.
 
 ## Implementation notes
 
@@ -231,7 +251,7 @@ by IP, so all keys behind one egress IP share it.
 
 ## Tests
 
-`main/tests.py`, 51 tests across 9 classes:
+`main/tests.py`, 54 tests across 10 classes:
 
 | Class | Covers |
 |---|---|
@@ -244,6 +264,7 @@ by IP, so all keys behind one egress IP share it.
 | `TestRevokeLookupKeyCommand` | Bulk revoke, `--dry-run`, no-key reporting |
 | `TestWalletLookupKeyCacheIsolation` | Cache namespace separation from the balance endpoint, and NFT key collisions |
 | `TestWalletLookupKeyRouting` | URL resolution for both routes, and unknown subpaths 404ing |
+| `TestWalletLookupKeyThrottleScopes` | Mint/revoke and read use separate throttle buckets |
 
 `TestWalletLookupKeyRouting` needs no DB, so it runs even without Postgres.
 It exists because both URL patterns were originally unanchored: `re_path` matches

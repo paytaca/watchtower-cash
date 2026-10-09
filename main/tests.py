@@ -12,7 +12,7 @@ from django.db.models import ProtectedError
 from django.test import TestCase, override_settings
 from django.urls import Resolver404, resolve, reverse
 from django.utils import timezone
-from rest_framework.test import APIClient
+from rest_framework.test import APIClient, APIRequestFactory
 
 from authentication.models import AuthToken
 from main.models import (
@@ -29,7 +29,11 @@ from main.models import (
     WalletLookupKey,
 )
 from main.tasks import revert_dropped_mempool_transactions
-from main.throttles import WebhookSecretThrottle
+from main.throttles import (
+    WalletLookupKeyManageThrottle,
+    WalletLookupKeyThrottle,
+    WebhookSecretThrottle,
+)
 from main.views.view_wallet_lookup_key import (
     WalletLookupKeyBalanceView,
     WalletLookupKeyView,
@@ -1171,6 +1175,87 @@ class TestWalletLookupKeyBalances(LookupKeyTestMixin, TestCase):
         # Unknown category still reports found=False rather than erroring.
         self.assertFalse(resp.data['assets'][2]['found'])
         self.assertEqual(resp.data['assets'][2]['balance'], 0)
+
+
+def _fake_request():
+    return APIRequestFactory().get('/')
+
+
+# The throttle writes to Django's default cache, which in tests is a
+# process-global LocMemCache. This test deliberately exhausts a 600/min bucket,
+# so it needs its own store or the burned budget leaks into every later test.
+_THROTTLE_TEST_CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'lookup-key-throttle-scope-tests',
+    }
+}
+
+
+@override_settings(
+    FERNET_KEY=_TEST_LOOKUP_FERNET_KEY,
+    CACHES=_THROTTLE_TEST_CACHES,
+)
+class TestWalletLookupKeyThrottleScopes(LookupKeyTestMixin, TestCase):
+    """
+    Mint/revoke and balance reads must not share a throttle bucket.
+
+    Both buckets are keyed by IP, so a shared scope let a partner server polling
+    balances at the read limit throttle a user trying to revoke their own key --
+    on exactly the lockout path that admin-side revocation exists to solve.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.wallet = self._make_wallet('wallet-hash-1')
+        self.key = self._mint('wallet-hash-1')
+        self.redis_patcher = patch(
+            'main.utils.wallet_balances.settings.REDISKV', self.fake_redis
+        )
+        self.redis_patcher.start()
+
+    def tearDown(self):
+        self.redis_patcher.stop()
+        super().tearDown()
+
+    def _flush_throttle_cache(self):
+        from django.core.cache import cache
+        cache.clear()
+
+    def test_mint_and_read_use_different_scopes(self):
+        manage = WalletLookupKeyManageThrottle()
+        read = WalletLookupKeyThrottle()
+        self.assertNotEqual(manage.scope, read.scope)
+        # Both rates are configured, so neither raises at lookup time.
+        for throttle in (manage, read):
+            self.assertIsNotNone(throttle.get_rate())
+
+    def test_the_two_scopes_produce_different_cache_keys(self):
+        request = APIRequestFactory().get('/')
+        manage_key = WalletLookupKeyManageThrottle().get_cache_key(request, None)
+        read_key = WalletLookupKeyThrottle().get_cache_key(request, None)
+        self.assertNotEqual(manage_key, read_key)
+
+    def test_read_traffic_does_not_throttle_revoke(self):
+        """
+        The regression this guards: exhausting the read budget must leave the
+        revoke path usable.
+
+        Burns the read bucket to exhaustion -- a single shared token would not
+        prove anything, since 600/min is far more than one request.
+        """
+        read = WalletLookupKeyThrottle()
+        self._flush_throttle_cache()
+        num_requests, duration = read.parse_rate(read.get_rate())
+        for _ in range(num_requests):
+            self.assertTrue(read.allow_request(_fake_request(), None))
+        # The read bucket is now empty.
+        self.assertFalse(read.allow_request(_fake_request(), None))
+        # The revoke path is untouched.
+        self.assertTrue(
+            WalletLookupKeyManageThrottle().allow_request(_fake_request(), None),
+            'revoke path was throttled by balance-read traffic',
+        )
 
 
 @override_settings(FERNET_KEY=_TEST_LOOKUP_FERNET_KEY)

@@ -19,7 +19,7 @@ from main.serializers import (
     WalletLookupKeyCreatedSerializer,
     WalletLookupKeyBalanceSerializer,
 )
-from main.throttles import WalletLookupKeyThrottle
+from main.throttles import WalletLookupKeyManageThrottle, WalletLookupKeyThrottle
 from main.utils.wallet_balances import (
     InvalidAssetId,
     LOOKUP_CACHE_PREFIX,
@@ -113,12 +113,15 @@ class LookupKeyAuthentication(BaseAuthentication):
 
 
 class WalletLookupKeyBaseView(APIView):
-    # Every subclass supplies its own authentication and permission classes:
-    # this endpoint has no anonymous use case, so leaving the DRF default
-    # AllowAny here would let a subclass reach its handler with an
+    # Every subclass supplies its own authentication, permission AND throttle
+    # classes: this endpoint has no anonymous use case, so leaving the DRF
+    # default AllowAny here would let a subclass reach its handler with an
     # AnonymousUser if its authenticator returned None.
+    #
+    # Throttles are per-subclass for the same reason -- mint/revoke and balance
+    # reads have different traffic profiles and must not share a bucket. See
+    # WalletLookupKeyManageThrottle.
     permission_classes = [IsAuthenticatedWallet]
-    throttle_classes = [WalletLookupKeyThrottle]
 
 
 class WalletLookupKeyView(WalletLookupKeyBaseView):
@@ -128,6 +131,7 @@ class WalletLookupKeyView(WalletLookupKeyBaseView):
 
     authentication_classes = [WalletAuthentication]
     permission_classes = [IsAuthenticatedWallet]
+    throttle_classes = [WalletLookupKeyManageThrottle]
 
     @swagger_auto_schema(
         operation_description=(
@@ -233,6 +237,7 @@ class WalletLookupKeyBalanceView(WalletLookupKeyBaseView):
 
     authentication_classes = [LookupKeyAuthentication]
     permission_classes = [IsAuthenticatedLookupKey]
+    throttle_classes = [WalletLookupKeyThrottle]
 
     @swagger_auto_schema(
         operation_description=(

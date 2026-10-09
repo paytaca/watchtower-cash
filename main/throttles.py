@@ -120,15 +120,41 @@ class WebhookSecretThrottle(throttling.SimpleRateThrottle):
         }
 
 
+class WalletLookupKeyManageThrottle(throttling.SimpleRateThrottle):
+    """
+    Throttle for the wallet-authenticated mint/revoke endpoints
+    (POST/DELETE /api/wallet/lookup-keys/). Rate configured via
+    DEFAULT_THROTTLE_RATES['wallet_lookup_key_manage'] in settings.
+
+    Deliberately a separate scope from WalletLookupKeyThrottle. Both buckets are
+    keyed by IP, so sharing one scope meant a partner server polling balances at
+    the read limit could throttle a user trying to revoke their own key -- on
+    exactly the lockout path admin-side revocation exists to solve. Separate
+    scopes mean read traffic can never starve the recovery path.
+    """
+    scope = 'wallet_lookup_key_manage'
+
+    def get_cache_key(self, request, view):
+        return self.cache_format % {
+            'scope': self.scope,
+            'ident': self.get_ident(request),
+        }
+
+
 class WalletLookupKeyThrottle(throttling.SimpleRateThrottle):
     """
-    Throttle for the lookup-key endpoints, which authenticate with a bearer
-    key in the X-Api-Key header. Rate configured via
+    Throttle for the key-authenticated balance read endpoint
+    (GET /api/wallet/lookup-keys/balances/). Rate configured via
     DEFAULT_THROTTLE_RATES['wallet_lookup_key'] in settings.
 
     The caller is a trusted backend rather than a browser, so the rate is set
     generously; the bucket is still keyed by IP, so all keys behind one egress
     IP share a bucket.
+
+    Note what this does and does not do: DRF runs authentication and permission
+    checks before check_throttles(), so requests that fail auth are never
+    metered. This bounds legitimate partner traffic, not credential guessing --
+    the key is 256 bits of HMAC output and is not brute-forceable.
     """
     scope = 'wallet_lookup_key'
 

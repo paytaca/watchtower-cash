@@ -483,7 +483,11 @@ REST_FRAMEWORK = {
     "DEFAULT_FILTER_BACKENDS": ["django_filters.rest_framework.DjangoFilterBackend"],
     "DEFAULT_THROTTLE_RATES": {
         "webhook_secret": "10/min",
+        # Balance reads: a server-to-server partner polling on a schedule.
         "wallet_lookup_key": "600/min",
+        # Mint/revoke: a human clicking a button. Kept on a separate bucket from
+        # reads so heavy polling can never throttle a user revoking their key.
+        "wallet_lookup_key_manage": "60/min",
     },
 }
 
