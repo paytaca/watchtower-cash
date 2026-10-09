@@ -22,6 +22,9 @@ from main.models import (
     Address,
     Token,
     BlockHeight,
+    CashFungibleToken,
+    CashNonFungibleToken,
+    CashTokenInfo,
     WalletHistory,
     WalletLookupKey,
 )
@@ -615,6 +618,8 @@ _LOOKUP_BALANCES_URL = '/api/wallet/lookup-keys/balances/'
 
 _CATEGORY = 'a' * 64
 _TXID = 'b' * 64
+_CATEGORY_FT = 'd' * 64
+_CATEGORY_OTHER = 'e' * 64
 
 
 class FakeRedis:
@@ -1029,6 +1034,120 @@ class TestWalletLookupKeyBalances(LookupKeyTestMixin, TestCase):
         self.assertIsNone(WalletLookupKey.objects.get().last_used_at)
         self._get()
         self.assertIsNotNone(WalletLookupKey.objects.get().last_used_at)
+
+    def _make_nft(self, category, txid, index, with_metadata=False):
+        """
+        Create a CashNonFungibleToken, optionally without BCMR metadata.
+
+        Most real NFTs have info=None: with_bcmr_metadata is a separate column
+        defaulting to False, so a null info is the common case, not an edge one.
+        """
+        info = None
+        if with_metadata:
+            info = CashTokenInfo.objects.create(
+                name='Cool Cat', symbol='CAT', decimals=0,
+            )
+        return CashNonFungibleToken.objects.create(
+            category=category,
+            info=info,
+            current_txid=txid,
+            current_index=index,
+            commitment='abc123',
+            capability=CashNonFungibleToken.Capability.MUTABLE,
+        )
+
+    def _make_nft_txn(self, nft, value=1):
+        """An unspent Transaction so the NFT's balance query is non-zero."""
+        address = Address.objects.create(
+            address='bitcoincash:qnft', wallet=self.wallet, address_path='0/2'
+        )
+        return Transaction.objects.create(
+            txid=nft.current_txid,
+            index=nft.current_index,
+            address=address,
+            spent=False,
+            source='test',
+            cashtoken_nft=nft,
+            value=value,
+        )
+
+    def _make_ft(self, category, with_metadata=False):
+        info = None
+        if with_metadata:
+            info = CashTokenInfo.objects.create(
+                name='Some Token', symbol='TOK', decimals=2,
+            )
+        return CashFungibleToken.objects.create(category=category, info=info)
+
+    def test_nft_without_metadata_does_not_500(self):
+        """
+        Regression: the NFT branch called get_info() unguarded, and
+        CashNonFungibleToken.get_info() dereferences its nullable info FK, so a
+        single metadata-less NFT raised AttributeError and 500'd the request.
+        """
+        nft = self._make_nft(_CATEGORY, _TXID, 0, with_metadata=False)
+        self._make_nft_txn(nft)
+
+        resp = self._get(assets=f'ct/{_CATEGORY}/{_TXID}/0')
+
+        self.assertEqual(resp.status_code, 200, resp.data)
+        entry = resp.data['assets'][0]
+        self.assertTrue(entry['found'])
+        self.assertEqual(entry['balance'], 1)
+        # Assert the keys are present-and-None rather than absent: `found: True`
+        # distinguishes "known NFT" from "unknown", and a caller must be able to
+        # tell "no metadata" from "field missing".
+        self.assertIn('name', entry)
+        self.assertIn('symbol', entry)
+        self.assertIsNone(entry['name'])
+        self.assertIsNone(entry['symbol'])
+        # decimals is meaningless for an NFT -- balances are 0/1, never scaled.
+        self.assertEqual(entry['decimals'], 0)
+        self.assertEqual(entry['commitment'], 'abc123')
+
+    def test_nft_with_metadata_reports_name_and_symbol(self):
+        """The guard must not swallow metadata when it exists."""
+        nft = self._make_nft(_CATEGORY, _TXID, 0, with_metadata=True)
+        self._make_nft_txn(nft)
+
+        resp = self._get(assets=f'ct/{_CATEGORY}/{_TXID}/0')
+
+        self.assertEqual(resp.status_code, 200, resp.data)
+        entry = resp.data['assets'][0]
+        self.assertEqual(entry['name'], 'Cool Cat')
+        self.assertEqual(entry['symbol'], 'CAT')
+
+    def test_metadata_less_nft_does_not_poison_other_assets(self):
+        """
+        The real blast radius: get_wallet_balances loops over every requested
+        asset, so one bad NFT previously 500'd the whole response -- taking out
+        the BCH balance and every other asset alongside it.
+        """
+        nft = self._make_nft(_CATEGORY, _TXID, 0, with_metadata=False)
+        self._make_nft_txn(nft)
+        self._make_ft(_CATEGORY_FT)
+        other = _CATEGORY_OTHER
+
+        resp = self._get(assets=(
+            f'ct/{_CATEGORY_FT},'
+            f'ct/{_CATEGORY}/{_TXID}/0,'
+            f'ct/{other}'
+        ))
+
+        self.assertEqual(resp.status_code, 200, resp.data)
+        # BCH survived.
+        self.assertIn('balance', resp.data['bch'])
+        self.assertEqual(resp.data['wallet_hash'], 'wallet-hash-1')
+        # All three assets survived, in request order.
+        self.assertEqual(
+            [a['asset_id'] for a in resp.data['assets']],
+            [f'ct/{_CATEGORY_FT}', f'ct/{_CATEGORY}/{_TXID}/0', f'ct/{other}'],
+        )
+        self.assertTrue(resp.data['assets'][0]['found'])
+        self.assertTrue(resp.data['assets'][1]['found'])
+        # Unknown category still reports found=False rather than erroring.
+        self.assertFalse(resp.data['assets'][2]['found'])
+        self.assertEqual(resp.data['assets'][2]['balance'], 0)
 
 
 @override_settings(FERNET_KEY=_TEST_LOOKUP_FERNET_KEY)

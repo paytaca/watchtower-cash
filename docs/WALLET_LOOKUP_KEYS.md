@@ -226,7 +226,7 @@ by IP, so all keys behind one egress IP share it.
 
 ## Tests
 
-`main/tests.py`, 48 tests across 9 classes:
+`main/tests.py`, 51 tests across 9 classes:
 
 | Class | Covers |
 |---|---|
@@ -234,7 +234,7 @@ by IP, so all keys behind one egress IP share it.
 | `TestHashKey` | Digest determinism, uniqueness, raw key never stored |
 | `TestWalletLookupKeyMint` | `201`, `409`, digest never returned, auth required, one-row-per-wallet |
 | `TestWalletLookupKeyRevoke` | `204`, `404`, ownership scoping, rotation |
-| `TestWalletLookupKeyBalances` | Balance reads, `401`s, `400`s, `last_used_at`, revoked key |
+| `TestWalletLookupKeyBalances` | Balance reads, `401`s, `400`s, `last_used_at`, revoked key, NFTs with and without BCMR metadata |
 | `TestWalletLookupKeyAdmin` | Admin delete for a locked-out wallet |
 | `TestRevokeLookupKeyCommand` | Bulk revoke, `--dry-run`, no-key reporting |
 | `TestWalletLookupKeyCacheIsolation` | Cache namespace separation from the balance endpoint, and NFT key collisions |

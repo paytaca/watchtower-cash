@@ -290,11 +290,18 @@ def get_asset_balance(wallet, asset_id: str) -> dict:
             current_index=descriptor['index']
         ).first()
         if token:
+            # Guarded: an NFT without BCMR metadata has info=None, and
+            # CashNonFungibleToken.get_info() dereferences it unconditionally.
+            # Most NFTs lack metadata, and get_wallet_balances loops over every
+            # requested asset, so one unguarded call 500'd the whole response --
+            # including the BCH balance and every other asset in the list.
+            info = token.get_info() if token.info else {}
             data.update({
                 'balance': 1 if balance > 0 else 0,
                 'found': True,
-                'name': token.get_info().get('name'),
-                'symbol': token.get_info().get('symbol'),
+                # 'decimals' stays 0: NFT balances are 0/1 and never scaled.
+                'name': info.get('name'),
+                'symbol': info.get('symbol'),
                 'commitment': token.commitment,
                 'capability': token.capability,
             })
