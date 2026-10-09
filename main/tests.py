@@ -686,6 +686,15 @@ class LookupKeyTestMixin:
         # A real (if tiny) store, not a MagicMock, so cache hits and the
         # cross-endpoint contamination they used to cause are observable.
         self.fake_redis = FakeRedis()
+        # Saving an Address/Transaction runs main.signals.transaction_post_save,
+        # which calls is_bch_address() -> an outbound HTTP request to the
+        # address validator on localhost:3000. Nothing is listening in the test
+        # environment, so every seeded row would raise ConnectionRefused.
+        patch('main.signals.is_bch_address', return_value=False).start()
+        # The signals handler reads settings.REDISKV directly, so it must see
+        # the same fake store the endpoint under test uses.
+        patch('main.signals.settings.REDISKV', self.fake_redis).start()
+        self.addCleanup(patch.stopall)
 
     def _auth(self, wallet_hash):
         # WSGI-style META keys: Django's HttpHeaders resolves 'wallet-hash' and
@@ -1061,14 +1070,28 @@ class TestWalletLookupKeyBalances(LookupKeyTestMixin, TestCase):
         address = Address.objects.create(
             address='bitcoincash:qnft', wallet=self.wallet, address_path='0/2'
         )
+        # Transaction.token is a non-null FK, so the CashToken row needs a Token
+        # even though the balance query matches on cashtoken_nft.
+        token, _ = Token.objects.get_or_create(
+            name='bch', tokenid='', defaults={'token_ticker': 'BCH'}
+        )
         return Transaction.objects.create(
             txid=nft.current_txid,
             index=nft.current_index,
             address=address,
             spent=False,
             source='test',
+            token=token,
             cashtoken_nft=nft,
+            # The balance queries filter on Transaction.wallet (Q(wallet=...)),
+            # not on the owning Address, so this FK is what actually scopes the
+            # row to the wallet under test.
+            wallet=self.wallet,
+            # _get_slp_balance sums `amount`, not `value` -- the CashToken
+            # quantity lives in a separate column. Seeding only `value` left
+            # the balance at 0.
             value=value,
+            amount=value,
         )
 
     def _make_ft(self, category, with_metadata=False):
@@ -1199,14 +1222,24 @@ class TestWalletLookupKeyCacheIsolation(LookupKeyTestMixin, TestCase):
                 f'lookup endpoint polluted the balance endpoint cache: {key}',
             )
 
-    def test_legacy_warm_does_not_strip_lookup_fields(self):
+    def test_lookup_cannot_read_the_balance_endpoints_payload(self):
         """
-        Reverse direction: if the balance endpoint's payload is what we read
-        back, `found` and `decimals` would vanish from the asset entry.
+        Reverse direction: the balance endpoint's payload must be unreadable
+        here, because it lives under a different namespace entirely.
+
+        Note this writes to `wallet:balance:*` -- the *balance* endpoint's key --
+        rather than to a lookup key. An earlier version of this test planted the
+        foreign payload directly on a lookup key, which asserted that a cache
+        hit under our own namespace magically gains `found`/`decimals`. That is
+        not true and not what namespacing promises: a hit under our namespace is
+        our own payload, because nothing else writes there.
         """
-        self.fake_redis.store['lookup:balance:ft:wallet-hash-1:' + _CATEGORY] = \
-            json.dumps({'balance': 5.0, 'spendable': 5.0, 'token_id': _CATEGORY,
-                        'valid': True})
+        self.fake_redis.store[
+            f'wallet:balance:token:wallet-hash-1:{_CATEGORY}'
+        ] = json.dumps({
+            'balance': 5.0, 'spendable': 5.0, 'token_id': _CATEGORY,
+            'valid': True,
+        })
 
         resp = self.client.get(
             _LOOKUP_BALANCES_URL,
@@ -1216,9 +1249,18 @@ class TestWalletLookupKeyCacheIsolation(LookupKeyTestMixin, TestCase):
 
         self.assertEqual(resp.status_code, 200)
         entry = resp.data['assets'][0]
-        # The lookup contract promises these regardless of who warmed the cache.
+        # Recomputed from the database under our own key, so the lookup contract
+        # holds: 'token_id'/'spendable'/'valid' are not borrowed from the
+        # balance endpoint's payload.
+        self.assertNotIn('token_id', entry)
+        self.assertNotIn('spendable', entry)
         self.assertIn('found', entry)
         self.assertIn('decimals', entry)
+        # And the balance endpoint's entry was left alone.
+        stored = json.loads(
+            self.fake_redis.store[f'wallet:balance:token:wallet-hash-1:{_CATEGORY}']
+        )
+        self.assertEqual(stored['token_id'], _CATEGORY)
 
     def test_two_nfts_in_one_category_do_not_collide(self):
         """

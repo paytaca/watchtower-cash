@@ -7,15 +7,20 @@ class WalletLookupKeyCreateSerializer(serializers.ModelSerializer):
     """
     Mint a lookup key for the authenticated wallet.
 
-    `wallet` is never read from the request body -- the view injects it from
-    request.user so a caller cannot bind a key to somebody else's wallet.
+    `wallet` is read_only, not merely optional. A plain `required=False` field
+    would still be *validated* if the caller sent one, and as a
+    PrimaryKeyRelatedField it rejects a wallet_hash string with
+    "Incorrect type. Expected pk value, received str" -- a 400 that tells the
+    caller nothing about the real rule. read_only drops the body value entirely,
+    so the field matches its docstring: the view injects request.user and a
+    caller cannot bind a key to somebody else's wallet, whatever they send.
     """
 
     class Meta:
         model = WalletLookupKey
         fields = ['label', 'wallet']
         extra_kwargs = {
-            'wallet': {'required': False},
+            'wallet': {'read_only': True},
         }
 
 
