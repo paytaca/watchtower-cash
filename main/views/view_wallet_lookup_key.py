@@ -246,6 +246,13 @@ class WalletLookupKeyBalanceView(WalletLookupKeyBaseView):
             "`bch` field; `assets` only adds CashTokens on top of it. SLP "
             "assets are not supported."
         ),
+        # Opt this view in explicitly rather than relying on SWAGGER_SETTINGS.
+        # SECURITY_REQUIREMENTS is unset, so drf_yasg applies every entry in
+        # SECURITY_DEFINITIONS to every endpoint -- which is why the unrelated
+        # global X-Api-Key Authorize control is not something this view can
+        # turn off. Naming the scheme here makes our own docs self-describing
+        # regardless of what the global default is.
+        security=[{'X-Api-Key': []}],
         manual_parameters=[
             openapi.Parameter(
                 name='assets',
