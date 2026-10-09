@@ -26,7 +26,10 @@ def subscribe_address(address:str, wallet_hash:str=None):
         token_address=token_address,
         **kwargs,
     )
-    _, created = main_models.Subscription.objects.get_or_create(address=addr_obj)
+    try:
+        _, created = main_models.Subscription.objects.get_or_create(address=addr_obj)
+    except main_models.Subscription.MultipleObjectsReturned:
+        created = False
     return created
 
 

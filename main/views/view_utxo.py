@@ -239,6 +239,7 @@ class UTXO(APIView):
 
         data = { 'valid': False }
         qs = None
+        utxos_values = None
 
         is_token_addr = is_token_address(tokenaddress)
         
@@ -346,6 +347,9 @@ class UTXO(APIView):
 
         if baton is not None:
             data['minting_baton'] = baton
+
+        if utxos_values is None:
+            return Response(data=data, status=status.HTTP_400_BAD_REQUEST)
 
         data['utxos'] = list(utxos_values)
         data['valid'] = True  
