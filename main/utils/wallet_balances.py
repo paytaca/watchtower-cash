@@ -126,6 +126,58 @@ def get_bch_cache_key(wallet) -> str:
     return f'{LOOKUP_CACHE_PREFIX}:bch:{wallet.wallet_hash}'
 
 
+def clear_lookup_balance_cache(wallet_hash, cache=None):
+    """
+    Drop every cached lookup-key balance for one wallet.
+
+    Lives here rather than at each call site so the glob can't drift between
+    the revoke endpoint and the revoke_lookup_key command.
+
+    The glob is anchored with a trailing ':' rather than a bare '*' because
+    wallet_hash is a free-form CharField with no format constraint. An
+    unanchored f'{PREFIX}:*:{wallet_hash}*' also matches wallet_hash values that
+    merely *start* with this one -- evicting wallet-hash-1 would sweep
+    wallet-hash-10. That is only a recompute, not a correctness problem, but it
+    is unbounded in principle and trivially avoidable.
+
+    Note the BCH key is deleted explicitly and deliberately NOT globbed: it is
+    the only key with nothing after the wallet hash, so a ':'-anchored pattern
+    would silently miss it and leave a stale BCH balance cached.
+
+    Returns the list of deleted keys. Never raises: a cache failure must not
+    fail a revocation.
+    """
+    cache = cache or settings.REDISKV
+    deleted = []
+
+    try:
+        bch_key = f'{LOOKUP_CACHE_PREFIX}:bch:{wallet_hash}'
+        # delete() returns 0 rather than raising when the key is absent.
+        deleted.extend([bch_key] if cache.delete(bch_key) else [])
+
+        # scan_keys avoids blocking Redis with KEYS, which would stall the
+        # Celery broker sharing this instance.
+        from main.utils.cache import scan_keys
+        token_keys = [
+            key for key in scan_keys(
+                cache, f'{LOOKUP_CACHE_PREFIX}:*:{wallet_hash}:*'
+            )
+            if key != bch_key
+        ]
+        if token_keys:
+            cache.delete(*token_keys)
+            deleted.extend(token_keys)
+    except Exception:
+        # Swallow: revoking must succeed even when Redis does not.
+        logger.warning(
+            'Failed to clear lookup balance cache for %s', wallet_hash,
+            exc_info=True,
+        )
+        return deleted
+
+    return deleted
+
+
 def get_asset_cache_key(wallet, descriptor) -> str:
     """
     Cache key for one asset.

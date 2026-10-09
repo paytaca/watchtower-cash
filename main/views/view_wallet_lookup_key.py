@@ -22,7 +22,7 @@ from main.serializers import (
 from main.throttles import WalletLookupKeyManageThrottle, WalletLookupKeyThrottle
 from main.utils.wallet_balances import (
     InvalidAssetId,
-    LOOKUP_CACHE_PREFIX,
+    clear_lookup_balance_cache,
     get_wallet_balances,
     parse_assets_param,
 )
@@ -219,18 +219,8 @@ class WalletLookupKeyView(WalletLookupKeyBaseView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     def _clear_wallet_cache(self, wallet_hash):
-        cache = settings.REDISKV
-        try:
-            # scan_keys avoids blocking Redis with KEYS.
-            from main.utils.cache import scan_keys
-            keys = scan_keys(cache, f'{LOOKUP_CACHE_PREFIX}:*:{wallet_hash}*')
-            if keys:
-                cache.delete(*keys)
-        except Exception as exc:
-            # A cache failure must not fail the revocation.
-            logger.warning(
-                f'Failed to clear balance cache for {wallet_hash}: {exc}'
-            )
+        # Shared with the revoke_lookup_key command so the two cannot drift.
+        clear_lookup_balance_cache(wallet_hash)
 
 
 class WalletLookupKeyBalanceView(WalletLookupKeyBaseView):

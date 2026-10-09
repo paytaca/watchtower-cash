@@ -257,6 +257,17 @@ Two caveats worth knowing:
   share one slot, so reading NFT #1 then NFT #2 returns NFT #1's balance. This
   endpoint keys NFTs as `lookup:balance:nft:{hash}:{category}:{txid}:{index}`,
   avoiding that. (The pre-existing collision in `view_balance.py` is untouched.)
+
+- **Revoke invalidates only the affected wallet.** `clear_lookup_balance_cache()`
+  in `main/utils/wallet_balances.py` is shared by the revoke endpoint and the
+  `revoke_lookup_key` command so the glob cannot drift between them. `wallet_hash`
+  is a free-form `CharField` with no format constraint, so a glob ending in a bare
+  `*` would also match hashes that merely start with the same string —
+  invalidating `wallet-hash-1` would sweep `wallet-hash-10`. The token glob is
+  therefore anchored with a trailing `:`, and the BCH key is deleted explicitly
+  because it is the only key with no segment after the hash and so a `:'-anchored
+  pattern would silently miss it. Cache failures are swallowed: revocation must
+  succeed even when Redis does not.
 - **One aggregate query per asset**, capped at 20. Multi-token batching is
   unreliable on `psqlextra`'s `PostgresModel` manager; see the note on
   `_get_slp_balance` in `main/utils/wallet_balances.py` and
@@ -264,7 +275,7 @@ Two caveats worth knowing:
 
 ## Tests
 
-`main/tests.py`, 58 tests across 10 classes:
+`main/tests.py`, 63 tests across 11 classes:
 
 | Class | Covers |
 |---|---|
@@ -276,6 +287,7 @@ Two caveats worth knowing:
 | `TestWalletLookupKeyAdmin` | Admin delete for a locked-out wallet |
 | `TestRevokeLookupKeyCommand` | Bulk revoke, `--dry-run`, no-key reporting |
 | `TestWalletLookupKeyCacheIsolation` | Cache namespace separation from the balance endpoint, and NFT key collisions |
+| `TestLookupBalanceCacheInvalidation` | Revoke-time cache invalidation: exact wallet only, no prefix collisions, survives Redis failure |
 | `TestWalletLookupKeyRouting` | URL resolution for both routes, and unknown subpaths 404ing |
 | `TestWalletLookupKeyThrottleScopes` | Mint/revoke and read use separate throttle buckets; read bucket is keyed per lookup key, not per IP |
 

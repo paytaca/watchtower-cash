@@ -1,11 +1,13 @@
 import hashlib
 import hmac
+import inspect
 import json
 from io import StringIO
 from unittest.mock import patch, MagicMock
 
 import requests as requests_lib
 from cryptography.fernet import Fernet, InvalidToken
+from redis.exceptions import ConnectionError
 from django.contrib.auth.models import User
 from django.core.management import call_command
 from django.db.models import ProtectedError
@@ -43,6 +45,9 @@ from main.utils.transaction_processing import reverse_dropped_transaction
 from main.utils.wallet_balances import (
     InvalidAssetId,
     MAX_ASSETS_PER_REQUEST,
+    clear_lookup_balance_cache,
+    get_asset_cache_key,
+    get_bch_cache_key,
     parse_asset_id,
     parse_assets_param,
 )
@@ -1450,6 +1455,104 @@ class TestWalletLookupKeyCacheIsolation(LookupKeyTestMixin, TestCase):
 
         keys = [k for k in self.fake_redis.keys() if 'nft' in k]
         self.assertEqual(len(keys), 2, f'NFTs shared a cache slot: {keys}')
+
+
+@override_settings(FERNET_KEY=_TEST_LOOKUP_FERNET_KEY)
+class TestLookupBalanceCacheInvalidation(LookupKeyTestMixin, TestCase):
+    """
+    clear_lookup_balance_cache must drop exactly one wallet's cached balances.
+
+    Shared by the revoke endpoint and the revoke_lookup_key command so the two
+    cannot drift; these tests pin the glob itself.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.wallet = self._make_wallet('wallet-hash-1')
+        # A sibling hash that shares a string prefix with wallet-hash-1.
+        self.sibling = self._make_wallet('wallet-hash-10')
+
+    def _keys_for(self, wallet, descriptor=None):
+        """Seed and return the cache keys one wallet would produce."""
+        if descriptor is None:
+            keys = [get_bch_cache_key(wallet)]
+        else:
+            keys = [get_asset_cache_key(wallet, descriptor)]
+        for key in keys:
+            self.fake_redis.set(key, '{}')
+        return keys
+
+    def _ft(self, category='catA'):
+        return {'type': 'ft', 'category': category}
+
+    def _nft(self, category='catB', txid='aa', index=0):
+        return {'type': 'nft', 'category': category, 'txid': txid,
+                'index': index}
+
+    def test_clears_bch_ft_and_nft_keys(self):
+        """All three key shapes must go. The bch key is the easy one to miss."""
+        bch = self._keys_for(self.wallet)
+        ft = self._keys_for(self.wallet, self._ft())
+        nft = self._keys_for(self.wallet, self._nft())
+
+        clear_lookup_balance_cache('wallet-hash-1', cache=self.fake_redis)
+
+        for key in bch + ft + nft:
+            self.assertNotIn(key, self.fake_redis.store,
+                             f'cache key survived invalidation: {key}')
+
+    def test_does_not_evict_a_hash_that_shares_a_prefix(self):
+        """
+        The regression this guards.
+
+        wallet_hash is a free-form CharField, so 'wallet-hash-1' and
+        'wallet-hash-10' are both legal. A glob ending in a bare '*' matches the
+        sibling too, which was harmless but unbounded.
+        """
+        sibling_bch = self._keys_for(self.sibling)
+        sibling_ft = self._keys_for(self.sibling, self._ft())
+        self._keys_for(self.wallet)
+
+        clear_lookup_balance_cache('wallet-hash-1', cache=self.fake_redis)
+
+        for key in sibling_bch + sibling_ft:
+            self.assertIn(
+                key, self.fake_redis.store,
+                'invalidating one wallet evicted a prefix-sharing sibling',
+            )
+
+    def test_is_a_noop_for_a_wallet_with_nothing_cached(self):
+        """No keys cached must not raise -- revoke has to survive this."""
+        clear_lookup_balance_cache('wallet-hash-never-cached',
+                                   cache=self.fake_redis)
+
+    def test_survives_a_broken_cache(self):
+        """A cache failure must never fail a revocation."""
+        class Exploding:
+            def delete(self, *a, **kw):
+                raise ConnectionError('redis down')
+
+            def scan_iter(self, *a, **kw):
+                raise ConnectionError('redis down')
+
+        clear_lookup_balance_cache('wallet-hash-1', cache=Exploding())
+
+    def test_view_and_command_share_one_implementation(self):
+        """Guards against the two call sites drifting back into copies."""
+        from main.management.commands.revoke_lookup_key import (
+            Command as RevokeCommand,
+        )
+        view_src = inspect.getsource(WalletLookupKeyView)
+        cmd_src = inspect.getsource(RevokeCommand)
+        for name, src in (('view', view_src), ('command', cmd_src)):
+            self.assertNotIn(
+                'scan_keys', src,
+                f'{name} reimplements the glob instead of calling the helper',
+            )
+            self.assertIn(
+                'clear_lookup_balance_cache', src,
+                f'{name} should call the shared helper',
+            )
 
 
 @override_settings(FERNET_KEY=_TEST_LOOKUP_FERNET_KEY)

@@ -1,9 +1,7 @@
 from django.core.management.base import BaseCommand
 
 from main.models import WalletLookupKey
-from main.utils.cache import scan_keys
-from main.utils.wallet_balances import LOOKUP_CACHE_PREFIX
-from django.conf import settings
+from main.utils.wallet_balances import clear_lookup_balance_cache
 
 
 class Command(BaseCommand):
@@ -53,22 +51,9 @@ class Command(BaseCommand):
                 continue
 
             lookup_key.delete()
-            self._clear_wallet_balance_cache(wallet_hash)
+            clear_lookup_balance_cache(wallet_hash)
             self.stdout.write(self.style.SUCCESS('  revoked'))
             revoked_count += 1
 
         prefix = 'would revoke' if dry_run else 'revoked'
         self.stdout.write(self.style.SUCCESS(f'{prefix} {revoked_count} key(s)'))
-
-    def _clear_wallet_balance_cache(self, wallet_hash):
-        cache = settings.REDISKV
-        try:
-            keys = scan_keys(cache, f'{LOOKUP_CACHE_PREFIX}:*:{wallet_hash}*')
-            if keys:
-                cache.delete(*keys)
-        except Exception as exc:
-            self.stderr.write(
-                self.style.WARNING(
-                    f'  could not clear balance cache for {wallet_hash}: {exc}'
-                )
-            )
