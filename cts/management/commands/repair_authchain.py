@@ -1,19 +1,15 @@
-from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
-from main.models import (
-    Address,
-    BlockHeight,
-    Subscription,
-    Transaction,
-    Token,
-    CashNonFungibleToken,
-)
-from main.tasks import process_input, process_output
+from main.models import Subscription, Transaction
 from main.utils.subscription import new_subscription
-from main.utils.cache import clear_wallet_balance_cache, clear_wallet_history_cache
 
-from cts.utils import NODE, build_authchain
+from cts.utils import (
+    build_authchain,
+    clear_authguard_caches,
+    get_authguard_address,
+    repair_authchain_full,
+    repair_authchain_minimal,
+)
 
 
 class Command(BaseCommand):
@@ -78,13 +74,10 @@ class Command(BaseCommand):
             raise CommandError(str(exc))
 
         # 2. Resolve the authguard address = the authhead's index-0 output address.
-        head_tx = NODE.BCH.get_transaction(authhead)
-        if head_tx is None:
-            raise CommandError(f"node has no tx {authhead}")
-        out0 = next((o for o in head_tx["outputs"] if o["index"] == 0), None)
-        if not out0 or not out0.get("address"):
-            raise CommandError(f"{authhead} has no index-0 output address")
-        authguard_address = out0["address"]
+        try:
+            authguard_address = get_authguard_address(authhead)
+        except ValueError as exc:
+            raise CommandError(str(exc))
 
         self.stdout.write(f"Authchain ({len(chain)} links), authguard address {authguard_address}:")
         for txid in chain:
@@ -123,12 +116,12 @@ class Command(BaseCommand):
 
         if full:
             self.stdout.write("Mode: --full (process_output/process_input; BCMR + side effects).")
-            updated, created = self._repair_full(chain, authhead)
+            updated, created = repair_authchain_full(chain, authhead)
         else:
             self.stdout.write("Mode: minimal (direct ORM; no BCMR, no signals).")
-            updated, created = self._repair_minimal(chain)
+            updated, created = repair_authchain_minimal(chain)
 
-        self._clear_caches(authguard_address)
+        clear_authguard_caches(authguard_address)
 
         self.stdout.write(self.style.SUCCESS(
             f"Repaired authchain: {updated} row(s) updated, {created} row(s) created."
@@ -177,140 +170,6 @@ class Command(BaseCommand):
         resolved_txid = resolved.txid if resolved else None
         return (resolved_txid == authhead), resolved_txid
 
-    def _repair_minimal(self, chain):
-        """Direct ORM writes for index-0 rows. No BCMR, no post-save signals."""
-        updated = 0
-        created = 0
-        for i, txid in enumerate(chain):
-            head = (i == len(chain) - 1)
-            link = "" if head else chain[i + 1]
-
-            rows = Transaction.objects.filter(txid=txid, index=0)
-            if rows.exists():
-                rows.update(spent=not head, spending_txid=link)
-                updated += 1
-                continue
-
-            tx = NODE.BCH.get_transaction(txid)
-            o0 = next((o for o in tx["outputs"] if o["index"] == 0), None) if tx else None
-            if not o0 or not o0.get("address"):
-                self.stderr.write(f"skip {txid}: no index-0 output")
-                continue
-
-            addr_obj, _ = Address.objects.get_or_create(address=o0["address"])
-            token_obj, token_created = Token.objects.get_or_create(
-                tokenid=settings.WT_DEFAULT_CASHTOKEN_ID
-            )
-            if token_created:
-                token_obj.name = "CashToken - "
-                token_obj.token_ticker = "CT-" + token_obj.tokenid[0:6]
-                token_obj.save()
-
-            token_data = o0.get("token_data") or {}
-            nft = None
-            if token_data.get("category"):
-                nft_data = token_data.get("nft") or {}
-                nft, _ = CashNonFungibleToken.objects.get_or_create(
-                    current_txid=txid,
-                    current_index=0,
-                    defaults={
-                        "category": token_data["category"],
-                        "capability": nft_data.get("capability", ""),
-                        "commitment": nft_data.get("commitment", ""),
-                    },
-                )
-
-            amount = None
-            if token_data.get("amount") is not None:
-                try:
-                    amount = int(token_data["amount"])
-                except (TypeError, ValueError):
-                    amount = None
-
-            Transaction.objects.bulk_create([
-                Transaction(
-                    txid=txid,
-                    address=addr_obj,
-                    token=token_obj,
-                    cashtoken_nft=nft,
-                    index=0,
-                    value=o0.get("value", 0),
-                    amount=amount,
-                    source="authchain_repair",
-                    spent=not head,
-                    spending_txid=link,
-                )
-            ])
-            created += 1
-        return updated, created
-
-    def _repair_full(self, chain, authhead):
-        """Full ingestion path via process_output/process_input (BCMR + post-save side effects)."""
-        updated = 0
-        created = 0
-        for i, txid in enumerate(chain):
-            head = (i == len(chain) - 1)
-            link = "" if head else chain[i + 1]
-
-            tx = NODE.BCH.get_transaction(txid)
-            if tx is None:
-                self.stderr.write(f"skip {txid}: node has no tx")
-                continue
-
-            o0 = next((o for o in tx["outputs"] if o["index"] == 0), None)
-            if not o0 or not o0.get("address"):
-                self.stderr.write(f"skip {txid}: no index-0 output")
-                continue
-
-            block = self._resolve_block(tx)
-            block_id = block.id if block else None
-            existed = Transaction.objects.filter(txid=txid, index=0).exists()
-
-            process_output(
-                o0,
-                txid,
-                block_id=block_id,
-                force_create=True,
-                spending_txid=link,
-                send_client_acknowledgement=False,
-            )
-
-            # Link the tx's other inputs (authkey, funding, ...) to their source outputs.
-            for tx_input in tx["inputs"]:
-                process_input(
-                    tx_input,
-                    txid,
-                    block_id=block_id,
-                    force_create=True,
-                    send_client_acknowledgement=False,
-                )
-
-            # process_output/save_record won't flip an already-spent row back to unspent.
-            if head:
-                Transaction.objects.filter(txid=txid, index=0).update(
-                    spent=False, spending_txid=""
-                )
-
-            if existed:
-                updated += 1
-            else:
-                created += 1
-        return updated, created
-
-    def _resolve_block(self, tx):
-        confirmations = tx.get("confirmations")
-        if not confirmations:
-            return None
-        try:
-            latest = NODE.BCH.get_latest_block()
-        except Exception:
-            return None
-        number = int(latest) - int(confirmations) + 1
-        if number < 0:
-            return None
-        block, _ = BlockHeight.objects.get_or_create(number=number)
-        return block
-
     @staticmethod
     def _db_walk(authbase):
         """Replicate Authhead.get_authhead: follow index-0 spending_txid to the unspent head."""
@@ -325,20 +184,3 @@ class Command(BaseCommand):
                 return row
             current = row.spending_txid
         return None
-
-    @staticmethod
-    def _clear_caches(authguard_address):
-        cache = settings.REDISKV
-        addresses = {authguard_address}
-        addr_obj = Address.objects.filter(address=authguard_address).select_related("wallet").first()
-        if addr_obj and addr_obj.token_address:
-            addresses.add(addr_obj.token_address)
-
-        for address in addresses:
-            cache.delete(f"address:balance:bch:{address}:False")
-            cache.delete(f"address:balance:bch:{address}:True")
-
-        if addr_obj and addr_obj.wallet:
-            wallet_hash = addr_obj.wallet.wallet_hash
-            clear_wallet_balance_cache(wallet_hash)
-            clear_wallet_history_cache(wallet_hash)
