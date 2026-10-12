@@ -87,8 +87,21 @@ def resolve_block(tx):
     number = int(latest) - int(confirmations) + 1
     if number < 0:
         return None
-    block, _ = BlockHeight.objects.get_or_create(number=number)
-    return block
+    # Look up only: creating a BlockHeight row triggers blockheight_post_save ->
+    # block_setter(), which queues a full block reprocess (main/signals.py).
+    return BlockHeight.objects.filter(number=number).first()
+
+
+def assert_unspent_authhead(authhead):
+    """
+    Refuse to set a spent output as the authhead.
+
+    Guards against a stale/fork head being posted: marking a spent txid `spent=False` would
+    erase the DB link to the real head and make the endpoint serve false on-chain state.
+    `gettxout` returns None when the output is spent (or spent in the mempool).
+    """
+    if NODE.BCH.get_tx_output(authhead, 0) is None:
+        raise ValueError(f"{authhead}:0 is not an unspent output; refusing to set it as authhead")
 
 
 def repair_authchain_minimal(chain):
@@ -98,6 +111,7 @@ def repair_authchain_minimal(chain):
     Existing rows only get `spent`/`spending_txid` updated; missing rows are created minimally
     from the node's output 0. No BCMR, no post-save signals. Returns (updated, created).
     """
+    assert_unspent_authhead(chain[-1])
     updated = 0
     created = 0
     for i, txid in enumerate(chain):
@@ -116,6 +130,9 @@ def repair_authchain_minimal(chain):
             continue
 
         addr_obj, _ = Address.objects.get_or_create(address=o0["address"])
+        # An authchain identity output always carries the token's NFT, so the row belongs to
+        # the cashtoken. (A plain-BCH output 0 would need the 'bch' token instead, but that
+        # does not occur on a real authchain.)
         token_obj, token_created = Token.objects.get_or_create(
             tokenid=settings.WT_DEFAULT_CASHTOKEN_ID
         )
@@ -158,7 +175,7 @@ def repair_authchain_minimal(chain):
                 spent=not head,
                 spending_txid=link,
             )
-        ])
+        ], ignore_conflicts=True)
         created += 1
     return updated, created
 
@@ -169,6 +186,7 @@ def repair_authchain_full(chain, authhead):
 
     This DOES fetch BCMR metadata and trigger the post-save side effects. Returns (updated, created).
     """
+    assert_unspent_authhead(authhead)
     updated = 0
     created = 0
     for i, txid in enumerate(chain):

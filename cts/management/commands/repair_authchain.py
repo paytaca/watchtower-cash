@@ -57,14 +57,14 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         authhead = options["authhead"]
         authbase = options["authbase"]
-        apply = options["apply"]
+        do_apply = options["apply"]
         full = options["full"]
 
         self.stdout.write("repair_authchain options:")
         self.stdout.write(f"  --authhead  = {authhead}")
         self.stdout.write(f"  --authbase  = {authbase}")
         self.stdout.write(f"  --max-depth = {options['max_depth']}")
-        self.stdout.write(f"  --apply     = {apply}")
+        self.stdout.write(f"  --apply     = {do_apply}")
         self.stdout.write(f"  --full      = {full}")
 
         # 1. Trace the chain from the node (no DB).
@@ -93,14 +93,14 @@ class Command(BaseCommand):
 
         if subscribed:
             self.stdout.write(f"Address {authguard_address} is already subscribed.")
-        elif apply:
+        elif do_apply:
             response = new_subscription(address=authguard_address)
             self.stdout.write(f"Subscribed {authguard_address}: {response}")
         else:
             self.stdout.write(f"Address {authguard_address} is NOT subscribed (dry-run: would subscribe).")
 
         # 4. Repair index-0 rows base -> head.
-        if not apply:
+        if not do_apply:
             resolved_ok, resolved_txid = self._diagnose(chain, authhead, authbase)
             if resolved_ok:
                 self.stdout.write(self.style.SUCCESS(
@@ -114,12 +114,15 @@ class Command(BaseCommand):
             self.stdout.write(self.style.WARNING("Dry-run: no rows written."))
             return
 
-        if full:
-            self.stdout.write("Mode: --full (process_output/process_input; BCMR + side effects).")
-            updated, created = repair_authchain_full(chain, authhead)
-        else:
-            self.stdout.write("Mode: minimal (direct ORM; no BCMR, no signals).")
-            updated, created = repair_authchain_minimal(chain)
+        try:
+            if full:
+                self.stdout.write("Mode: --full (process_output/process_input; BCMR + side effects).")
+                updated, created = repair_authchain_full(chain, authhead)
+            else:
+                self.stdout.write("Mode: minimal (direct ORM; no BCMR, no signals).")
+                updated, created = repair_authchain_minimal(chain)
+        except ValueError as exc:
+            raise CommandError(str(exc))
 
         clear_authguard_caches(authguard_address)
 
