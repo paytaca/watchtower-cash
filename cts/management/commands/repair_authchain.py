@@ -114,15 +114,12 @@ class Command(BaseCommand):
             self.stdout.write(self.style.WARNING("Dry-run: no rows written."))
             return
 
-        try:
-            if full:
-                self.stdout.write("Mode: --full (process_output/process_input; BCMR + side effects).")
-                updated, created = repair_authchain_full(chain, authhead)
-            else:
-                self.stdout.write("Mode: minimal (direct ORM; no BCMR, no signals).")
-                updated, created = repair_authchain_minimal(chain)
-        except ValueError as exc:
-            raise CommandError(str(exc))
+        if full:
+            self.stdout.write("Mode: --full (process_output/process_input; BCMR + side effects).")
+            updated, created = repair_authchain_full(chain, authhead)
+        else:
+            self.stdout.write("Mode: minimal (direct ORM; no BCMR, no signals).")
+            updated, created = repair_authchain_minimal(chain)
 
         clear_authguard_caches(authguard_address)
 

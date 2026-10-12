@@ -1,7 +1,6 @@
 
 
 from typing import Any
-import logging
 import requests
 import threading
 from drf_yasg import openapi
@@ -15,13 +14,7 @@ from main.models import (Transaction, BlockHeight)
 
 from smartbch.pagination import CustomLimitOffsetPagination
 
-from main.throttles import AuthchainRepairThrottle
-
 from cts.serializers import UtxoSerializer, AuthchainIdentitySerializer
-from cts.utils import resolve_and_repair
-
-
-LOGGER = logging.getLogger(__name__)
 
 
 
@@ -162,7 +155,6 @@ class Authhead(APIView):
 
 class Authenticate(APIView):
     serializer_class = UtxoSerializer
-    throttle_classes = [AuthchainRepairThrottle]
     @swagger_auto_schema(
         operation_description="Authenticates the authhead. Checks that the authhead is the last, unspent, zeroeth descendant output of the authbase.",
         responses={status.HTTP_200_OK: UtxoSerializer},
@@ -174,30 +166,9 @@ class Authenticate(APIView):
     def post(self, request, *args, **kwargs):
         authhead = Authhead.get_authhead(request)
         authhead_param = request.query_params.get('authhead')
-        authbase_param = request.query_params.get('authbase')
-
         if authhead and authhead.txid == authhead_param and not authhead.spent:
             s = UtxoSerializer(authhead, many=False)
             return Response(data={'authhead': s.data, 'address': authhead.address.address, 'success': 'Authhead checked ok'})
-
-        # Minimal repair (broken-authchain fix): only when the DB walk is unresolved, and the
-        # supplied authhead is verified unspent on-chain (assert_unspent_authhead). Authguard
-        # is a contract, not a wallet; the existing UTXO scan still covers its UTXO set/history.
-        # Small max_depth bounds the synchronous node-RPC fan-out on this unauthenticated path.
-        if authhead is None and authhead_param and authbase_param:
-            try:
-                resolve_and_repair(authhead_param, authbase_param, max_depth=100)
-            except Exception:
-                LOGGER.exception(
-                    "authhead repair failed | authhead=%s authbase=%s",
-                    authhead_param,
-                    authbase_param,
-                )
-            authhead = Authhead.get_authhead(request)
-            if authhead and authhead.txid == authhead_param and not authhead.spent:
-                s = UtxoSerializer(authhead, many=False)
-                return Response(data={'authhead': s.data, 'address': authhead.address.address, 'success': 'Authhead checked ok', 'repaired': True})
-
         return Response(data={'failed': f'Authhead checked nok'})
 
 

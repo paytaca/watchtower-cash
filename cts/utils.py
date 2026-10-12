@@ -91,18 +91,6 @@ def resolve_block(tx):
     return block
 
 
-def assert_unspent_authhead(authhead):
-    """
-    Refuse to set a spent output as the authhead.
-
-    Guards against a stale/fork head being posted: marking a spent txid `spent=False` would
-    destroy the DB link to the real head and make the endpoint authenticate false on-chain
-    state. `gettxout` returns None when the output is spent (or spent in the mempool).
-    """
-    if NODE.BCH.get_tx_output(authhead, 0) is None:
-        raise ValueError(f"{authhead}:0 is not an unspent output; refusing to set it as authhead")
-
-
 def repair_authchain_minimal(chain):
     """
     Write the index-0 rows for a chain base -> head using direct ORM.
@@ -110,7 +98,6 @@ def repair_authchain_minimal(chain):
     Existing rows only get `spent`/`spending_txid` updated; missing rows are created minimally
     from the node's output 0. No BCMR, no post-save signals. Returns (updated, created).
     """
-    assert_unspent_authhead(chain[-1])
     updated = 0
     created = 0
     for i, txid in enumerate(chain):
@@ -182,7 +169,6 @@ def repair_authchain_full(chain, authhead):
 
     This DOES fetch BCMR metadata and trigger the post-save side effects. Returns (updated, created).
     """
-    assert_unspent_authhead(authhead)
     updated = 0
     created = 0
     for i, txid in enumerate(chain):
@@ -246,20 +232,3 @@ def clear_authguard_caches(authguard_address):
         wallet_hash = addr_obj.wallet.wallet_hash
         clear_wallet_balance_cache(wallet_hash)
         clear_wallet_history_cache(wallet_hash)
-
-
-def resolve_and_repair(authhead, authbase, max_depth=1500):
-    """
-    Trace the chain from the node and repair it in the DB (minimal writes + cache clear).
-
-    Minimal (not --full) on purpose: this only fixes a broken authchain, and the authguard
-    address is a contract, not a wallet, so its history/metadata is rarely used — the tx rows
-    and links are all that matter here. The address's UTXO set and history are still handled
-    by the existing UTXO scan (and the contract-history backfill).
-
-    No subscription, no BCMR. Returns the resolved chain [authbase, ..., authhead].
-    """
-    chain = build_authchain(authhead, authbase, max_depth=max_depth)
-    repair_authchain_minimal(chain)
-    clear_authguard_caches(get_authguard_address(authhead))
-    return chain
