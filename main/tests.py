@@ -48,9 +48,11 @@ from main.utils.transaction_processing import reverse_dropped_transaction
 from main.utils.wallet_balances import (
     InvalidAssetId,
     MAX_ASSETS_PER_REQUEST,
+    WalletDigestUnavailable,
     clear_lookup_balance_cache,
     get_asset_cache_key,
     get_bch_cache_key,
+    get_wallet_digest,
     parse_asset_id,
     parse_assets_param,
 )
@@ -1019,10 +1021,10 @@ class TestWalletLookupKeyMint(LookupKeyTestMixin, TestCase):
 
     def setUp(self):
         super().setUp()
-        self.wallet = self._make_wallet('wallet-hash-1')
+        self.wallet = self._make_wallet('ab'*30)
 
     def test_mint_returns_201_and_raw_key_once(self):
-        raw_key = self._mint('wallet-hash-1', label='partner-server')
+        raw_key = self._mint('ab'*30, label='partner-server')
 
         self.assertTrue(raw_key)
         row = WalletLookupKey.objects.get()
@@ -1034,7 +1036,7 @@ class TestWalletLookupKeyMint(LookupKeyTestMixin, TestCase):
     def test_create_response_does_not_leak_digest(self):
         resp = self.client.post(
             _LOOKUP_URL, {'label': 'x'}, format='json',
-            **self._auth('wallet-hash-1')
+            **self._auth('ab'*30)
         )
         self.assertEqual(resp.status_code, 201)
         self.assertNotIn('key_hash', resp.data)
@@ -1051,11 +1053,11 @@ class TestWalletLookupKeyMint(LookupKeyTestMixin, TestCase):
         drive-by refactor -- the caller still learns why, and gets the 400 on
         a retry after revoking.
         """
-        self._mint('wallet-hash-1')
+        self._mint('ab'*30)
 
         resp = self.client.post(
             _LOOKUP_URL, {'label': 'x' * 200}, format='json',
-            **self._auth('wallet-hash-1')
+            **self._auth('ab'*30)
         )
 
         self.assertEqual(resp.status_code, 409)
@@ -1067,11 +1069,11 @@ class TestWalletLookupKeyMint(LookupKeyTestMixin, TestCase):
         self.assertEqual(WalletLookupKey.objects.count(), 1)
 
     def test_second_mint_returns_409_and_keeps_original_key(self):
-        first = self._mint('wallet-hash-1')
+        first = self._mint('ab'*30)
 
         resp = self.client.post(
             _LOOKUP_URL, {'label': 'second'}, format='json',
-            **self._auth('wallet-hash-1')
+            **self._auth('ab'*30)
         )
 
         self.assertEqual(resp.status_code, 409)
@@ -1083,7 +1085,7 @@ class TestWalletLookupKeyMint(LookupKeyTestMixin, TestCase):
         # wallet-hash header alone must not be enough to mint a credential.
         resp = self.client.post(
             _LOOKUP_URL, {'label': 'x'}, format='json',
-            HTTP_WALLET_HASH='wallet-hash-1',
+            HTTP_WALLET_HASH='ab'*30,
         )
         self.assertEqual(resp.status_code, 403)
         self.assertEqual(WalletLookupKey.objects.count(), 0)
@@ -1098,19 +1100,19 @@ class TestWalletLookupKeyMint(LookupKeyTestMixin, TestCase):
         self.assertEqual(WalletLookupKey.objects.count(), 0)
 
     def test_cannot_bind_key_to_another_wallet(self):
-        self._make_wallet('wallet-hash-2')
+        self._make_wallet('cd'*30)
         resp = self.client.post(
             _LOOKUP_URL,
-            {'label': 'x', 'wallet': 'wallet-hash-2'},
+            {'label': 'x', 'wallet': 'cd'*30},
             format='json',
-            **self._auth('wallet-hash-1'),
+            **self._auth('ab'*30),
         )
         self.assertEqual(resp.status_code, 201)
         row = WalletLookupKey.objects.get()
-        self.assertEqual(row.wallet.wallet_hash, 'wallet-hash-1')
+        self.assertEqual(row.wallet.wallet_hash, 'ab'*30)
 
     def test_one_row_per_wallet_enforced_by_db(self):
-        self._mint('wallet-hash-1')
+        self._mint('ab'*30)
         from django.db import IntegrityError, transaction
         with self.assertRaises(IntegrityError):
             with transaction.atomic():
@@ -1124,32 +1126,32 @@ class TestWalletLookupKeyRevoke(LookupKeyTestMixin, TestCase):
 
     def setUp(self):
         super().setUp()
-        self.wallet = self._make_wallet('wallet-hash-1')
-        self.key = self._mint('wallet-hash-1')
+        self.wallet = self._make_wallet('ab'*30)
+        self.key = self._mint('ab'*30)
 
     def test_revoke_returns_204_and_removes_key(self):
-        resp = self.client.delete(_LOOKUP_URL, **self._auth('wallet-hash-1'))
+        resp = self.client.delete(_LOOKUP_URL, **self._auth('ab'*30))
         self.assertEqual(resp.status_code, 204)
         self.assertEqual(WalletLookupKey.objects.count(), 0)
         self.assertIsNone(resolve_key(self.key))
 
     def test_second_revoke_returns_404(self):
         # Makes a blind DELETE-then-POST rotation safe to retry.
-        self.client.delete(_LOOKUP_URL, **self._auth('wallet-hash-1'))
-        resp = self.client.delete(_LOOKUP_URL, **self._auth('wallet-hash-1'))
+        self.client.delete(_LOOKUP_URL, **self._auth('ab'*30))
+        resp = self.client.delete(_LOOKUP_URL, **self._auth('ab'*30))
         self.assertEqual(resp.status_code, 404)
 
     def test_revoke_without_key_returns_404(self):
-        other = self._make_wallet('wallet-hash-2')
-        resp = self.client.delete(_LOOKUP_URL, **self._auth('wallet-hash-2'))
+        other = self._make_wallet('cd'*30)
+        resp = self.client.delete(_LOOKUP_URL, **self._auth('cd'*30))
         self.assertEqual(resp.status_code, 404)
         # And it must not have touched anyone else's key.
         self.assertEqual(WalletLookupKey.objects.count(), 1)
         self.assertIsNotNone(resolve_key(self.key))
 
     def test_cannot_revoke_another_wallets_key(self):
-        self._make_wallet('wallet-hash-2')
-        resp = self.client.delete(_LOOKUP_URL, **self._auth('wallet-hash-2'))
+        self._make_wallet('cd'*30)
+        resp = self.client.delete(_LOOKUP_URL, **self._auth('cd'*30))
         self.assertEqual(resp.status_code, 404)
         self.assertEqual(WalletLookupKey.objects.count(), 1)
 
@@ -1161,13 +1163,13 @@ class TestWalletLookupKeyRevoke(LookupKeyTestMixin, TestCase):
         # so the fix belongs in that shared class -- which every wallet endpoint
         # uses, not just this one. Left alone deliberately; pinned here so the
         # current behaviour is explicit rather than incidental.
-        resp = self.client.delete(_LOOKUP_URL, HTTP_WALLET_HASH='wallet-hash-1')
+        resp = self.client.delete(_LOOKUP_URL, HTTP_WALLET_HASH='ab'*30)
         self.assertEqual(resp.status_code, 403)
         self.assertEqual(WalletLookupKey.objects.count(), 1)
 
     def test_rotation_yields_a_working_new_key(self):
-        self.client.delete(_LOOKUP_URL, **self._auth('wallet-hash-1'))
-        new_key = self._mint('wallet-hash-1', label='rotated')
+        self.client.delete(_LOOKUP_URL, **self._auth('ab'*30))
+        new_key = self._mint('ab'*30, label='rotated')
         self.assertNotEqual(new_key, self.key)
         self.assertIsNone(resolve_key(self.key))
         self.assertIsNotNone(resolve_key(new_key))
@@ -1178,8 +1180,8 @@ class TestWalletLookupKeyBalances(LookupKeyTestMixin, TestCase):
 
     def setUp(self):
         super().setUp()
-        self.wallet = self._make_wallet('wallet-hash-1')
-        self.key = self._mint('wallet-hash-1')
+        self.wallet = self._make_wallet('ab'*30)
+        self.key = self._mint('ab'*30)
         self.redis_patcher = patch(
             'main.utils.wallet_balances.settings.REDISKV', self.fake_redis
         )
@@ -1196,10 +1198,17 @@ class TestWalletLookupKeyBalances(LookupKeyTestMixin, TestCase):
             HTTP_X_API_KEY=key if key is not None else self.key
         )
 
-    def test_returns_bch_balance_and_wallet_hash(self):
+    def test_returns_bch_balance_and_wallet_digest(self):
         resp = self._get()
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.data['wallet_hash'], 'wallet-hash-1')
+        self.assertEqual(
+            resp.data['wallet_digest'],
+            get_wallet_digest('ab'*30),
+        )
+        # The raw wallet_hash must never appear: this endpoint exists so a
+        # partner can read balances without holding the wallet's identifier.
+        self.assertNotIn('wallet_hash', resp.data)
+        self.assertNotIn('ab'*30, str(resp.data))
         self.assertEqual(resp.data['assets'], [])
         # Assert the whole key set, not just that 'balance' is present: a
         # shape regression here would otherwise pass silently.
@@ -1253,7 +1262,7 @@ class TestWalletLookupKeyBalances(LookupKeyTestMixin, TestCase):
         self.assertEqual(resp.status_code, 401)
 
     def test_revoked_key_returns_401(self):
-        self.client.delete(_LOOKUP_URL, **self._auth('wallet-hash-1'))
+        self.client.delete(_LOOKUP_URL, **self._auth('ab'*30))
         resp = self._get()
         self.assertEqual(resp.status_code, 401)
 
@@ -1437,7 +1446,8 @@ class TestWalletLookupKeyBalances(LookupKeyTestMixin, TestCase):
         self.assertEqual(resp.status_code, 200, resp.data)
         # BCH survived.
         self.assertIn('balance', resp.data['bch'])
-        self.assertEqual(resp.data['wallet_hash'], 'wallet-hash-1')
+        self.assertEqual(
+            resp.data['wallet_digest'], get_wallet_digest('ab'*30))
         # All three assets survived, in request order.
         self.assertEqual(
             [a['asset_id'] for a in resp.data['assets']],
@@ -1483,8 +1493,8 @@ class TestWalletLookupKeyThrottleScopes(LookupKeyTestMixin, TestCase):
 
     def setUp(self):
         super().setUp()
-        self.wallet = self._make_wallet('wallet-hash-1')
-        self.key = self._mint('wallet-hash-1')
+        self.wallet = self._make_wallet('ab'*30)
+        self.key = self._mint('ab'*30)
         self.redis_patcher = patch(
             'main.utils.wallet_balances.settings.REDISKV', self.fake_redis
         )
@@ -1500,8 +1510,8 @@ class TestWalletLookupKeyThrottleScopes(LookupKeyTestMixin, TestCase):
 
     def _second_key(self):
         """A second wallet's key, which will be used from the same client IP."""
-        self._make_wallet('wallet-hash-2')
-        return self._mint('wallet-hash-2')
+        self._make_wallet('cd'*30)
+        return self._mint('cd'*30)
 
     def _drain_read_bucket(self, key):
         """Burn a key's whole read budget; return True once it is exhausted."""
@@ -1543,7 +1553,7 @@ class TestWalletLookupKeyThrottleScopes(LookupKeyTestMixin, TestCase):
         self.assertTrue(self._drain_read_bucket(self.key))
 
         # The revoke path is untouched.
-        resp = self.client.delete(_LOOKUP_URL, **self._auth('wallet-hash-1'))
+        resp = self.client.delete(_LOOKUP_URL, **self._auth('ab'*30))
         self.assertEqual(
             resp.status_code, 204,
             'revoke path was throttled by balance-read traffic',
@@ -1599,6 +1609,104 @@ class TestWalletLookupKeyThrottleScopes(LookupKeyTestMixin, TestCase):
 
 
 @override_settings(FERNET_KEY=_TEST_LOOKUP_FERNET_KEY)
+class TestWalletDigest(LookupKeyTestMixin, TestCase):
+    """
+    The balances endpoint identifies the wallet by digest, never raw hash.
+
+    sha224(bytes.fromhex(wallet_hash)), matching the convention already used by
+    /api/address-info/bch/{address}/ so a consumer of both sees one identifier.
+    """
+
+    # Fixed vectors. If these change, a partner's stored digests stop matching
+    # and every integration breaks silently, so they are pinned rather than
+    # recomputed from the implementation under test.
+    KNOWN = {
+        'ab'*30: '8cb419914d073c2a29674e83015612fabddf464eca1cd7f02dfb2942',
+        'ab'*30+'10': '0621075749e1331f6894e7ebfc918220df048366425ef867cab73fdd',
+        'cd'*30: 'cfa18a0635ad3b205c5d933c2c8b8a47503e2aff7298c88da53bf50d',
+    }
+
+    def setUp(self):
+        super().setUp()
+        self.wallet = self._make_wallet('ab'*30)
+        self.key = self._mint('ab'*30)
+        self.redis_patcher = patch(
+            'main.utils.wallet_balances.settings.REDISKV', self.fake_redis
+        )
+        self.redis_patcher.start()
+
+    def tearDown(self):
+        self.redis_patcher.stop()
+        super().tearDown()
+
+    def test_digest_matches_the_address_info_convention(self):
+        """
+        Pinned vector. sha224 over the raw bytes, hex-encoded -- NOT
+        sha256(wallet_hash.encode()), which is the *other* convention in this
+        codebase (view_wallet_activity_report) under the same field name.
+        """
+        for wallet_hash, expected in self.KNOWN.items():
+            self.assertEqual(
+                get_wallet_digest(wallet_hash), expected,
+                f'digest changed for {wallet_hash[:12]}...',
+            )
+
+    def test_digest_is_56_hex_chars(self):
+        digest = get_wallet_digest('ab'*30)
+        self.assertEqual(len(digest), 56)
+        self.assertTrue(all(c in '0123456789abcdef' for c in digest))
+
+    def test_digest_is_not_the_raw_hash_or_a_prefix(self):
+        raw = 'ab'*30
+        self.assertNotEqual(get_wallet_digest(raw), raw)
+        self.assertFalse(get_wallet_digest(raw).startswith(raw[:32]))
+
+    def test_distinct_wallets_get_distinct_digests(self):
+        self.assertNotEqual(
+            get_wallet_digest('ab'*30), get_wallet_digest('cd'*30)
+        )
+
+    def test_non_hex_wallet_hash_raises(self):
+        """bytes.fromhex rejects these; there is no silent fallback digest."""
+        # NB: '' is excluded -- bytes.fromhex('') legitimately returns b'' and
+        # digests it, so an empty hash is not a ValueError case. It cannot occur
+        # in practice (wallet_hash is unique and max_length=70).
+        for bad in ['wallet-hash-1', 'testwallet', 'abc', 'zz'*30, 'ab'*30+'f']:
+            with self.assertRaises(WalletDigestUnavailable):
+                get_wallet_digest(bad)
+
+    def test_response_carries_the_digest_and_not_the_raw_hash(self):
+        resp = self.client.get(
+            _LOOKUP_BALANCES_URL, HTTP_X_API_KEY=self.key
+        )
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.assertIn('wallet_digest', resp.data)
+        self.assertNotIn('wallet_hash', resp.data)
+        self.assertEqual(
+            resp.data['wallet_digest'], get_wallet_digest('ab'*30)
+        )
+        # Belt and braces: the raw hash must not leak anywhere in the body,
+        # including nested structures.
+        self.assertNotIn('ab'*30, str(resp.data))
+
+    def test_non_hex_wallet_hash_returns_500_not_a_leaked_hash(self):
+        """
+        A corrupt stored wallet_hash is our data, not the caller's, so it is a
+        500 rather than a 400. The body must not echo the raw hash -- doing so
+        would defeat the reason the field is digested at all.
+        """
+        Wallet.objects.filter(wallet_hash='ab'*30).update(wallet_hash='nope')
+
+        resp = self.client.get(
+            _LOOKUP_BALANCES_URL, HTTP_X_API_KEY=self.key
+        )
+
+        self.assertEqual(resp.status_code, 500)
+        self.assertEqual(resp.data['error'], 'wallet_digest_unavailable')
+        self.assertNotIn('nope', str(resp.data))
+
+
+@override_settings(FERNET_KEY=_TEST_LOOKUP_FERNET_KEY)
 class TestWalletLookupKeyCacheIsolation(LookupKeyTestMixin, TestCase):
     """
     The lookup-key balance endpoint and the pre-existing /api/balance/wallet/
@@ -1614,8 +1722,8 @@ class TestWalletLookupKeyCacheIsolation(LookupKeyTestMixin, TestCase):
 
     def setUp(self):
         super().setUp()
-        self.wallet = self._make_wallet('wallet-hash-1')
-        self.key = self._mint('wallet-hash-1')
+        self.wallet = self._make_wallet('ab'*30)
+        self.key = self._mint('ab'*30)
         self.redis_patcher = patch(
             'main.utils.wallet_balances.settings.REDISKV', self.fake_redis
         )
@@ -1660,7 +1768,7 @@ class TestWalletLookupKeyCacheIsolation(LookupKeyTestMixin, TestCase):
         our own payload, because nothing else writes there.
         """
         self.fake_redis.store[
-            f'wallet:balance:token:wallet-hash-1:{_CATEGORY}'
+            f'wallet:balance:token:{"ab"*30}:{_CATEGORY}'
         ] = json.dumps({
             'balance': 5.0, 'spendable': 5.0, 'token_id': _CATEGORY,
             'valid': True,
@@ -1683,7 +1791,7 @@ class TestWalletLookupKeyCacheIsolation(LookupKeyTestMixin, TestCase):
         self.assertIn('decimals', entry)
         # And the balance endpoint's entry was left alone.
         stored = json.loads(
-            self.fake_redis.store[f'wallet:balance:token:wallet-hash-1:{_CATEGORY}']
+            self.fake_redis.store[f'wallet:balance:token:{"ab"*30}:{_CATEGORY}']
         )
         self.assertEqual(stored['token_id'], _CATEGORY)
 
@@ -1725,9 +1833,9 @@ class TestLookupBalanceCacheInvalidation(LookupKeyTestMixin, TestCase):
 
     def setUp(self):
         super().setUp()
-        self.wallet = self._make_wallet('wallet-hash-1')
+        self.wallet = self._make_wallet('ab'*30)
         # A sibling hash that shares a string prefix with wallet-hash-1.
-        self.sibling = self._make_wallet('wallet-hash-10')
+        self.sibling = self._make_wallet('ab'*30+'10')
 
     def _keys_for(self, wallet, descriptor=None):
         """Seed and return the cache keys one wallet would produce."""
@@ -1752,7 +1860,7 @@ class TestLookupBalanceCacheInvalidation(LookupKeyTestMixin, TestCase):
         ft = self._keys_for(self.wallet, self._ft())
         nft = self._keys_for(self.wallet, self._nft())
 
-        clear_lookup_balance_cache('wallet-hash-1', cache=self.fake_redis)
+        clear_lookup_balance_cache('ab'*30, cache=self.fake_redis)
 
         for key in bch + ft + nft:
             self.assertNotIn(key, self.fake_redis.store,
@@ -1762,15 +1870,15 @@ class TestLookupBalanceCacheInvalidation(LookupKeyTestMixin, TestCase):
         """
         The regression this guards.
 
-        wallet_hash is a free-form CharField, so 'wallet-hash-1' and
-        'wallet-hash-10' are both legal. A glob ending in a bare '*' matches the
+        wallet_hash is a free-form CharField, so 'ab'*30 and
+        'ab'*30+'10' are both legal. A glob ending in a bare '*' matches the
         sibling too, which was harmless but unbounded.
         """
         sibling_bch = self._keys_for(self.sibling)
         sibling_ft = self._keys_for(self.sibling, self._ft())
         self._keys_for(self.wallet)
 
-        clear_lookup_balance_cache('wallet-hash-1', cache=self.fake_redis)
+        clear_lookup_balance_cache('ab'*30, cache=self.fake_redis)
 
         for key in sibling_bch + sibling_ft:
             self.assertIn(
@@ -1780,7 +1888,7 @@ class TestLookupBalanceCacheInvalidation(LookupKeyTestMixin, TestCase):
 
     def test_is_a_noop_for_a_wallet_with_nothing_cached(self):
         """No keys cached must not raise -- revoke has to survive this."""
-        clear_lookup_balance_cache('wallet-hash-never-cached',
+        clear_lookup_balance_cache('ab'*30+'ff',
                                    cache=self.fake_redis)
 
     def test_survives_a_broken_cache(self):
@@ -1792,7 +1900,7 @@ class TestLookupBalanceCacheInvalidation(LookupKeyTestMixin, TestCase):
             def scan_iter(self, *a, **kw):
                 raise ConnectionError('redis down')
 
-        clear_lookup_balance_cache('wallet-hash-1', cache=Exploding())
+        clear_lookup_balance_cache('ab'*30, cache=Exploding())
 
     def test_view_and_command_share_one_implementation(self):
         """Guards against the two call sites drifting back into copies."""
@@ -1817,8 +1925,8 @@ class TestWalletLookupKeyAdmin(LookupKeyTestMixin, TestCase):
 
     def setUp(self):
         super().setUp()
-        self.wallet = self._make_wallet('wallet-hash-1')
-        self.key = self._mint('wallet-hash-1')
+        self.wallet = self._make_wallet('ab'*30)
+        self.key = self._mint('ab'*30)
         self.admin_user = User.objects.create_superuser(
             username='admin', email='admin@example.com', password='pw'
         )
@@ -1837,7 +1945,7 @@ class TestWalletLookupKeyAdmin(LookupKeyTestMixin, TestCase):
 
     def test_admin_changelist_searches_by_wallet_hash(self):
         resp = self.client.get(
-            reverse('admin:main_walletlookupkey_changelist') + '?q=wallet-hash-1'
+            reverse('admin:main_walletlookupkey_changelist') + '?q=' + "ab"*30
         )
         self.assertEqual(resp.status_code, 200)
 
@@ -1847,8 +1955,8 @@ class TestRevokeLookupKeyCommand(LookupKeyTestMixin, TestCase):
 
     def setUp(self):
         super().setUp()
-        self.wallet = self._make_wallet('wallet-hash-1')
-        self.key = self._mint('wallet-hash-1')
+        self.wallet = self._make_wallet('ab'*30)
+        self.key = self._mint('ab'*30)
 
     def _run(self, *args, **kwargs):
         out = StringIO()
@@ -1856,24 +1964,24 @@ class TestRevokeLookupKeyCommand(LookupKeyTestMixin, TestCase):
         return out.getvalue()
 
     def test_revokes_by_wallet_hash(self):
-        output = self._run('wallet-hash-1')
+        output = self._run('ab'*30)
         self.assertIn('revoked', output)
         self.assertEqual(WalletLookupKey.objects.count(), 0)
         self.assertIsNone(resolve_key(self.key))
 
     def test_dry_run_leaves_the_key_in_place(self):
-        output = self._run('wallet-hash-1', dry_run=True)
+        output = self._run('ab'*30, dry_run=True)
         self.assertIn('would revoke', output)
         self.assertEqual(WalletLookupKey.objects.count(), 1)
 
     def test_reports_wallet_without_a_key(self):
-        self._make_wallet('wallet-hash-2')
-        output = self._run('wallet-hash-2')
+        self._make_wallet('cd'*30)
+        output = self._run('cd'*30)
         self.assertIn('no lookup key', output)
         self.assertEqual(WalletLookupKey.objects.count(), 1)
 
     def test_handles_multiple_wallet_hashes(self):
-        self._make_wallet('wallet-hash-2')
-        self._mint('wallet-hash-2')
-        self._run('wallet-hash-1', 'wallet-hash-2')
+        self._make_wallet('cd'*30)
+        self._mint('cd'*30)
+        self._run('ab'*30, 'cd'*30)
         self.assertEqual(WalletLookupKey.objects.count(), 0)

@@ -120,7 +120,7 @@ curl 'https://watchtower.cash/api/wallet/lookup-keys/balances/?assets=ct/9f2a...
 `200`:
 ```json
 {
-  "wallet_hash": "...",
+  "wallet_digest": "8cb419914d073c2a29674e83015612fabddf464eca1cd7f02dfb2942",
   "bch": { "balance": 1.23456789, "spendable": 1.23456789, "valid": true },
   "assets": [
     {
@@ -142,6 +142,29 @@ Status codes:
 | `200` | Success |
 | `400` | Malformed asset id, an `slp/...` id, or `bch` |
 | `401` | Missing, unknown, or revoked `X-Api-Key` |
+| `500` | Stored `wallet_hash` is not valid hex, so no digest can be derived |
+
+### The wallet is identified by digest, not by hash
+
+The response carries `wallet_digest`, never the raw `wallet_hash`. This endpoint
+exists so a partner can read balances **without** holding the wallet's
+identifier, so echoing that identifier back would undo the point of it.
+
+```python
+sha224(bytes.fromhex(wallet_hash)).digest().hex()   # 56 hex chars
+```
+
+This is the same convention `/api/address-info/bch/{address}/` uses, so a
+consumer of both APIs sees one identifier per wallet. Note there is a *different*
+convention elsewhere in this codebase — the wallet-activity-report endpoint uses
+`sha256(wallet_hash.encode())` under the same field name. They are not
+interchangeable.
+
+A `wallet_hash` that is not valid hex (including odd-length) raises rather than
+falling back to some other digest, which would produce an identifier no other
+system agrees with. That surfaces as a `500`, not a `400`: it is a data-integrity
+problem on our side, and the caller cannot influence it. The error body does not
+echo the raw hash.
 
 All failures return `401` with `WWW-Authenticate: X-Api-Key` — including a
 completely missing header. `LookupKeyAuthentication` raises rather than
@@ -301,7 +324,7 @@ Two caveats worth knowing:
 
 ## Tests
 
-`main/tests.py`, 75 tests across 12 classes:
+`main/tests.py`, 82 tests across 13 classes:
 
 | Class | Covers |
 |---|---|
@@ -311,6 +334,7 @@ Two caveats worth knowing:
 | `TestWalletLookupKeyMint` | `201`, `409`, digest never returned, auth required, one-row-per-wallet, 409-before-validation precedence |
 | `TestWalletLookupKeyRevoke` | `204`, `404`, ownership scoping, rotation |
 | `TestWalletLookupKeyBalances` | Balance reads, `401`s, `400`s, `last_used_at`, revoked key, NFTs with and without BCMR metadata, NFT-only `commitment`/`capability`, schema/response field parity |
+| `TestWalletDigest` | `wallet_digest` matches the `/address-info/bch/` convention; raw `wallet_hash` never returned or leaked on error |
 | `TestWalletLookupKeyAdmin` | Admin delete for a locked-out wallet |
 | `TestRevokeLookupKeyCommand` | Bulk revoke, `--dry-run`, no-key reporting |
 | `TestWalletLookupKeyCacheIsolation` | Cache namespace separation from the balance endpoint, and NFT key collisions |

@@ -22,6 +22,7 @@ from main.serializers import (
 from main.throttles import WalletLookupKeyManageThrottle, WalletLookupKeyThrottle
 from main.utils.wallet_balances import (
     InvalidAssetId,
+    WalletDigestUnavailable,
     clear_lookup_balance_cache,
     get_wallet_balances,
     parse_assets_param,
@@ -276,6 +277,19 @@ class WalletLookupKeyBalanceView(WalletLookupKeyBaseView):
             return Response(
                 {'error': str(exc)},
                 status=status.HTTP_400_BAD_REQUEST
+            )
+        except WalletDigestUnavailable:
+            # Our data, not the caller's: a non-hex stored wallet_hash. 500 so
+            # it surfaces as an operator problem rather than looking like a
+            # malformed request. The raw wallet_hash is deliberately absent from
+            # this body -- echoing it would defeat the reason it is digested.
+            logger.exception(
+                'Cannot digest wallet_hash for lookup key id=%s',
+                lookup_key.id,
+            )
+            return Response(
+                {'error': 'wallet_digest_unavailable'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
         # Track usage on the key, not on the wallet -- this avoids a write on
