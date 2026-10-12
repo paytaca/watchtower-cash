@@ -1,4 +1,5 @@
 import json
+from hashlib import sha224
 
 from django.conf import settings
 from django.db.models import Count, F, Q, Sum
@@ -115,6 +116,47 @@ LOOKUP_CACHE_PREFIX = 'lookup:balance'
 
 class InvalidAssetId(ValueError):
     """Raised when an asset id cannot be parsed."""
+
+
+class WalletDigestUnavailable(ValueError):
+    """
+    Raised when a wallet_hash cannot be digested because it is not valid hex.
+
+    This is a data-integrity problem, not a caller error: the caller did not
+    supply the wallet_hash and cannot influence it. It is surfaced as a 500
+    rather than a 400 so an operator sees it instead of assuming their request
+    was malformed.
+
+    Deliberately not swallowed with a fallback digest. Returning balances with a
+    missing identifier would let a partner mis-attribute one wallet's balance to
+    another, which is a worse outcome on a balance endpoint than an error.
+    """
+
+
+def get_wallet_digest(wallet_hash: str) -> str:
+    """
+    The public identifier for a wallet: sha224 over its bytes.
+
+    Matches the convention already used by /api/address-info/bch/{address}/, so
+    a consumer of both APIs sees one identifier per wallet:
+
+        sha224(bytes.fromhex(wallet_hash)).digest().hex()
+
+    Note there is a second, different convention in this codebase --
+    view_wallet_activity_report uses sha256(wallet_hash.encode()) under the same
+    `wallet_digest` name. They are not interchangeable.
+
+    bytes.fromhex() rejects anything non-hex, including odd-length input, so a
+    malformed stored wallet_hash raises rather than silently producing a digest
+    that no other system would agree with.
+    """
+    try:
+        wallet_hash_bytes = bytes.fromhex(wallet_hash)
+    except (ValueError, TypeError) as exc:
+        raise WalletDigestUnavailable(
+            f'wallet_hash is not valid hex: {exc}'
+        ) from exc
+    return sha224(wallet_hash_bytes).digest().hex()
 
 
 def get_cache_ttl():
@@ -382,6 +424,9 @@ def get_wallet_balances(wallet, asset_ids) -> dict:
 
     The BCH balance is always returned in the top-level `bch` field; `assets`
     only adds CashTokens on top of it.
+
+    Identifies the wallet by `wallet_digest`, never the raw wallet_hash. Raises
+    WalletDigestUnavailable if the stored wallet_hash is not hex.
     """
     asset_ids = list(asset_ids or [])
 
@@ -395,7 +440,10 @@ def get_wallet_balances(wallet, asset_ids) -> dict:
     descriptors = [parse_asset_id(asset_id) for asset_id in asset_ids]
 
     data = {
-        'wallet_hash': wallet.wallet_hash,
+        # Digest, never the raw wallet_hash: this endpoint authenticates with a
+        # lookup key precisely so the caller never needs the wallet's own
+        # identifier, and echoing it back would undo that.
+        'wallet_digest': get_wallet_digest(wallet.wallet_hash),
         'bch': get_bch_balance(wallet),
         'assets': [],
     }

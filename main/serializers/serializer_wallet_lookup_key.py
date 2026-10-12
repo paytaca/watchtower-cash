@@ -60,6 +60,10 @@ class WalletLookupKeyAssetBalanceSerializer(serializers.Serializer):
 
 
 class WalletLookupKeyBalanceSerializer(serializers.Serializer):
-    wallet_hash = serializers.CharField(read_only=True)
+    # sha224 digest of the wallet's wallet_hash, matching
+    # /api/address-info/bch/{address}/. The raw wallet_hash is deliberately not
+    # exposed: this endpoint exists so a partner can read balances without
+    # holding the wallet's identifier.
+    wallet_digest = serializers.CharField(read_only=True)
     bch = serializers.DictField(read_only=True)
     assets = WalletLookupKeyAssetBalanceSerializer(many=True, read_only=True)
