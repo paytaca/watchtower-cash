@@ -121,7 +121,7 @@ class Authhead(APIView):
     serializer_class = UtxoSerializer
     @swagger_auto_schema(
         operation_description="Returns the current authhead of the authchain.",
-        responses={status.HTTP_200_OK: UtxoSerializer},
+        responses={status.HTTP_200_OK: UtxoSerializer, status.HTTP_404_NOT_FOUND: "Authhead not found"},
         manual_parameters=[
             openapi.Parameter('authbase', openapi.IN_QUERY, description="The authbase(txid) of the authchain", type=openapi.TYPE_STRING),
         ]
@@ -131,32 +131,28 @@ class Authhead(APIView):
         if authhead and not authhead.spent:
             s = UtxoSerializer(authhead, many=False)
             return Response(data={'authhead': s.data, 'address': authhead.address.address})
-        else: 
-            Response(None)
+        return Response(status=status.HTTP_404_NOT_FOUND, data={'authhead': None, 'message': 'Authhead not found'})
 
     @staticmethod
     def get_authhead(request):
         authbase = request.query_params.get('authbase')
-        identity_output = None
         identity_output_tx = authbase 
         authhead = None
-        max_chain_length = BlockHeight.objects.order_by('number').last().number
+        last_block = BlockHeight.objects.order_by('number').last()
+        max_chain_length = last_block.number if last_block else None
         count = 0
-        while authhead == None:
+        while authhead is None:
             count += 1
-            if count == max_chain_length:
+            if max_chain_length is not None and count >= max_chain_length:
                 break
-            identity_output = Transaction.objects.filter(txid=identity_output_tx, index=0)
-            if identity_output:
-                identity_output = identity_output.first()
-                identity_output_tx = identity_output.spending_txid
-                if identity_output.spent == True:
-                    continue
-                else:
-                    authhead = identity_output
-                    break
-            else:
+            identity_output = Transaction.objects.filter(txid=identity_output_tx, index=0).first()
+            if identity_output is None:
                 break
+            identity_output_tx = identity_output.spending_txid
+            if identity_output.spent:
+                continue
+            authhead = identity_output
+            break
 
         return authhead
         
