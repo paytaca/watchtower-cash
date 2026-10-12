@@ -4,6 +4,7 @@ from main.models import Subscription, Transaction
 from main.utils.subscription import new_subscription
 
 from cts.utils import (
+    assert_unspent_authhead,
     build_authchain,
     clear_authguard_caches,
     get_authguard_address,
@@ -70,14 +71,22 @@ class Command(BaseCommand):
         # 1. Trace the chain from the node (no DB).
         try:
             chain = build_authchain(authhead, authbase, max_depth=options["max_depth"])
-        except ValueError as exc:
-            raise CommandError(str(exc))
+        except Exception as exc:
+            raise CommandError(str(exc)) from exc
 
         # 2. Resolve the authguard address = the authhead's index-0 output address.
         try:
             authguard_address = get_authguard_address(authhead)
-        except ValueError as exc:
-            raise CommandError(str(exc))
+        except Exception as exc:
+            raise CommandError(str(exc)) from exc
+
+        # 2b. Guard before any side effect: a spent --authhead must be a no-op, so this runs
+        # before the subscription step (the repair functions guard again as a safety net).
+        if do_apply:
+            try:
+                assert_unspent_authhead(authhead)
+            except Exception as exc:
+                raise CommandError(str(exc)) from exc
 
         self.stdout.write(f"Authchain ({len(chain)} links), authguard address {authguard_address}:")
         for txid in chain:
@@ -121,8 +130,8 @@ class Command(BaseCommand):
             else:
                 self.stdout.write("Mode: minimal (direct ORM; no BCMR, no signals).")
                 updated, created = repair_authchain_minimal(chain)
-        except ValueError as exc:
-            raise CommandError(str(exc))
+        except Exception as exc:
+            raise CommandError(str(exc)) from exc
 
         clear_authguard_caches(authguard_address)
 
