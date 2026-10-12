@@ -186,3 +186,21 @@ class WalletLookupKeyThrottle(throttling.SimpleRateThrottle):
             'scope': self.scope,
             'ident': self.get_ident(request, view),
         }
+
+
+class AuthchainRepairThrottle(throttling.SimpleRateThrottle):
+    """
+    Throttle for the unauthenticated authchain repair trigger
+    (POST /cts/authhead/authenticate/). Rate configured via
+    DEFAULT_THROTTLE_RATES['authchain_repair'] in settings.
+
+    The repair is a synchronous DB-write + node-RPC path with no permission class
+    on the view, so it needs its own bucket keyed by client identity (IP).
+    """
+    scope = 'authchain_repair'
+
+    def get_cache_key(self, request, view):
+        return self.cache_format % {
+            'scope': self.scope,
+            'ident': self.get_ident(request),
+        }

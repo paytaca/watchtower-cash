@@ -513,6 +513,9 @@ REST_FRAMEWORK = {
         # Mint/revoke: a human clicking a button. Kept on a separate bucket from
         # reads so heavy polling can never throttle a user revoking their key.
         "wallet_lookup_key_manage": "60/min",
+        # Unauthenticated authchain repair trigger (POST /cts/authhead/authenticate/):
+        # a rare, opt-in, synchronous DB-write + node-RPC path.
+        "authchain_repair": "10/min",
     },
 }
 
