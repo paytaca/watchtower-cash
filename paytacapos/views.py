@@ -255,6 +255,23 @@ class PosDeviceViewSet(
         instance = serializer.save()
         return Response(self.serializer_class(instance).data)
 
+    @swagger_auto_schema(responses={ 200: serializer_class })
+    @decorators.action(methods=["post"], detail=True, url_path=f"disable_nfc_payments")
+    def disable_nfc_payments(self, request, *args, **kwargs):
+        instance = self.get_queryset().get(wallet_hash_posid=self.kwargs[self.lookup_field])
+
+        request_user = request.user
+        if not request_user or not request_user.is_authenticated:
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        if instance.wallet_hash != request_user.wallet_hash:
+            return Response(status=status.HTTP_403_FORBIDDEN)
+
+        instance.nfc_payments_enabled = False
+        instance.save()
+
+        send_device_update(instance, action="nfc_disable")
+        return Response(self.get_serializer(instance).data)
+
     @swagger_auto_schema(
         method="get",
         responses={ 200: SalesSummarySerializer(many=True) },
