@@ -13,6 +13,11 @@ def on_order_update(sender, instance:models.Status, created:bool, raw:bool, usin
     if created:
         OrderSummaryMessage.send_safe(instance.order.id)
         OrderStatusUpdateMessage.send_safe(instance.order.id)
+        try:
+            from rampp2p.utils.live_activity import update_order_live_activity
+            update_order_live_activity(instance.order, instance)
+        except Exception as error:
+            logger.exception(f"Failed to update order live activity: {error}")
 
     if (instance.status == models.StatusType.APPEALED or
         instance.status == models.StatusType.REFUND_PENDING or
