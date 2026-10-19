@@ -104,11 +104,42 @@ class WalletHashSerializer(serializers.Serializer):
 
 
 class RoomSerializer(serializers.ModelSerializer):
+    nostr_group_id = serializers.CharField(
+        max_length=64,
+        allow_null=True,
+        required=False,
+    )
+
     class Meta:
         model = NostrRoom
-        fields = ('room_id', 'type', 'name', 'members', 'subject',
+        fields = ('room_id', 'type', 'name', 'members', 'nostr_group_id', 'subject',
                   'avatar', 'created_at', 'updated_at',
                   'last_message_timestamp', 'archived')
+
+    def validate_nostr_group_id(self, value):
+        if value is None:
+            return value
+        if not re.match(r'^[0-9a-fA-F]{64}$', value):
+            raise serializers.ValidationError(
+                "nostr_group_id must be a 64-character hex string."
+            )
+        return value.lower()
+
+    def validate_members(self, value):
+        if not isinstance(value, list):
+            raise serializers.ValidationError("members must be a list.")
+        cleaned = []
+        for member in value:
+            if not isinstance(member, str):
+                raise serializers.ValidationError(
+                    f"member {member!r} is not a string."
+                )
+            if not re.match(r'^[0-9a-fA-F]{64}$', member):
+                raise serializers.ValidationError(
+                    f"member '{member}' is not a 64-character hex string."
+                )
+            cleaned.append(member.lower())
+        return cleaned
 
 
 class RoomCreateSerializer(serializers.Serializer):
@@ -121,11 +152,35 @@ class RoomUpdateSerializer(serializers.Serializer):
     name = serializers.CharField(max_length=255, required=False)
     subject = serializers.CharField(allow_null=True, required=False)
     archived = serializers.BooleanField(required=False)
+    nostr_group_id = serializers.CharField(max_length=64, allow_null=True, required=False)
     members = serializers.ListField(
         child=serializers.CharField(max_length=64),
         allow_empty=True,
         required=False,
     )
+
+    def validate_nostr_group_id(self, value):
+        if value is None:
+            return value
+        if not re.match(r'^[0-9a-fA-F]{64}$', value):
+            raise serializers.ValidationError(
+                "nostr_group_id must be a 64-character hex string."
+            )
+        return value.lower()
+
+    def validate_members(self, value):
+        cleaned = []
+        for member in value:
+            if not isinstance(member, str):
+                raise serializers.ValidationError(
+                    f"member {member!r} is not a string."
+                )
+            if not re.match(r'^[0-9a-fA-F]{64}$', member):
+                raise serializers.ValidationError(
+                    f"member '{member}' is not a 64-character hex string."
+                )
+            cleaned.append(member.lower())
+        return cleaned
 
 
 class RoomBatchSyncSerializer(serializers.Serializer):
