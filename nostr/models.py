@@ -27,6 +27,7 @@ class NostrRoom(models.Model):
     type = models.CharField(max_length=10)
     name = models.CharField(max_length=255)
     members = JSONField(default=list)
+    nostr_group_id = models.CharField(max_length=64, null=True, blank=True, db_index=True)
     subject = models.TextField(null=True, blank=True)
     avatar = models.URLField(null=True, blank=True)
     created_at = models.DateTimeField()

@@ -292,6 +292,7 @@ class NostrRoomListView(APIView):
                 'type': room_data['type'],
                 'name': room_data['name'],
                 'members': room_data['members'],
+                'nostr_group_id': room_data.get('nostr_group_id'),
                 'subject': room_data.get('subject'),
                 'avatar': room_data.get('avatar'),
                 'created_at': room_data['created_at'],
@@ -329,7 +330,7 @@ class NostrRoomDetailView(APIView):
             )
 
         update_fields = {}
-        for field in ('name', 'subject', 'archived', 'members'):
+        for field in ('name', 'subject', 'archived', 'members', 'nostr_group_id'):
             if field in serializer.validated_data:
                 update_fields[field] = serializer.validated_data[field]
         update_fields['updated_at'] = timezone.now()
@@ -390,6 +391,7 @@ class NostrRoomBatchSyncView(APIView):
                         'type': room_data['type'],
                         'name': room_data['name'],
                         'members': room_data['members'],
+                        'nostr_group_id': room_data.get('nostr_group_id'),
                         'subject': room_data.get('subject'),
                         'avatar': room_data.get('avatar'),
                         'created_at': room_data['created_at'],

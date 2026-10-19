@@ -7,13 +7,15 @@ from django.core.management.base import BaseCommand
 from django.db import connection
 from django.conf import settings
 from nostr.utils import send_nostr_push_notification
-from nostr.models import NostrPubkey
+from nostr.models import NostrPubkey, NostrRoom
 
 
 logger = logging.getLogger(__name__)
 
 RELAY_URL = "wss://relay.paytaca.com"
-SUBSCRIPTION_KINDS = [1059]
+GIFT_WRAP_KIND = 1059
+GROUP_EVENT_KIND = 445  # NIP-EE MLS group message
+SUBSCRIPTION_KINDS = [GIFT_WRAP_KIND, GROUP_EVENT_KIND]
 PUBKEY_REFRESH_INTERVAL = 60  # seconds
 SEEN_EVENT_TTL = 60 * 60 * 24  # 24 hours — how long to remember processed event IDs
 RECONNECT_DELAY = 5  # seconds to wait before reconnecting
@@ -90,7 +92,10 @@ class Command(BaseCommand):
             {"kinds": SUBSCRIPTION_KINDS},
         ]
         ws.send(json.dumps(req))
-        logger.info("Subscribed to all kind-1059 events (pubkey filtering done client-side)")
+        logger.info(
+            f"Subscribed to kinds {SUBSCRIPTION_KINDS} "
+            "(pubkey filtering done client-side)"
+        )
 
         last_pubkey_refresh = time.time()
         has_seen_eose = False
@@ -145,31 +150,55 @@ class Command(BaseCommand):
                     ):
                         continue
 
-                    # Collect unique recipient pubkeys from all "p" tags to avoid
-                    # sending duplicate notifications when a pubkey appears more than once.
-                    # Exclude self-sends (event pubkey == recipient).
-                    event_pubkey = event.get("pubkey", "")
-                    recipient_pubkeys = {
-                        tag[1]
-                        for tag in event_tags
-                        if isinstance(tag, list) and len(tag) >= 2
-                        and tag[0] == "p"
-                        and tag[1] in pubkeys
-                        and tag[1] != event_pubkey
-                    }
+                    event_kind = event.get("kind")
+
+                    if event_kind == GROUP_EVENT_KIND:
+                        # NIP-EE MLS group messages are signed with an ephemeral
+                        # key and carry only an "h" tag (the public
+                        # nostr_group_id), so the sender cannot be identified
+                        # here. Resolve recipients from the room -> member
+                        # mapping the client registered via /api/nostr/rooms/.
+                        h_tag = next(
+                            (
+                                tag[1]
+                                for tag in event_tags
+                                if isinstance(tag, list) and len(tag) >= 2 and tag[0] == "h"
+                            ),
+                            None,
+                        )
+                        recipient_pubkeys = (
+                            self.get_group_recipient_pubkeys(h_tag, pubkeys)
+                            if h_tag else set()
+                        )
+                    else:
+                        # Gift-wraps (kind 1059) address recipients via "p" tags.
+                        # Collect unique recipient pubkeys to avoid sending
+                        # duplicate notifications when a pubkey appears more than
+                        # once. Exclude self-sends (event pubkey == recipient).
+                        event_pubkey = event.get("pubkey", "")
+                        recipient_pubkeys = {
+                            tag[1]
+                            for tag in event_tags
+                            if isinstance(tag, list) and len(tag) >= 2
+                            and tag[0] == "p"
+                            and tag[1] in pubkeys
+                            and tag[1] != event_pubkey
+                        }
 
                     now = timezone.now()
 
-                    # Update recipients' last_active — receiving a message
-                    # means they were online at this point.
-                    if recipient_pubkeys:
+                    # Update recipients' last_active — receiving a gift-wrap
+                    # means they were online at this point. Group events are
+                    # excluded: bumping every member on each message would make
+                    # the whole group appear permanently online.
+                    if recipient_pubkeys and event_kind != GROUP_EVENT_KIND:
                         NostrPubkey.objects.filter(
                             pubkey_hex__in=recipient_pubkeys,
                             show_active_status=True,
                         ).update(last_active=now)
 
                     for recipient_pubkey in recipient_pubkeys:
-                        logger.info(f"Detected gift-wrap event {event_id} for pubkey {recipient_pubkey[:16]}... sending push")
+                        logger.info(f"Detected event {event_id} (kind {event_kind}) for pubkey {recipient_pubkey[:16]}... sending push")
                         send_nostr_push_notification(recipient_pubkey)
 
                 elif msg_type == "EOSE":
@@ -203,3 +232,32 @@ class Command(BaseCommand):
         except Exception as e:
             logger.error(f"Failed to fetch pubkeys: {e}")
             return []
+
+    def get_group_recipient_pubkeys(self, nostr_group_id, registered_pubkeys):
+        """Resolve recipient pubkeys for a NIP-EE MLS group event (kind 445).
+
+        Group events carry only the public ``h`` tag (``nostr_group_id``) and are
+        signed with an ephemeral key, so recipients cannot be read from the event
+        itself. The client registers each group room (with its member list) via
+        ``/api/nostr/rooms/``; union the member lists of every room row sharing
+        this group id and keep only pubkeys that are registered for push.
+        """
+        if not nostr_group_id:
+            return set()
+        try:
+            connection.ensure_connection()
+            member_lists = NostrRoom.objects.filter(
+                nostr_group_id=nostr_group_id,
+            ).values_list('members', flat=True)
+        except Exception as e:
+            logger.error(
+                f"Failed to resolve group recipients for {nostr_group_id[:16]}...: {e}"
+            )
+            return set()
+
+        recipients = set()
+        for members in member_lists:
+            if not isinstance(members, list):
+                continue
+            recipients.update(m for m in members if isinstance(m, str))
+        return recipients & registered_pubkeys
