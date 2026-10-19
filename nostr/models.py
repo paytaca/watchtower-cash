@@ -1,5 +1,12 @@
+from django.core.validators import RegexValidator
 from django.db import models
 from django.contrib.postgres.fields import JSONField
+
+
+NOSTR_GROUP_ID_VALIDATOR = RegexValidator(
+    regex=r'^[0-9a-f]{64}$',
+    message='nostr_group_id must be a 64-character lowercase hex string.',
+)
 
 
 class NostrPubkey(models.Model):
@@ -27,7 +34,13 @@ class NostrRoom(models.Model):
     type = models.CharField(max_length=10)
     name = models.CharField(max_length=255)
     members = JSONField(default=list)
-    nostr_group_id = models.CharField(max_length=64, null=True, blank=True, db_index=True)
+    nostr_group_id = models.CharField(
+        max_length=64,
+        null=True,
+        blank=True,
+        db_index=True,
+        validators=[NOSTR_GROUP_ID_VALIDATOR],
+    )
     subject = models.TextField(null=True, blank=True)
     avatar = models.URLField(null=True, blank=True)
     created_at = models.DateTimeField()

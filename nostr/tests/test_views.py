@@ -9,6 +9,8 @@ from nostr.models import NostrPubkey, NostrRoom, NostrBlockedContact, NostrBlock
 
 VALID_HEX = "aabbccdd0011eeffaabbccdd0011eeffaabbccdd0011eeffaabbccdd0011eeff"
 OTHER_HEX = "bbccddee0022ffaabbccddee0022ffaabbccddee0022ffaabbccddee0022ffaa"
+MEMBER_HEX = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+UPPERCASE_GROUP_ID = "00112233445566778899AABBCCDDEEFF00112233445566778899AABBCCDDEEFF"
 
 
 class PubkeyLastOnlineViewTestCase(TestCase):
@@ -798,3 +800,107 @@ class NostrRoomGroupIdTestCase(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         rooms = {r["room_id"]: r for r in response.data["rooms"]}
         self.assertEqual(rooms["mls_room_4"]["nostr_group_id"], OTHER_HEX)
+
+    @patch("nostr.views.verify_wallet_ownership")
+    def test_create_room_uppercase_group_id_lower(self, mock_verify):
+        mock_verify.return_value = (True, None)
+        now = timezone.now()
+        response = self.client.post("/api/nostr/rooms/", {
+            "wallet_hash": self.wallet_hash,
+            "room": {
+                "room_id": "mls_room_upper",
+                "type": "mls-group",
+                "name": "MLS Room",
+                "members": [MEMBER_HEX],
+                "nostr_group_id": UPPERCASE_GROUP_ID,
+                "created_at": now.isoformat(),
+                "updated_at": now.isoformat(),
+            },
+        }, content_type="application/json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        room = NostrRoom.objects.get(
+            wallet_hash=self.wallet_hash, room_id="mls_room_upper",
+        )
+        self.assertEqual(room.nostr_group_id, UPPERCASE_GROUP_ID.lower())
+
+    @patch("nostr.views.verify_wallet_ownership")
+    def test_create_room_invalid_group_id_rejected(self, mock_verify):
+        mock_verify.return_value = (True, None)
+        now = timezone.now()
+        response = self.client.post("/api/nostr/rooms/", {
+            "wallet_hash": self.wallet_hash,
+            "room": {
+                "room_id": "mls_room_bad",
+                "type": "mls-group",
+                "name": "MLS Room",
+                "members": [MEMBER_HEX],
+                "nostr_group_id": "x" * 64,
+                "created_at": now.isoformat(),
+                "updated_at": now.isoformat(),
+            },
+        }, content_type="application/json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(NostrRoom.objects.filter(room_id="mls_room_bad").exists())
+
+    @patch("nostr.views.verify_wallet_ownership")
+    def test_patch_uppercase_group_id_lower(self, mock_verify):
+        mock_verify.return_value = (True, None)
+        room = NostrRoom.objects.create(
+            room_id="mls_room_patch_upper",
+            wallet_hash=self.wallet_hash,
+            type="mls-group",
+            name="MLS Room",
+            members=[VALID_HEX],
+            created_at=timezone.now(),
+            updated_at=timezone.now(),
+        )
+        response = self.client.patch(f"/api/nostr/rooms/{room.room_id}/", {
+            "wallet_hash": self.wallet_hash,
+            "nostr_group_id": UPPERCASE_GROUP_ID,
+        }, content_type="application/json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        room.refresh_from_db()
+        self.assertEqual(room.nostr_group_id, UPPERCASE_GROUP_ID.lower())
+
+    @patch("nostr.views.verify_wallet_ownership")
+    def test_patch_invalid_group_id_rejected(self, mock_verify):
+        mock_verify.return_value = (True, None)
+        room = NostrRoom.objects.create(
+            room_id="mls_room_patch_bad",
+            wallet_hash=self.wallet_hash,
+            type="mls-group",
+            name="MLS Room",
+            members=[VALID_HEX],
+            nostr_group_id=OTHER_HEX,
+            created_at=timezone.now(),
+            updated_at=timezone.now(),
+        )
+        response = self.client.patch(f"/api/nostr/rooms/{room.room_id}/", {
+            "wallet_hash": self.wallet_hash,
+            "nostr_group_id": "too short",
+        }, content_type="application/json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        room.refresh_from_db()
+        self.assertEqual(room.nostr_group_id, OTHER_HEX)
+
+    @patch("nostr.views.verify_wallet_ownership")
+    def test_create_room_uppercase_member_lower(self, mock_verify):
+        mock_verify.return_value = (True, None)
+        now = timezone.now()
+        response = self.client.post("/api/nostr/rooms/", {
+            "wallet_hash": self.wallet_hash,
+            "room": {
+                "room_id": "mls_room_member_upper",
+                "type": "mls-group",
+                "name": "MLS Room",
+                "members": [UPPERCASE_GROUP_ID],
+                "nostr_group_id": OTHER_HEX,
+                "created_at": now.isoformat(),
+                "updated_at": now.isoformat(),
+            },
+        }, content_type="application/json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        room = NostrRoom.objects.get(
+            wallet_hash=self.wallet_hash, room_id="mls_room_member_upper",
+        )
+        self.assertEqual(room.members, [UPPERCASE_GROUP_ID.lower()])

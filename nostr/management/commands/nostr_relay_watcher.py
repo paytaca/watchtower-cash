@@ -65,11 +65,51 @@ class Command(BaseCommand):
         result = redis_client.set(key, 1, ex=SEEN_EVENT_TTL, nx=True)
         return result is None  # None means key already existed → already seen
 
+    def _refresh_group_cache(self):
+        """Rebuild the in-memory ``nostr_group_id -> {member pubkey hex}`` lookup.
+
+        Called every ``PUBKEY_REFRESH_INTERVAL`` seconds so the hot path never
+        hits Postgres per event. Archived rooms are excluded so that a wallet
+        deleting a group stops forcing pushes immediately. Membership of each
+        room row is unioned because each member has their own row keyed by
+        ``room_id`` (which is per-wallet) but shared ``nostr_group_id``.
+        """
+        try:
+            connection.ensure_connection()
+            rows = NostrRoom.objects.filter(
+                nostr_group_id__isnull=False,
+                archived=False,
+            ).values_list('nostr_group_id', 'members')
+        except Exception as e:
+            logger.error(f"Failed to refresh group cache: {e}")
+            self._group_members_cache = {}
+            return
+
+        new_cache = {}
+        for nostr_group_id, members in rows:
+            if not isinstance(members, list):
+                logger.warning(
+                    f"NostrRoom nostr_group_id={nostr_group_id[:16]}... has "
+                    f"non-list members field (type={type(members).__name__}); "
+                    "skipping from group cache"
+                )
+                continue
+            recipients = new_cache.setdefault(nostr_group_id, set())
+            for m in members:
+                if isinstance(m, str):
+                    recipients.add(m)
+        self._group_members_cache = new_cache
+
     def run_watcher(self, relay_url):
         # Obtain the shared Redis client configured in settings
         redis_client = getattr(settings, "REDISKV", None)
         if redis_client is None:
             logger.warning("REDISKV not configured — event deduplication disabled")
+
+        # Prime the in-memory lookups once before opening the socket so the
+        # first few events don't hit the DB.
+        self._group_members_cache = {}
+        self._refresh_group_cache()
 
         pubkeys = set(self.get_registered_pubkeys())
         if not pubkeys:
@@ -103,9 +143,12 @@ class Command(BaseCommand):
 
         while True:
             try:
-                # Refresh the registered pubkey set periodically
+                # Refresh the registered pubkeys and group cache periodically
+                # so newly registered wallets and any room-list changes
+                # (members, archive) take effect without per-event DB queries.
                 if time.time() - last_pubkey_refresh > PUBKEY_REFRESH_INTERVAL:
                     pubkeys = set(self.get_registered_pubkeys())
+                    self._refresh_group_cache()
                     last_pubkey_refresh = time.time()
 
                 # Receive with timeout so we can refresh pubkeys periodically
@@ -191,6 +234,12 @@ class Command(BaseCommand):
                     # means they were online at this point. Group events are
                     # excluded: bumping every member on each message would make
                     # the whole group appear permanently online.
+                    #
+                    # Known v1 gap: this excludes every group event, so MLS
+                    # users that only ever appear in groups won't get their
+                    # last_active refreshed here. A self-tagged pubkey or a
+                    # periodic ping would close the gap — left for v2 since
+                    # group-member push behavior is the dominant use case.
                     if recipient_pubkeys and event_kind != GROUP_EVENT_KIND:
                         NostrPubkey.objects.filter(
                             pubkey_hex__in=recipient_pubkeys,
@@ -236,28 +285,18 @@ class Command(BaseCommand):
     def get_group_recipient_pubkeys(self, nostr_group_id, registered_pubkeys):
         """Resolve recipient pubkeys for a NIP-EE MLS group event (kind 445).
 
-        Group events carry only the public ``h`` tag (``nostr_group_id``) and are
-        signed with an ephemeral key, so recipients cannot be read from the event
-        itself. The client registers each group room (with its member list) via
-        ``/api/nostr/rooms/``; union the member lists of every room row sharing
-        this group id and keep only pubkeys that are registered for push.
+        Reads from the in-memory cache populated by ``_refresh_group_cache``
+        rather than the DB. The cache is rebuilt every ``PUBKEY_REFRESH_INTERVAL``
+        seconds. Group events carry only the public ``h`` tag
+        (``nostr_group_id``) and are signed with an ephemeral key, so recipients
+        cannot be read from the event itself — the client registers each group
+        room (with its member list) via ``/api/nostr/rooms/``, and the cache
+        unions the member lists of every room row sharing this group id while
+        intersecting with currently registered pubkeys.
         """
         if not nostr_group_id:
             return set()
-        try:
-            connection.ensure_connection()
-            member_lists = NostrRoom.objects.filter(
-                nostr_group_id=nostr_group_id,
-            ).values_list('members', flat=True)
-        except Exception as e:
-            logger.error(
-                f"Failed to resolve group recipients for {nostr_group_id[:16]}...: {e}"
-            )
+        members = self._group_members_cache.get(nostr_group_id)
+        if members is None:
             return set()
-
-        recipients = set()
-        for members in member_lists:
-            if not isinstance(members, list):
-                continue
-            recipients.update(m for m in members if isinstance(m, str))
-        return recipients & registered_pubkeys
+        return members & registered_pubkeys
