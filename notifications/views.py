@@ -7,10 +7,12 @@ from .serializers import (
     DeviceUnsubscribeSerializer,
     DeviceWalletSerializer,
     SendPushNotificationSerializer,
+    OrderLiveActivitySerializer,
 )
 from authentication.models import ApiTokenScopes
 from authentication.authentication import ApiTokenAuthentication
-from authentication.permissions import HasApiTokenScopePermission
+from authentication.permissions import HasApiTokenScopePermission, RampP2PIsAuthenticated
+from authentication.token import TokenAuthentication
 
     
 # Create your views here.
@@ -125,3 +127,34 @@ class SendPushNotificationView(APIView):
         serializer.is_valid(raise_exception=True)
         result = serializer.save()
         return Response(result)
+
+
+class OrderLiveActivityView(APIView):
+    """
+    Register/refresh/unregister a push destination for a P2P Ramp order's live
+    activity. Only a participant (seller, buyer or arbiter) of the order may
+    register a token for it.
+    """
+
+    serializer_class = OrderLiveActivitySerializer
+
+    authentication_classes = [TokenAuthentication]
+    permission_classes = [RampP2PIsAuthenticated]
+
+    @swagger_auto_schema(request_body=OrderLiveActivitySerializer)
+    def post(self, request, *args, **kwargs):
+        from rampp2p.models import Order
+        from rampp2p.utils.live_activity import is_order_member
+
+        serializer = self.serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        order = Order.objects.filter(pk=serializer.validated_data["order_id"]).first()
+        if not order:
+            return Response({"detail": "Order not found"}, status=404)
+
+        wallet_hash = getattr(request.user, "wallet_hash", None)
+        if not is_order_member(order, wallet_hash):
+            return Response({"detail": "Not an order member"}, status=403)
+
+        return Response(serializer.save(), status=201)

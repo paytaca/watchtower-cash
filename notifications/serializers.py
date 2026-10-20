@@ -5,7 +5,7 @@ from django.db import transaction
 from rest_framework import serializers
 from push_notifications.models import GCMDevice, APNSDevice
 
-from .models import DeviceWallet
+from .models import DeviceWallet, OrderLiveActivityToken
 from notifications.utils.send import send_push_notification_to_wallet_hashes
 
 
@@ -284,3 +284,36 @@ class SendPushNotificationSerializer(serializers.Serializer):
     def save(self):
         validated_data = self.validated_data
         return self.create(validated_data)
+
+
+class OrderLiveActivitySerializer(serializers.Serializer):
+    """
+    Registers (or drops) a device's push destination for an order's live
+    activity. The client calls this when it starts, updates or ends an activity.
+    """
+
+    order_id = serializers.IntegerField()
+    # Bounded by the model column so an oversized push token is rejected as a
+    # 400 instead of reaching Postgres and raising a DataError (500).
+    token = serializers.CharField(
+        max_length=OrderLiveActivityToken._meta.get_field("token").max_length
+    )
+    type = serializers.ChoiceField(choices=["start", "update", "end"])
+    platform = serializers.ChoiceField(choices=OrderLiveActivityToken.Platform.choices)
+
+    def create(self, validated_data):
+        order_id = validated_data["order_id"]
+        token = validated_data["token"]
+        platform = validated_data["platform"]
+        action = validated_data["type"]
+
+        if action == "end":
+            OrderLiveActivityToken.objects.filter(
+                order_id=order_id, token=token, platform=platform,
+            ).delete()
+            return {"order_id": order_id, "action": action, "registered": False}
+
+        obj, _ = OrderLiveActivityToken.objects.update_or_create(
+            order_id=order_id, token=token, platform=platform,
+        )
+        return {"order_id": order_id, "action": action, "registered": True, "id": obj.id}
