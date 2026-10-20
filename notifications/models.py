@@ -40,7 +40,9 @@ class OrderLiveActivityToken(models.Model):
         IOS = "ios", _("iOS")
         ANDROID = "android", _("Android")
 
-    order_id = models.BigIntegerField(db_index=True)
+    # No db_index here: `order_id` already leads the unique constraint below, so
+    # that index serves order lookups and a second btree would be dead weight.
+    order_id = models.BigIntegerField()
     token = models.CharField(max_length=512)
     platform = models.CharField(max_length=16, choices=Platform.choices)
     created_at = models.DateTimeField(auto_now_add=True)

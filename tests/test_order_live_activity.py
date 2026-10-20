@@ -122,17 +122,37 @@ class TestBuildOrderLiveActivity:
         )
         assert "Alice" not in str(after)
 
-    def test_countdown_present_only_for_live_orders(self):
+    @pytest.mark.parametrize("code", ["SBM", "CNF"])
+    def test_countdown_while_the_deadline_is_enforced(self, code):
         expires_at = timezone.now() + timedelta(minutes=30)
-        live = activity_builder.build_order_live_activity(
-            self._order(expires_at=expires_at), SimpleNamespace(status="PD")
+        activity = activity_builder.build_order_live_activity(
+            self._order(expires_at=expires_at), SimpleNamespace(status=code)
         )
-        assert live["countdownAt"] == int(expires_at.timestamp() * 1000)
+        assert activity["countdownAt"] == int(expires_at.timestamp() * 1000)
 
-        done = activity_builder.build_order_live_activity(
-            self._order(expires_at=expires_at), SimpleNamespace(status="RLS")
+    @pytest.mark.parametrize("code", ["ESCRW", "PD", "APL", "RLS_PN"])
+    def test_no_countdown_once_the_deadline_stops_being_enforced(self, code):
+        """Past escrow there is no deadline, and an appeal's is its outcome."""
+        expires_at = timezone.now() + timedelta(minutes=30)
+        activity = activity_builder.build_order_live_activity(
+            self._order(expires_at=expires_at), SimpleNamespace(status=code)
         )
-        assert done["countdownAt"] is None
+        assert activity["countdownAt"] is None
+
+    def test_no_countdown_for_terminal_orders(self):
+        expires_at = timezone.now() + timedelta(minutes=30)
+        for code in ("RLS", "RFN", "CNCL"):
+            activity = activity_builder.build_order_live_activity(
+                self._order(expires_at=expires_at), SimpleNamespace(status=code)
+            )
+            assert activity["countdownAt"] is None
+
+    def test_expiry_enforced_codes_are_real_statuses_and_not_terminal(self):
+        status_codes = {code for code, _ in models.StatusType.choices}
+        assert activity_builder.P2P_EXPIRY_ENFORCED <= status_codes
+        assert not activity_builder.P2P_EXPIRY_ENFORCED & set(
+            activity_builder.P2P_TERMINAL
+        )
 
     def test_epoch_ms(self):
         assert activity_builder._epoch_ms(None) is None
@@ -252,6 +272,25 @@ class TestOrderLiveActivitySerializer:
         )
         assert not serializer.is_valid()
         assert "type" in serializer.errors
+
+    def test_token_is_bounded_by_the_column(self):
+        """An oversized token fails validation instead of raising a DataError."""
+        max_length = OrderLiveActivityToken._meta.get_field("token").max_length
+        serializer = OrderLiveActivitySerializer(
+            data={
+                "order_id": 1,
+                "token": "t" * (max_length + 1),
+                "type": "start",
+                "platform": OrderLiveActivityToken.Platform.IOS,
+            }
+        )
+        assert not serializer.is_valid()
+        assert "token" in serializer.errors
+
+    def test_token_at_the_column_limit_is_accepted(self):
+        max_length = OrderLiveActivityToken._meta.get_field("token").max_length
+        result = self._register("start", token="t" * max_length)
+        assert result["registered"] is True
 
 
 # --------------------------------------------------------------------------

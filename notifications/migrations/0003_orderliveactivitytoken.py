@@ -13,7 +13,7 @@ class Migration(migrations.Migration):
             name='OrderLiveActivityToken',
             fields=[
                 ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('order_id', models.BigIntegerField(db_index=True)),
+                ('order_id', models.BigIntegerField()),
                 ('token', models.CharField(max_length=512)),
                 ('platform', models.CharField(choices=[('ios', 'iOS'), ('android', 'Android')], max_length=16)),
                 ('created_at', models.DateTimeField(auto_now_add=True)),

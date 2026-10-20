@@ -293,7 +293,11 @@ class OrderLiveActivitySerializer(serializers.Serializer):
     """
 
     order_id = serializers.IntegerField()
-    token = serializers.CharField()
+    # Bounded by the model column so an oversized push token is rejected as a
+    # 400 instead of reaching Postgres and raising a DataError (500).
+    token = serializers.CharField(
+        max_length=OrderLiveActivityToken._meta.get_field("token").max_length
+    )
     type = serializers.ChoiceField(choices=["start", "update", "end"])
     platform = serializers.ChoiceField(choices=OrderLiveActivityToken.Platform.choices)
 

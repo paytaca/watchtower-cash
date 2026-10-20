@@ -207,6 +207,12 @@ def send_live_activity_apns_batch(aps_by_token: dict, application_id=None) -> di
         ]
         # `send_notification_batch` connects (with retries) and reads the
         # results of all streams, so a connection failure raises from here.
+        #
+        # `expiration=0` means "deliver now or never", which is right for
+        # updates (a stale stage is worse than none) but lossy for an `end` on a
+        # device that is briefly offline. Accepted for now: the activity is also
+        # dismissed by the app when it next opens the order, and a lasting
+        # expiry here would leave terminal notifications on screen for hours.
         return client.send_notification_batch(
             notifications,
             topic=get_live_activity_apns_topic(application_id),
@@ -224,14 +230,17 @@ def send_live_activity_apns(token, aps: dict, application_id=None):
     ).get(token)
 
 
-def build_fcm_message(token, activity: dict, action=None):
+def build_fcm_message(token, activity: dict):
+    """Data-only message for the app's `PaytacaMessagingService`.
+
+    There is no `action` field: terminal orders are dismissed by the app from
+    the payload's `isTerminal` flag, not by a separate cancel message.
+    """
     data = {
         "live_activity": "1",
         "payload": json.dumps(activity),
         "activity_id": str(activity.get("id", "")),
     }
-    if action:
-        data["action"] = action
 
     return messaging.Message(
         data=data,
@@ -240,10 +249,10 @@ def build_fcm_message(token, activity: dict, action=None):
     )
 
 
-def send_live_activity_fcm(token, activity: dict, action=None, application_id=None):
+def send_live_activity_fcm(token, activity: dict, application_id=None):
     """Send to a single Android token. Prefer the batch path in
     `send_order_live_activity` when pushing to several devices."""
-    message = build_fcm_message(token, activity, action=action)
+    message = build_fcm_message(token, activity)
     return messaging.send(message, app=get_manager().get_firebase_app(application_id))
 
 

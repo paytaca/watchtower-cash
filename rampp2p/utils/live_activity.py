@@ -34,6 +34,11 @@ P2P_TERMINAL = {
     "RFN": "failed",
     "CNCL": "cancelled",
 }
+# Statuses where `order.expires_at` is actually enforced: `Order.confirm` rejects
+# an expired order and the cancel-expired-orders task only cancels these two.
+# From escrow onward there is no deadline, and during an appeal the deadline is
+# the appeal outcome, so counting down to `expires_at` there would be wrong.
+P2P_EXPIRY_ENFORCED = {"SBM", "CNF"}
 STATUS_LABELS = dict(models.StatusType.choices)
 
 
@@ -79,7 +84,11 @@ def build_order_live_activity(order, status=None):
         "stageIndex": stage_index,
         "stageCount": P2P_STAGE_COUNT,
         "progress": _progress(stage_index, P2P_STAGE_COUNT),
-        "countdownAt": None if terminal_type else _epoch_ms(order.expires_at),
+        "countdownAt": (
+            _epoch_ms(order.expires_at)
+            if status_code in P2P_EXPIRY_ENFORCED
+            else None
+        ),
         "countdownLabel": "Expires in",
         "isTerminal": bool(terminal_type),
         "terminalType": terminal_type,
