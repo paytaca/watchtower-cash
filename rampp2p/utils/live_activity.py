@@ -102,17 +102,40 @@ def is_order_member(order, wallet_hash):
 
 def update_order_live_activity(order, status=None):
     """
-    Push the current order state to every registered live activity.
+    Queue a push of the current order state to every registered live activity.
 
-    Safe to call unconditionally: it no-ops when the order has no registrations
-    (i.e. no device currently tracks it).
+    The push itself does network I/O, so it runs in the
+    `notifications.tasks.push_order_live_activity` Celery task instead of the
+    status-save request. Safe to call unconditionally: it no-ops when the order
+    has no registrations (i.e. no device currently tracks it).
+
+    Returns:
+        bool: whether a push was queued
     """
-    from notifications.models import OrderLiveActivityToken
-    from notifications.utils.live_activity import send_order_live_activity
+    from django.db import transaction
 
-    tokens = OrderLiveActivityToken.objects.filter(order_id=order.id)
-    if not tokens.exists():
-        return []
+    from notifications.models import OrderLiveActivityToken
+    from notifications.tasks import push_order_live_activity
+
+    token_ids = list(
+        OrderLiveActivityToken.objects.filter(order_id=order.id).values_list(
+            "id", flat=True
+        )
+    )
+    if not token_ids:
+        return False
 
     activity = build_order_live_activity(order, status)
-    return send_order_live_activity(activity, tokens)
+
+    def queue():
+        try:
+            push_order_live_activity.delay(activity, token_ids)
+        except Exception as error:
+            # A push is best-effort: a broker outage must not fail a status
+            # change that has already been committed.
+            logger.exception(f"Failed to queue order live activity push: {error}")
+
+    # Push only once the status row is committed; a rolled-back transition must
+    # not leave devices showing a status the server never stored.
+    transaction.on_commit(queue)
+    return True
