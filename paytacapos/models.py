@@ -1,3 +1,4 @@
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db import models
 from django.utils import timezone
@@ -8,8 +9,9 @@ from main.models import WalletHistory, Wallet, Transaction
 from rampp2p.models import PaymentType, PaymentTypeField, FiatCurrency
 
 from decimal import Decimal
+from io import BytesIO
 
-from main.utils.images import fit_within, open_image
+from main.utils.images import UnsupportedImageFormat, fit_within, open_image
 import os
 
 
@@ -182,6 +184,19 @@ class Merchant(models.Model):
         return f"Merchant ({self.name})"
 
     def save(self, *args, **kwargs):
+        if self.logo:
+            # Reject unsupported formats before the row and its files are
+            # persisted, and surface them as a validation error instead of an
+            # unhandled UnsupportedImageFormat (which callers treat as a 500).
+            self.logo.seek(0)
+            try:
+                with open_image(BytesIO(self.logo.read())):
+                    pass
+            except UnsupportedImageFormat as err:
+                raise ValidationError({"logo": str(err)})
+            finally:
+                self.logo.seek(0)
+
         super().save(*args, **kwargs)
 
         if self.logo:

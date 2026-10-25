@@ -16,7 +16,7 @@ cannot install Pillow 13, so the reachable attack paths are closed here:
 Remove these guards once the runtime can move to Pillow >= 13.0.0.
 """
 
-from PIL import Image, ImageOps
+from PIL import Image
 
 # Formats accepted from uploads and remote image URLs. EPS, TIFF and the other
 # less common plugins are intentionally excluded.
@@ -46,7 +46,17 @@ def fit_within(image, size):
     """Shrink ``image`` to fit ``size``, preserving aspect ratio.
 
     Unlike ``Image.thumbnail()``, this never uses ``draft()``, so it does not
-    hit the JPEG decoder path affected by CVE-2026-112403. Images smaller than
-    ``size`` are returned unchanged.
+    hit the JPEG decoder path affected by CVE-2026-112403. Images that already
+    fit within ``size`` are returned unchanged instead of being upscaled.
     """
-    return ImageOps.contain(image, size, Image.Resampling.LANCZOS)
+    max_width, max_height = size
+    width, height = image.size
+    if width <= max_width and height <= max_height:
+        return image
+
+    scale = min(max_width / width, max_height / height)
+    resized_size = (
+        max(1, round(width * scale)),
+        max(1, round(height * scale)),
+    )
+    return image.resize(resized_size, Image.Resampling.LANCZOS)
