@@ -130,4 +130,7 @@ uvicorn==0.32.0
 uvloop==0.21.0
 git+https://github.com/paytaca/python-bitcoinrpc
 bip32utils==0.3.post4
+# 0.2.1+ dropped macOS wheels; on Python <3.9 the sdist build fails because its
+# build backend requires puccinialin, which itself requires Python >=3.9.
+py-sr25519-bindings==0.2.0
 bip-utils==2.9.3
