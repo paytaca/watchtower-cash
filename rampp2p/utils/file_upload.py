@@ -4,6 +4,8 @@ from requests.compat import urljoin
 from PIL import Image
 from io import BytesIO 
 
+from main.utils.images import fit_within
+
 from django.conf import settings
 from rampp2p import models
 
@@ -17,7 +19,7 @@ def save_image(img: Image, max_width=None, request=None, path=None):
         new_width = max_width
         new_height = int((new_width / width) * height)
         new_size = (new_width, new_height)
-        img = img.resize(new_size, Image.ANTIALIAS)
+        img = fit_within(img, new_size)
 
     file_hash = get_image_file_hash(img)
     file_ext = (img.format or "png").lower()

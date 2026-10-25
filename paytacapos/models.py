@@ -9,7 +9,7 @@ from rampp2p.models import PaymentType, PaymentTypeField, FiatCurrency
 
 from decimal import Decimal
 
-from PIL import Image
+from main.utils.images import fit_within, open_image
 import os
 
 
@@ -192,9 +192,9 @@ class Merchant(models.Model):
                 (120,120),
             ]
 
+            img = open_image(self.logo.path)
             for size in sizes:
-                img = Image.open(self.logo.path)
-                img.thumbnail(size)
+                resized = fit_within(img, size)
                 django_image_name, django_image_ext = os.path.splitext(self.logo.name)
                 server_image_name, server_image_ext = os.path.splitext(self.logo.path)
 
@@ -202,7 +202,7 @@ class Merchant(models.Model):
 
                 logo_server_path = f'{server_image_name}_{_size}{server_image_ext}'
                 logo_django_path = f'{django_image_name}_{_size}{django_image_ext}'
-                img.save(logo_server_path)
+                resized.save(logo_server_path)
 
                 if _size == 30:
                     self.logo_30 = logo_django_path
