@@ -183,7 +183,7 @@ def send_post_broadcast_notifications(transaction, extra_data:dict=None):
 
     input_0 = tx['vin'][0]
     input_details = NODE.BCH.get_input_details(input_0['txid'], input_0['vout'])
-    sender_0 = input_details['address']
+    sender_0 = input_details['address'] if input_details else None
 
     for tx_out in tx['vout']:
         _addrs = tx_out.get('scriptPubKey').get('addresses')

@@ -64,6 +64,7 @@ from .utils.websocket import (
 from .tasks import (
     validate_contract_funding,
     parse_contract_liquidity_fee,
+    index_external_funding_transaction,
 )
 
 LOGGER = logging.getLogger(__name__)
@@ -1357,6 +1358,12 @@ class FundGeneralProcotolLPContractSerializer(serializers.Serializer):
 
         hedge_position_obj.funding_tx_hash = funding_response["fundingTransactionHash"]
         hedge_position_obj.save()
+
+        # The settlement service broadcasts the funding tx itself, so trigger
+        # the same indexing/notification hooks as Watchtower's broadcast endpoint.
+        transaction.on_commit(
+            lambda: index_external_funding_transaction.delay(hedge_position_obj.funding_tx_hash)
+        )
 
         validate_contract_funding.delay(hedge_position_obj.address)
         parse_contract_liquidity_fee.delay(hedge_position_obj.address, hard_update=False)
