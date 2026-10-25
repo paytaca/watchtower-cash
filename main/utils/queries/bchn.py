@@ -11,6 +11,8 @@ import time
 import json
 from functools import wraps
 
+LOGGER = logging.getLogger(__name__)
+
 # Connect to Redis
 redis_client = settings.REDISKV
 
@@ -423,9 +425,17 @@ class BCHN(object):
             return {}
 
         history = {}
+        address_by_id = {
+            request_id: address
+            for request_id, address in enumerate(unique_addresses)
+        }
+        timeout = 20
         with socket.create_connection(
-            (self.fulcrum["host"], self.fulcrum["port"]), timeout=20
+            (self.fulcrum["host"], self.fulcrum["port"]), timeout=timeout
         ) as sock:
+            # The connect timeout does not cover reads; without this, a hung
+            # Fulcrum connection blocks the fail-safe scan indefinitely.
+            sock.settimeout(timeout)
             stream = sock.makefile("rwb")
             for request_id, address in enumerate(unique_addresses):
                 payload = {
@@ -436,6 +446,9 @@ class BCHN(object):
                 stream.write(json.dumps(payload).encode("utf-8") + b"\n")
             stream.flush()
 
+            # Fulcrum processes requests sequentially on a connection and echoes
+            # each id. Responses should also arrive in request order, but map by
+            # id so a future pipelined implementation cannot corrupt addresses.
             for _ in unique_addresses:
                 line = stream.readline()
                 if not line:
@@ -443,23 +456,37 @@ class BCHN(object):
                         "Fulcrum closed the connection before the batch completed"
                     )
                 response = json.loads(line.decode("utf-8").strip())
+                if not isinstance(response, dict):
+                    raise ValueError("Fulcrum returned a malformed response")
                 if response.get("error"):
                     raise ValueError(
                         "Fulcrum get_first_use error: %s" % response["error"]
                     )
+                request_id = response.get("id")
+                if (
+                    not isinstance(request_id, int)
+                    or isinstance(request_id, bool)
+                    or request_id not in address_by_id
+                ):
+                    LOGGER.warning(
+                        "Fulcrum get_first_use returned invalid request id: %r",
+                        request_id,
+                    )
+                    raise ValueError(
+                        "Fulcrum get_first_use returned invalid request id: %r"
+                        % request_id
+                    )
                 # get_first_use returns [height, tx_hash, funding_tx_pos] if used, null if never used
-                history[unique_addresses[response["id"]]] = bool(response.get("result"))
+                history[address_by_id[request_id]] = bool(response.get("result"))
+
+        if len(history) != len(unique_addresses):
+            missing = [address for address in unique_addresses if address not in history]
+            raise ValueError(
+                "Fulcrum get_first_use returned no result for addresses: %s"
+                % ", ".join(missing)
+            )
 
         return history
-
-    def check_address_history(self, address):
-        """
-        Check if an address has any transaction history.
-
-        Returns:
-            bool: True if address has transaction history, False otherwise
-        """
-        return self.check_addresses_history([address]).get(address, False)
 
     def get_dsproof(self, identifier, limit=None, offset=None):
         """
