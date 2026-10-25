@@ -394,30 +394,72 @@ class BCHN(object):
             response = json.loads(response.strip())
             return response["result"]
 
+    def check_addresses_history(self, addresses):
+        """
+        Check which addresses have transaction history using one Fulcrum
+        connection for the whole batch.
+
+        Uses blockchain.address.get_first_use, which returns a minimal response
+        indicating if/when an address was first used. Much more efficient than
+        get_history for addresses with thousands of transactions, and one
+        socket per batch instead of one per address.
+
+        A node error for any address raises instead of being reported as "no
+        history": callers must never mistake an unknown result for an unused
+        address.
+
+        Returns:
+            dict: address -> bool (True if the address has any history)
+        """
+        unique_addresses = []
+        seen = set()
+        for address in addresses:
+            if not address or address in seen:
+                continue
+            seen.add(address)
+            unique_addresses.append(address)
+
+        if not unique_addresses:
+            return {}
+
+        history = {}
+        with socket.create_connection(
+            (self.fulcrum["host"], self.fulcrum["port"]), timeout=20
+        ) as sock:
+            stream = sock.makefile("rwb")
+            for request_id, address in enumerate(unique_addresses):
+                payload = {
+                    "id": request_id,
+                    "method": "blockchain.address.get_first_use",
+                    "params": [address],
+                }
+                stream.write(json.dumps(payload).encode("utf-8") + b"\n")
+            stream.flush()
+
+            for _ in unique_addresses:
+                line = stream.readline()
+                if not line:
+                    raise ConnectionError(
+                        "Fulcrum closed the connection before the batch completed"
+                    )
+                response = json.loads(line.decode("utf-8").strip())
+                if response.get("error"):
+                    raise ValueError(
+                        "Fulcrum get_first_use error: %s" % response["error"]
+                    )
+                # get_first_use returns [height, tx_hash, funding_tx_pos] if used, null if never used
+                history[unique_addresses[response["id"]]] = bool(response.get("result"))
+
+        return history
+
     def check_address_history(self, address):
         """
         Check if an address has any transaction history.
 
-        Uses blockchain.address.get_first_use which returns a minimal response
-        indicating if/when an address was first used. Much more efficient than
-        get_history for addresses with thousands of transactions.
-
         Returns:
             bool: True if address has transaction history, False otherwise
         """
-        data = '{ "id": 0, "method": "blockchain.address.get_first_use",'
-        data += '"params": ["%s"] }' % (address)
-
-        with socket.create_connection(
-            (self.fulcrum["host"], self.fulcrum["port"])
-        ) as sock:
-            sock.send(data.encode("utf-8") + b"\n")
-            response_byte = self._recvall(sock)
-            response = response_byte.decode()
-            response = json.loads(response.strip())
-            result = response.get("result")
-            # get_first_use returns [height, tx_hash, funding_tx_pos] if used, null if never used
-            return bool(result)
+        return self.check_addresses_history([address]).get(address, False)
 
     def get_dsproof(self, identifier, limit=None, offset=None):
         """
