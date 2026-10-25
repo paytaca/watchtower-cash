@@ -15,8 +15,7 @@ from authentication.permissions import RampP2PIsAuthenticated
 import rampp2p.models as models
 import rampp2p.serializers as serializers
 import rampp2p.utils.file_upload as file_upload_utils
-
-from PIL import Image
+from main.utils.images import UnsupportedImageFormat, open_image
 
 import logging
 
@@ -301,7 +300,7 @@ class OrderPaymentViewSet(viewsets.GenericViewSet):
             if filesize > 5 * 1024 * 1024:
                 raise ValidationError({"image": _("File size cannot exceed 5 MB.")})
 
-            img_object = Image.open(image_file)
+            img_object = open_image(image_file)
             image_upload_obj = file_upload_utils.save_image(
                 img_object, max_width=450, request=request
             )
@@ -312,7 +311,7 @@ class OrderPaymentViewSet(viewsets.GenericViewSet):
             serializer = serializers.OrderPaymentAttachmentSerializer(attachment)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
 
-        except (models.OrderPayment.DoesNotExist, ValidationError) as err:
+        except (models.OrderPayment.DoesNotExist, UnsupportedImageFormat, ValidationError) as err:
             return Response({"error": err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
 
     @action(detail=False, methods=["post"], url_path="upload-by-method")
@@ -363,7 +362,7 @@ class OrderPaymentViewSet(viewsets.GenericViewSet):
             if filesize > 5 * 1024 * 1024:
                 raise ValidationError({"image": _("File size cannot exceed 5 MB.")})
 
-            img_object = Image.open(image_file)
+            img_object = open_image(image_file)
             image_upload_obj = file_upload_utils.save_image(
                 img_object, max_width=450, request=request
             )
@@ -377,6 +376,7 @@ class OrderPaymentViewSet(viewsets.GenericViewSet):
         except (
             models.Order.DoesNotExist,
             models.PaymentMethod.DoesNotExist,
+            UnsupportedImageFormat,
             ValidationError,
         ) as err:
             return Response({"error": err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
