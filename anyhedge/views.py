@@ -1,5 +1,5 @@
 import logging
-from django.db import models
+from django.db import models, transaction
 from django_filters import rest_framework as filters
 from rest_framework import (
     generics,
@@ -58,6 +58,7 @@ from .tasks import (
     validate_contract_funding,
     update_contract_settlement,
     redeem_contract,
+    index_external_funding_transaction,
 )
 
 
@@ -177,6 +178,11 @@ class HedgePositionViewSet(
         serializer = SubmitFundingTransactionSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         hedge_obj = serializer.save()
+        funding_tx_hash = hedge_obj.funding_tx_hash
+        # The funding tx may already have been broadcast outside Watchtower.
+        transaction.on_commit(
+            lambda: index_external_funding_transaction.delay(funding_tx_hash)
+        )
         attach_funding_tx_to_wallet_history_meta(hedge_obj, force=True)
         return Response(self.serializer_class(hedge_obj).data)
 

@@ -6,13 +6,9 @@ import bitcoin
 from main.models import Transaction
 from main.utils.queries.bchn import BCHN
 from main.utils.queries.bchd import BCHDQuery
-from main.utils.broadcast import broadcast_transaction_sync
+from main.utils.broadcast import broadcast_transaction_sync, queue_post_broadcast_processing
 from main.models import TransactionMetaAttribute
-from main.tasks import (
-    parse_tx_wallet_histories,
-    process_mempool_transaction_fast,
-    send_post_broadcast_notifications_task,
-)
+from main.tasks import parse_tx_wallet_histories
 
 from notifications.utils.send import send_push_notification_to_wallet_hashes, NotificationTypes
 
@@ -42,15 +38,7 @@ def broadcast_transaction(tx_hex):
     # The shared broadcast helper only records TransactionBroadcast and broadcasts
     # to the node. Trigger the same post-broadcast processing that the public
     # /broadcast/ endpoint does so the funding tx is indexed and notified about.
-    try:
-        process_mempool_transaction_fast.delay(txid, tx_hex, True)
-    except Exception:
-        LOGGER.exception(f"Failed to queue mempool processing for txid {txid}")
-
-    try:
-        send_post_broadcast_notifications_task.delay(tx_hex)
-    except Exception:
-        LOGGER.exception(f"Failed to queue post-broadcast notifications for txid {txid}")
+    queue_post_broadcast_processing(txid, tx_hex)
 
     response["txid"] = txid
     response["success"] = True
