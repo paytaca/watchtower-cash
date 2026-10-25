@@ -2,7 +2,7 @@ import logging
 import pytz
 from datetime import datetime
 from celery import shared_task
-from django.db import models
+from django.db import models, transaction
 from django.utils import timezone
 from .models import (
     MutualRedemption,
@@ -45,10 +45,7 @@ from .utils.websocket import (
     send_funding_tx_update,
 )
 from main.models import Transaction
-from main.tasks import (
-    process_mempool_transaction_fast,
-    send_post_broadcast_notifications_task,
-)
+from main.utils.broadcast import queue_post_broadcast_processing
 
 
 ## CELERY QUEUES
@@ -479,7 +476,11 @@ def complete_contract_funding(contract_address):
     if funding_tx_hash:
         hedge_position_obj.funding_tx_hash = funding_tx_hash
         hedge_position_obj.save()
-        index_external_funding_transaction.delay(funding_tx_hash)
+        # on_commit is a no-op outside a transaction (the save above commits
+        # immediately) and stays correct if this body is ever made atomic.
+        transaction.on_commit(
+            lambda: index_external_funding_transaction.delay(funding_tx_hash)
+        )
         response["success"] = True
         response["tx_hash"] = funding_tx_hash
         response["message"] = "found funding transaction in chain"
@@ -687,6 +688,8 @@ def index_external_funding_transaction(self, tx_hash):
         tx_data = get_bchn_instance()._get_raw_transaction(tx_hash)
     except Exception:
         LOGGER.exception(f"Error fetching external funding tx: {tx_hash}")
+        # self.retry() raises Retry with throw=True (Celery's default), including
+        # when called via .run() in tests. Revisit if that default changes.
         raise self.retry(countdown=10)
 
     tx_hex = tx_data.get("hex") if tx_data else None
@@ -697,5 +700,4 @@ def index_external_funding_transaction(self, tx_hash):
         # Already indexed (mempool listener or block parser got to it first).
         return
 
-    process_mempool_transaction_fast.delay(tx_hash, tx_hex, immediate=True)
-    send_post_broadcast_notifications_task.delay(tx_hex)
+    queue_post_broadcast_processing(tx_hash, tx_hex)

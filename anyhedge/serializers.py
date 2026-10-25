@@ -1358,11 +1358,13 @@ class FundGeneralProcotolLPContractSerializer(serializers.Serializer):
 
         hedge_position_obj.funding_tx_hash = funding_response["fundingTransactionHash"]
         hedge_position_obj.save()
+        funding_tx_hash = hedge_position_obj.funding_tx_hash
 
-        # The settlement service broadcasts the funding tx itself, so trigger
-        # the same indexing/notification hooks as Watchtower's broadcast endpoint.
+        # The funding tx may have been broadcast outside Watchtower (the GP
+        # settlement service broadcasts it), so run the same indexing and
+        # notification hooks as our broadcast endpoint.
         transaction.on_commit(
-            lambda: index_external_funding_transaction.delay(hedge_position_obj.funding_tx_hash)
+            lambda: index_external_funding_transaction.delay(funding_tx_hash)
         )
 
         validate_contract_funding.delay(hedge_position_obj.address)
