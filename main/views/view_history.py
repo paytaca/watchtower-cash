@@ -16,6 +16,7 @@ from django.db.models import (
 import pickle
 import base64
 import json
+import math
 from django.conf import settings
 from django.db.models.functions import Substr, Cast, Floor
 from django.db.models import ExpressionWrapper, FloatField, Subquery, OuterRef
@@ -1085,7 +1086,9 @@ class WalletHistoryView(APIView):
                 data = retrieve_object(cache_key, cache)
 
         if data:
-            return Response(data=data, status=status.HTTP_200_OK)
+            response = Response(data=data, status=status.HTTP_200_OK)
+            response["Cache-Control"] = "private, max-age=10, stale-while-revalidate=20"
+            return response
 
         qs = WalletHistory.objects.exclude(amount=0)
 
@@ -1169,6 +1172,12 @@ class WalletHistoryView(APIView):
             F("tx_timestamp").desc(nulls_last=True),
             F("date_created").desc(nulls_last=True),
         )
+
+        # Count before adding the per-row annotations below. Counting an
+        # annotated queryset makes Django wrap it in a subquery and evaluate
+        # those annotations (memo lookup, attribute aggregation) for every row
+        # in the wallet, which is the full-table cost this change removes.
+        total_count = qs.count()
 
         if include_attrs:
             qs = qs.annotate_attributes(
@@ -1287,8 +1296,22 @@ class WalletHistoryView(APIView):
                 "is_nft",
             )
 
+        # Paginate in the database instead of materializing the wallet's entire
+        # history and slicing it in Python. The post-processing below (token
+        # expansion, fiat amounts, field exclusion) then only runs for the page
+        # actually being returned, which is what made this endpoint's latency
+        # independent of `page`.
+        # Clamp so a zero or negative page_size cannot turn the slice below into
+        # e.g. history[0:-5], which would silently return nearly every row.
+        page_size = max(int(page_size), 1)
+        num_pages = max(math.ceil(total_count / page_size), 1)
+        page_num = max(int(page), 1)
+        offset = (page_num - 1) * page_size
+
+        history = list(history[offset:offset + page_size])
+        has_next = offset + page_size < total_count
+
         # Post-process to expand token field
-        history = list(history)
         for item in history:
             # Convert is_nft from integer (1/0) to boolean
             is_nft_value = bool(item.get("is_nft", False))
@@ -1357,14 +1380,12 @@ class WalletHistoryView(APIView):
         if categorize:
             history = self._apply_categories(history)
 
-        # Paginate
-        pages = Paginator(history, page_size)
-        page_obj = pages.page(int(page))
+        # Pagination already happened at the database level above.
         data = {
-            "history": page_obj.object_list,
-            "page": page,
-            "num_pages": pages.num_pages,
-            "has_next": page_obj.has_next(),
+            "history": history,
+            "page": page_num,
+            "num_pages": num_pages,
+            "has_next": has_next,
         }
 
         # Cache the response if applicable
@@ -1372,7 +1393,16 @@ class WalletHistoryView(APIView):
             cache = settings.REDISKV
             store_object(cache_key, data, cache)
 
-        return Response(data=data, status=status.HTTP_200_OK)
+        response = Response(data=data, status=status.HTTP_200_OK)
+        # Only hint caching for responses the server itself serves from Redis;
+        # filtered/derived responses must never be reused by the browser. The
+        # window is deliberately short because a freshly broadcast transaction
+        # is expected to appear in the home list almost immediately. `private`
+        # keeps this out of shared CDN caches, since the body is selected only
+        # by a wallet hash.
+        if use_cache and wallet.version > 1:
+            response["Cache-Control"] = "private, max-age=10, stale-while-revalidate=20"
+        return response
 
 
 class LastAddressIndexView(APIView):
