@@ -1,8 +1,6 @@
 import logging
 from firebase_admin import messaging
-from django.db.models import OuterRef, Exists
 from push_notifications.models import GCMDevice, APNSDevice
-from notifications.models import DeviceWallet
 
 from .send_response import parse_gcm_response
 
@@ -57,23 +55,6 @@ def get_wallet_hashes_devices(wallet_hash_list):
         active=True,
     ).distinct()
     return (gcm_devices, apns_devices)
-
-
-def filter_device_queryset_by_wallet_index(queryset, wallet_hash_list, index):
-    foreign_key_field = None
-    if queryset.model == GCMDevice:
-        foreign_key_field = "gcm_device_id"
-    elif queryset.model == APNSDevice:
-        foreign_key_field = "apns_device_id"
-
-    subq = Exists(
-        DeviceWallet.objects.filter(
-            multi_wallet_index=index,
-            wallet_hash__in=wallet_hash_list,
-            **{foreign_key_field: OuterRef("id")},
-        )
-    )
-    return queryset.filter(subq).distinct()
 
 
 def parse_send_message_for_gcm(message, **kwargs):
@@ -151,20 +132,22 @@ def send_push_notification_to_wallet_hashes(wallet_hash_list, message, **kwargs)
 
     gcm_send_response = None
     apns_send_response = None
+
+    # Each device is sent to once per wallet hash it is subscribed to, so the
+    # payload carries the wallet hash the client needs to route the
+    # notification. Devices are no longer grouped by the deprecated vault
+    # position (`multi_wallet_index`): that value shifted whenever the client
+    # reordered or removed a vault, which left one device/wallet pair spread
+    # across several rows and sent the same notification once per row.
     try:
-        gcm_wallets = gcm_devices.values_list("device_wallets__wallet_hash", "device_wallets__multi_wallet_index").distinct()
-        for wallet_hash, multi_wallet_index in gcm_wallets:
-            if not isinstance(gcm_message.data, dict):
-                gcm_message.data = {}
-
-            gcm_message.data["wallet_hash"] = wallet_hash
-            gcm_message.data["multi_wallet_index"] = str(multi_wallet_index)
-
-            filtered_gcm_devices = filter_device_queryset_by_wallet_index(
-                gcm_devices, wallet_hash_list, multi_wallet_index, 
-            )
-
+        gcm_base_data = gcm_message.data if isinstance(gcm_message.data, dict) else {}
+        gcm_wallets = gcm_devices.values_list("device_wallets__wallet_hash", flat=True).distinct()
+        for wallet_hash in gcm_wallets:
+            filtered_gcm_devices = gcm_devices.filter(device_wallets__wallet_hash=wallet_hash)
             if not filtered_gcm_devices: continue
+
+            gcm_message.data = {**gcm_base_data, "wallet_hash": wallet_hash}
+
             _gcm_send_response = filtered_gcm_devices.send_message(gcm_message, **gcm_kwargs)
             _gcm_send_response = parse_gcm_response(_gcm_send_response)
 
@@ -181,18 +164,16 @@ def send_push_notification_to_wallet_hashes(wallet_hash_list, message, **kwargs)
         gcm_send_response = exception
 
     try:
-        apns_wallets = apns_devices.values_list("device_wallets__wallet_hash", "device_wallets__multi_wallet_index").distinct()
-        for wallet_hash, multi_wallet_index in apns_wallets:
-            if "extra" not in apns_kwargs: apns_kwargs["extra"] = {}
-            apns_kwargs["extra"]["wallet_hash"] = wallet_hash
-            apns_kwargs["extra"]["multi_wallet_index"] = multi_wallet_index
+        apns_base_extra = apns_kwargs.get("extra")
+        if not isinstance(apns_base_extra, dict): apns_base_extra = {}
 
-            filtered_apns_devices = filter_device_queryset_by_wallet_index(
-                apns_devices, wallet_hash_list, multi_wallet_index, 
-            )
-
+        apns_wallets = apns_devices.values_list("device_wallets__wallet_hash", flat=True).distinct()
+        for wallet_hash in apns_wallets:
+            filtered_apns_devices = apns_devices.filter(device_wallets__wallet_hash=wallet_hash)
             if not filtered_apns_devices: continue
-            _apns_send_response = filtered_apns_devices.send_message(apns_message, **apns_kwargs)
+
+            _apns_kwargs = {**apns_kwargs, "extra": {**apns_base_extra, "wallet_hash": wallet_hash}}
+            _apns_send_response = filtered_apns_devices.send_message(apns_message, **_apns_kwargs)
 
             if not isinstance(apns_send_response, list): apns_send_response = []
             apns_send_response += _apns_send_response

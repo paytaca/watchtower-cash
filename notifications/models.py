@@ -23,8 +23,22 @@ class DeviceWallet(models.Model):
     wallet_hash = models.CharField(max_length=70, db_index=True)
 
     # could add more settings later
-    multi_wallet_index = models.IntegerField(null=True, blank=True)
     last_active = models.DateTimeField()
+
+    class Meta:
+        constraints = [
+            # A device stores at most one link per wallet hash. Push sending
+            # fans out per DeviceWallet row, so a duplicate row here means a
+            # duplicate notification for the same transaction.
+            models.UniqueConstraint(
+                fields=["wallet_hash", "gcm_device"],
+                name="unique_wallet_hash_per_gcm_device",
+            ),
+            models.UniqueConstraint(
+                fields=["wallet_hash", "apns_device"],
+                name="unique_wallet_hash_per_apns_device",
+            ),
+        ]
 
 
 class OrderLiveActivityToken(models.Model):

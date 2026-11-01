@@ -40,7 +40,6 @@ class DeviceWalletAdmin(admin.ModelAdmin):
         "apns_device__device_id",
         "apns_device__registration_id",
         "wallet_hash",
-        "multi_wallet_index",
         "last_active",
     ]
 
