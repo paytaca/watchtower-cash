@@ -69,10 +69,12 @@ class TestDeviceSubscription:
         self._subscribe("gcm_device", gcm_device.registration_id, 123456, ["w1", "w2"])
         self._subscribe("gcm_device", gcm_device.registration_id, 123456, ["w1"])
 
-        assert list(
+        # The query has no ORDER BY, so compare as a set rather than relying on
+        # row order that only happens to hold on SQLite.
+        assert set(
             DeviceWallet.objects.filter(gcm_device=gcm_device)
             .values_list("wallet_hash", flat=True)
-        ) == ["w1"]
+        ) == {"w1"}
 
     def test_index_field_from_old_clients_is_ignored(self, db, gcm_device):
         """Old app versions still post `multi_wallet_index`; it must not error."""
@@ -136,6 +138,8 @@ class TestSendFanOut:
 
         assert len(sent) == 2
         assert [call["count"] for call in sent] == [1, 1]
+        # `send.py` orders the wallet hashes explicitly, so the send order here
+        # is part of the contract rather than a database coincidence.
         assert [call["data"]["wallet_hash"] for call in sent] == ["w1", "w2"]
         # The deprecated field is no longer part of the payload at all.
         assert all("multi_wallet_index" not in call["data"] for call in sent)
@@ -170,3 +174,30 @@ class TestSendFanOut:
         assert sent[0]["model"] == "APNSDevice"
         assert sent[0]["extra"]["wallet_hash"] == "w1"
         assert sent[0]["extra"]["type"] == send_module.NotificationTypes.MAIN_TRANSACTION
+
+    def test_multiple_wallets_via_serializer_send_once_each(self, db, gcm_device, sent):
+        """End-to-end through the subscribe serializer, not just bulk_create.
+
+        The fan-out tests above build rows directly to isolate the send path; this
+        one goes through the code the app actually calls, which is also the path
+        that enforces the natural key.
+        """
+        for _ in range(2):
+            serializer = DeviceSubscriptionSerializer(data={
+                "gcm_device": {
+                    "registration_id": gcm_device.registration_id,
+                    "device_id": 123456,
+                    "name": "android",
+                },
+                "wallet_hashes": ["w1", "w2", "w3"],
+            })
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+
+        send_module.send_push_notification_to_wallet_hashes(
+            ["w1", "w2", "w3"], "Received 1 BCH", title="Received",
+            extra={"type": send_module.NotificationTypes.MAIN_TRANSACTION},
+        )
+
+        assert [call["data"]["wallet_hash"] for call in sent] == ["w1", "w2", "w3"]
+        assert all(call["count"] == 1 for call in sent)

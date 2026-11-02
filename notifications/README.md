@@ -16,6 +16,9 @@ class DeviceWallet(models.Model):
     last_active = models.DateTimeField()
 ```
 
+`last_active` records when a subscribe call last refreshed the link. It is
+bookkeeping only — it no longer drives send selection or ordering.
+
 A device may link to a wallet hash at most once (`unique_wallet_hash_per_gcm_device` /
 `unique_wallet_hash_per_apns_device`). Push sending fans out per linked device, so a
 duplicate row here means a duplicate notification for the same transaction.

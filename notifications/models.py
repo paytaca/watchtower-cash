@@ -22,7 +22,10 @@ class DeviceWallet(models.Model):
 
     wallet_hash = models.CharField(max_length=70, db_index=True)
 
-    # could add more settings later
+    # When this link was last refreshed by a subscribe call. It is bookkeeping
+    # only: nothing selects or orders on it any more. Send-time grouping used to
+    # key off `multi_wallet_index`, and the per-row fan-out that caused duplicate
+    # notifications is gone, so this no longer decides who receives a push.
     last_active = models.DateTimeField()
 
     class Meta:

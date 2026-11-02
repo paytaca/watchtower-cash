@@ -141,7 +141,15 @@ def send_push_notification_to_wallet_hashes(wallet_hash_list, message, **kwargs)
     # across several rows and sent the same notification once per row.
     try:
         gcm_base_data = gcm_message.data if isinstance(gcm_message.data, dict) else {}
-        gcm_wallets = gcm_devices.values_list("device_wallets__wallet_hash", flat=True).distinct()
+        gcm_wallets = (
+            gcm_devices.values_list("device_wallets__wallet_hash", flat=True)
+            .distinct()
+            # SQL does not guarantee order without an explicit ORDER BY, and the
+            # per-wallet sends below are sequential. Ordering also keeps the
+            # `SELECT DISTINCT` column list and the sort key identical, which
+            # Postgres requires.
+            .order_by("device_wallets__wallet_hash")
+        )
         for wallet_hash in gcm_wallets:
             filtered_gcm_devices = gcm_devices.filter(device_wallets__wallet_hash=wallet_hash)
             if not filtered_gcm_devices: continue
@@ -167,7 +175,11 @@ def send_push_notification_to_wallet_hashes(wallet_hash_list, message, **kwargs)
         apns_base_extra = apns_kwargs.get("extra")
         if not isinstance(apns_base_extra, dict): apns_base_extra = {}
 
-        apns_wallets = apns_devices.values_list("device_wallets__wallet_hash", flat=True).distinct()
+        apns_wallets = (
+            apns_devices.values_list("device_wallets__wallet_hash", flat=True)
+            .distinct()
+            .order_by("device_wallets__wallet_hash")
+        )
         for wallet_hash in apns_wallets:
             filtered_apns_devices = apns_devices.filter(device_wallets__wallet_hash=wallet_hash)
             if not filtered_apns_devices: continue

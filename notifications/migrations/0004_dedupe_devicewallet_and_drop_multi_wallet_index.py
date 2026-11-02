@@ -10,6 +10,16 @@ per row — the same transaction produced one identical notification per row.
 
 Dropping the column removes the grouping key. This migration first collapses the
 rows it left behind so the natural key below can be applied.
+
+Note on NULL semantics: the unique constraints are `(wallet_hash, gcm_device)` and
+`(wallet_hash, apns_device)`, and every backend here treats NULLs as distinct. That
+is deliberate — it lets an APNS-only row coexist with a GCM-only row for the same
+wallet, and lets the APNS pass below unlink a duplicate without colliding with the
+GCM pass. The consequence is that a row with both device FKs NULL is not covered by
+either constraint. Such a row is not created by this migration unless it was already
+there (it only deletes orphans it unlinked itself), and it is functionally inert:
+with no device attached it can never be delivered to. It is left alone rather than
+guessed at, so no data is discarded.
 """
 
 from django.db import migrations, models
