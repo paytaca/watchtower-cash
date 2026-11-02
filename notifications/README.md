@@ -13,9 +13,20 @@ class DeviceWallet(models.Model):
     gcm_device = models.ForeignKey(push_notifications.GCMDevice, null=True)
     apns_device = models.ForeignKey(push_notifications.APNSDevice, null=True)
     wallet_hash = models.CharField(...)
-    multi_wallet_index = models.IntegerField(null=True, blank=True)
     last_active = models.DateTimeField()
 ```
+
+`last_active` records when a subscribe call last refreshed the link. It is
+bookkeeping only — it no longer drives send selection or ordering.
+
+A device may link to a wallet hash at most once (`unique_wallet_hash_per_gcm_device` /
+`unique_wallet_hash_per_apns_device`). Push sending fans out per linked device, so a
+duplicate row here means a duplicate notification for the same transaction.
+
+> The old `multi_wallet_index` column is gone. It recorded the app's vault *position*,
+> which shifts whenever the user reorders or removes a vault, so it was never a stable
+> identity — and grouping sends by it produced one identical notification per index the
+> wallet had ever occupied.
 
 ## API
 ### Device Registration - `'/push-notifications/subscribe/'`
@@ -28,7 +39,6 @@ The API expects the following payload:
         "registration_id": string,
         "device_id": uuid | integer, // ios | android
         "name": string,
-        "multi_wallet_index": null | integer, // paytaca supports multi wallet
         "application_id": string,
     },
     "wallet_hashes": string[],
