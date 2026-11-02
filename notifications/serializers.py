@@ -89,6 +89,12 @@ class DeviceSubscriptionSerializer(serializers.Serializer):
         required=True,
         write_only=True,
     )
+    # Subscribing is additive by default: the call registers the given wallet
+    # hashes and leaves every other wallet on the device alone. A client only
+    # knows the wallet the user currently has open, so treating the list as the
+    # device's complete subscription set would unlink every other vault. A
+    # client that really does send its whole set can opt in to that meaning.
+    prune_unlisted = serializers.BooleanField(required=False, default=False, write_only=True)
 
     def validate(self, data):
         if "gcm_device" not in data and "apns_device" not in data:
@@ -122,6 +128,7 @@ class DeviceSubscriptionSerializer(serializers.Serializer):
         self.sync_device_wallet_hashes(
             gcm_device,
             validated_data["wallet_hashes"],
+            prune_unlisted=validated_data.get("prune_unlisted", False),
         )
         return gcm_device
 
@@ -136,10 +143,11 @@ class DeviceSubscriptionSerializer(serializers.Serializer):
         self.sync_device_wallet_hashes(
             apns_device,
             validated_data["wallet_hashes"],
+            prune_unlisted=validated_data.get("prune_unlisted", False),
         )
         return apns_device
 
-    def sync_device_wallet_hashes(self, device, wallet_hashes):
+    def sync_device_wallet_hashes(self, device, wallet_hashes, prune_unlisted=False):
         if not isinstance(device, GCMDevice) and not isinstance(device, APNSDevice):
             raise serializers.ValidationError("invalid device type")
 
@@ -158,8 +166,9 @@ class DeviceSubscriptionSerializer(serializers.Serializer):
             )
             device_wallets.append(device_wallet)
 
-        # Drop links to wallets this device no longer subscribes to.
-        device.device_wallets.exclude(wallet_hash__in=wallet_hashes).delete()
+        if prune_unlisted:
+            # Caller declared this to be its complete set, so drop the rest.
+            device.device_wallets.exclude(wallet_hash__in=wallet_hashes).delete()
 
         return device_wallets
 

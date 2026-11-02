@@ -65,16 +65,67 @@ class TestDeviceSubscription:
 
         assert DeviceWallet.objects.filter(gcm_device=gcm_device).count() == 2
 
-    def test_subscribe_prunes_wallets_no_longer_listed(self, db, gcm_device):
+    def test_subscribe_keeps_wallets_not_listed(self, db, gcm_device):
+        """A client only knows its active wallet, so subscribing to one must not
+        unlink the others. An installed app sends the open wallet's hashes on
+        every launch and every wallet switch."""
         self._subscribe("gcm_device", gcm_device.registration_id, 123456, ["w1", "w2"])
-        self._subscribe("gcm_device", gcm_device.registration_id, 123456, ["w1"])
+        self._subscribe("gcm_device", gcm_device.registration_id, 123456, ["w2"])
 
-        # The query has no ORDER BY, so compare as a set rather than relying on
-        # row order that only happens to hold on SQLite.
         assert set(
             DeviceWallet.objects.filter(gcm_device=gcm_device)
             .values_list("wallet_hash", flat=True)
-        ) == {"w1"}
+        ) == {"w1", "w2"}
+
+    def test_wallet_switch_does_not_drop_previous_wallet(self, db, gcm_device):
+        """Regression: the prune used to be scoped to the submitted wallet set,
+        which deleted every vault but the active one."""
+        self._subscribe("gcm_device", gcm_device.registration_id, 123456, ["a-bch", "a-slp"])
+        self._subscribe("gcm_device", gcm_device.registration_id, 123456, ["b-bch", "b-slp"])
+
+        assert set(
+            DeviceWallet.objects.filter(gcm_device=gcm_device)
+            .values_list("wallet_hash", flat=True)
+        ) == {"a-bch", "a-slp", "b-bch", "b-slp"}
+
+    def test_subscribe_can_opt_in_to_pruning(self, db, gcm_device):
+        """A client that really sends its whole set can declare the list
+        authoritative and have the rest removed."""
+        self._subscribe("gcm_device", gcm_device.registration_id, 123456, ["w1", "w2"])
+
+        serializer = DeviceSubscriptionSerializer(data={
+            "gcm_device": {
+                "registration_id": gcm_device.registration_id,
+                "device_id": 123456,
+                "name": "android",
+            },
+            "wallet_hashes": ["w2"],
+            "prune_unlisted": True,
+        })
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        assert set(
+            DeviceWallet.objects.filter(gcm_device=gcm_device)
+            .values_list("wallet_hash", flat=True)
+        ) == {"w2"}
+
+    def test_prune_unlisted_is_not_leaked_into_serializer_response(self, db, gcm_device):
+        """`prune_unlisted` is a write-only directive, not device state."""
+        serializer = DeviceSubscriptionSerializer(data={
+            "gcm_device": {
+                "registration_id": gcm_device.registration_id,
+                "device_id": 123456,
+                "name": "android",
+            },
+            "wallet_hashes": ["w1"],
+            "prune_unlisted": True,
+        })
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        assert "prune_unlisted" not in serializer.data
+        assert serializer.data["gcm_device"]["id"] == gcm_device.id
 
     def test_index_field_from_old_clients_is_ignored(self, db, gcm_device):
         """Old app versions still post `multi_wallet_index`; it must not error."""
