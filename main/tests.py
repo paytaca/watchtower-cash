@@ -1985,3 +1985,66 @@ class TestRevokeLookupKeyCommand(LookupKeyTestMixin, TestCase):
         self._mint('cd'*30)
         self._run('ab'*30, 'cd'*30)
         self.assertEqual(WalletLookupKey.objects.count(), 0)
+
+
+# ---------------------------------------------------------------------------
+# GET /api/transactions/<txid>/
+# ---------------------------------------------------------------------------
+
+class TestTransactionDetailsView(TestCase):
+
+    txid = 'ab' * 32
+    tx_hex = '0200000001feedfacedeadbeef0200000000ffffffff'
+
+    def setUp(self):
+        self.client = APIClient()
+        self.url = reverse('transaction-details', kwargs={'txid': self.txid})
+        node_patcher = patch('main.views.view_transaction.Node')
+        node = node_patcher.start()
+        self.addCleanup(node_patcher.stop)
+        self.get_transaction = node.return_value.BCH.get_transaction
+
+    def _txn(self, txid, include_hex=False):
+        txn = {'txid': txid, 'valid': True, 'inputs': [], 'outputs': []}
+        if include_hex:
+            txn['hex'] = self.tx_hex
+        return txn
+
+    def test_raw_returns_bare_hex_string(self):
+        self.get_transaction.side_effect = self._txn
+        resp = self.client.get(self.url, {'raw': 'true'})
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp['Content-Type'].startswith('text/plain'))
+        self.assertEqual(resp.content, self.tx_hex.encode())
+
+    def test_raw_fetches_hex_from_node(self):
+        self.get_transaction.side_effect = self._txn
+        self.client.get(self.url, {'raw': '1'})
+        self.get_transaction.assert_called_once_with(self.txid, include_hex=True)
+
+    def test_raw_unknown_txid_returns_404(self):
+        self.get_transaction.return_value = None
+        resp = self.client.get(self.url, {'raw': 'true'})
+        self.assertEqual(resp.status_code, 404)
+        self.assertEqual(resp.content, b'')
+
+    def test_raw_false_returns_json_details(self):
+        self.get_transaction.side_effect = self._txn
+        resp = self.client.get(self.url, {'raw': 'false'})
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.data['valid'])
+        self.assertNotIn('hex', resp.data['details'])
+        self.get_transaction.assert_called_once_with(self.txid, include_hex=False)
+
+    def test_include_hex_keeps_json_response(self):
+        self.get_transaction.side_effect = self._txn
+        resp = self.client.get(self.url, {'include_hex': 'true'})
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['details']['hex'], self.tx_hex)
+
+    def test_unknown_txid_reports_invalid(self):
+        self.get_transaction.return_value = None
+        resp = self.client.get(self.url)
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(resp.data['valid'])
+        self.assertEqual(resp.data['details'], {})
