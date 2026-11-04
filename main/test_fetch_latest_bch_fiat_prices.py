@@ -15,6 +15,9 @@ QUOTE_TIME = datetime(2026, 11, 4, 6, 20, tzinfo=timezone.utc)
 
 class FetchLatestBchFiatPricesTest(TestCase):
     def setUp(self):
+        # Keep the rampp2p currency union empty/hermetic by default. tasks.py
+        # imports FiatCurrency lazily, so patching the module attribute works.
+        # Tests that exercise the union override values_list.return_value.
         patcher = patch("rampp2p.models.FiatCurrency")
         self.fiat_currency_model = patcher.start()
         self.addCleanup(patcher.stop)
@@ -34,7 +37,17 @@ class FetchLatestBchFiatPricesTest(TestCase):
         self.assertEqual(aud.price_value, Decimal("933.02"))
         self.assertEqual(aud.source, "coingecko-yadio")
         self.assertEqual(aud.timestamp, QUOTE_TIME)
-        self.assertEqual({row["currency"] for row in results}, {"USD", "AUD"})
+        self.assertEqual(len(results), 2)
+        self.assertEqual(
+            {
+                row["currency"]: (row["price_value"], row["timestamp"], row["source"])
+                for row in results
+            },
+            {
+                "USD": (Decimal("612.40"), QUOTE_TIME, "coingecko"),
+                "AUD": (Decimal("933.02"), QUOTE_TIME, "coingecko-yadio"),
+            },
+        )
 
     @patch("main.tasks.get_latest_bch_rates")
     def test_stores_coingecko_currency(self, get_rates):
@@ -71,6 +84,11 @@ class FetchLatestBchFiatPricesTest(TestCase):
         self.assertFalse(AssetPriceLog.objects.filter(currency="XYZ").exists())
         self.assertEqual([row["currency"] for row in results], ["USD"])
 
+        usd = AssetPriceLog.objects.get(currency="USD", relative_currency="BCH")
+        self.assertEqual(usd.price_value, Decimal("612.40"))
+        self.assertEqual(usd.source, "coingecko")
+        self.assertEqual(usd.timestamp, QUOTE_TIME)
+
     @patch("main.tasks.get_latest_bch_rates")
     def test_unions_rampp2p_currencies(self, get_rates):
         self.fiat_currency_model.objects.all.return_value.values_list.return_value = [
@@ -92,6 +110,9 @@ class FetchLatestBchFiatPricesTest(TestCase):
 
     @patch("main.tasks.get_latest_bch_rates")
     def test_updates_existing_price_log(self, get_rates):
+        # update_or_create looks up by (currency, relative_currency, timestamp,
+        # source), so this seed must match the mocked rate exactly to update
+        # in place instead of inserting a second row.
         AssetPriceLog.objects.create(
             currency="AUD",
             relative_currency="BCH",
