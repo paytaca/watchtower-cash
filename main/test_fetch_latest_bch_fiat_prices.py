@@ -1,12 +1,13 @@
 from datetime import datetime, timezone
 from decimal import Decimal
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import requests
 from django.test import TestCase
 
 from main.models import AssetPriceLog
 from main.tasks import fetch_latest_bch_fiat_prices
+from main.utils.market_price import get_latest_bch_rates
 
 
 QUOTE_TIME = datetime(2026, 11, 4, 6, 20, tzinfo=timezone.utc)
@@ -116,3 +117,38 @@ class FetchLatestBchFiatPricesTest(TestCase):
             fetch_latest_bch_fiat_prices(currencies=["USD"])
 
         self.assertFalse(AssetPriceLog.objects.exists())
+
+    @patch("main.tasks.get_latest_bch_rates")
+    def test_propagates_unexpected_upstream_shape_error(self, get_rates):
+        # get_latest_bch_rates indexes the CoinGecko payload directly, so a
+        # missing key surfaces as a KeyError rather than being swallowed.
+        get_rates.side_effect = KeyError("bitcoin-cash")
+
+        with self.assertRaises(KeyError):
+            fetch_latest_bch_fiat_prices(currencies=["USD"])
+
+        self.assertFalse(AssetPriceLog.objects.exists())
+
+
+class GetLatestBchRatesContractTest(TestCase):
+    """Pins the payload contract callers such as the warm-up task rely on."""
+
+    @patch("main.utils.market_price.requests.get")
+    def test_missing_bitcoin_cash_body_raises(self, get):
+        response = Mock()
+        response.headers = {"Date": "Wed, 04 Nov 2026 06:20:00 GMT"}
+        response.json.return_value = {}
+        get.return_value = response
+
+        with self.assertRaises(KeyError):
+            get_latest_bch_rates(currencies=["USD"])
+
+    @patch("main.utils.market_price.requests.get")
+    def test_missing_date_header_raises(self, get):
+        response = Mock()
+        response.headers = {}
+        response.json.return_value = {"bitcoin-cash": {"usd": 612.40}}
+        get.return_value = response
+
+        with self.assertRaises(KeyError):
+            get_latest_bch_rates(currencies=["USD"])

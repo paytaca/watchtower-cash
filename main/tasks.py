@@ -2802,6 +2802,20 @@ def fetch_latest_bch_fiat_prices(currencies=None):
     # get_latest_bch_rates always requests USD and falls back to Yadio for
     # currencies CoinGecko omits, so background prices cover the same
     # currencies as the on-demand /api/asset-prices/ path.
+    #
+    # Note: delegating to get_latest_bch_rates tightens the implicit contract.
+    # That function indexes response.headers["Date"] and
+    # response_data["bitcoin-cash"] directly, with no internal try/except. Any
+    # structural change in those JSON/header shapes now fails this task, where
+    # the old inline code fell back to timezone.now() for a missing Date and
+    # used rates = {} for a missing bitcoin-cash body (which could store a
+    # 0/BCH ARS row, because usd_rate became Decimal(0)).
+    #
+    # The broadened except only adds logging; exceptions outside the old
+    # (requests.RequestException, ValueError) tuple still propagated before,
+    # just silently. This task is not bind=True/autoretry_for, so
+    # max_retries=3 is inert -- recovery comes from the 25s beat schedule
+    # re-enqueuing it, not a Celery retry.
     try:
         bch_rates = get_latest_bch_rates(currencies=currencies)
     except Exception as e:
