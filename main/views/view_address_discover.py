@@ -16,6 +16,8 @@ LOGGER = logging.getLogger(__name__)
 
 NODE = Node()
 
+CHAINS = ("receiving", "change")
+
 
 class WalletAddressDiscoverViewSet(viewsets.GenericViewSet):
     serializer_class = serializers.WalletAddressDiscoverSerializer
@@ -28,14 +30,17 @@ class WalletAddressDiscoverViewSet(viewsets.GenericViewSet):
         """
         Checks a batch of address sets for transaction history against the BCH node.
 
-        For each address set (receiving + change), efficiently queries the Electrum/Fulcrum
-        server to determine if the address has any transaction history. Uses blockchain.address.get_first_use
-        for O(1) checks instead of loading full transaction history — efficient even for
+        For each address set (receiving and change), efficiently
+        queries the Electrum/Fulcrum server to determine if the address has any
+        transaction history. Uses blockchain.address.get_first_use for O(1)
+        checks instead of loading full transaction history — efficient even for
         addresses with thousands of transactions (e.g., exchange hot wallets).
 
-        An address with zero balance but transaction history is still flagged as having
-        history — important for recovering wallets used by other software (e.g., Electron
-        Cash CashFusion) where coins may have moved through many addresses.
+        The whole batch is checked over a single Fulcrum connection. An address
+        with zero balance but transaction history is still flagged as having
+        history — important for recovering wallets used by other software (e.g.,
+        Electron Cash CashFusion) where coins may have moved through many
+        addresses.
 
         This endpoint does NOT subscribe addresses — it only reports which addresses
         have history. The client is expected to follow up with a call to
@@ -51,49 +56,44 @@ class WalletAddressDiscoverViewSet(viewsets.GenericViewSet):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         address_sets = serializer.validated_data["address_sets"]
-        wallet_hash = serializer.validated_data.get("wallet_hash", "")
+
+        addresses = []
+        for address_set in address_sets:
+            for chain in CHAINS:
+                if address_set.get(chain):
+                    addresses.append(address_set[chain])
+
+        try:
+            history = NODE.BCH.check_addresses_history(addresses)
+        except Exception:
+            LOGGER.exception("Failed to check transaction history for an address batch")
+            return Response(
+                {"error": "address_discovery_failed"},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
 
         results = []
         for address_set in address_sets:
-            address_index = address_set["address_index"]
-            receiving_address = address_set.get("receiving")
-            change_address = address_set.get("change")
+            result = {"address_index": address_set["address_index"]}
 
-            receiving_has_history = False
-            change_has_history = False
-
-            result = {
-                "address_index": address_index
-            }
-
-            if receiving_address:
-                try:
-                    receiving_has_history = NODE.BCH.check_address_history(
-                        receiving_address
+            for chain in CHAINS:
+                address = address_set.get(chain)
+                if not address:
+                    continue
+                if address not in history:
+                    LOGGER.error(
+                        "Missing transaction history result for %s address: %s",
+                        chain,
+                        address,
                     )
-                    result["receiving"] = {
-                        "address": receiving_address,
-                        "has_history": receiving_has_history
-                    }
-
-                except Exception:
-                    LOGGER.warning(
-                        "Failed to check transaction history for receiving address: %s",
-                        receiving_address,
+                    return Response(
+                        {"error": "address_discovery_incomplete"},
+                        status=status.HTTP_503_SERVICE_UNAVAILABLE,
                     )
-
-            if change_address:
-                try:
-                    change_has_history = NODE.BCH.check_address_history(change_address)
-                    result["change"] = {
-                        "address": change_address,
-                        "has_history": change_has_history
-                    }
-                except Exception:
-                    LOGGER.warning(
-                        "Failed to check transaction history for change address: %s",
-                        change_address,
-                    )
+                result[chain] = {
+                    "address": address,
+                    "has_history": history[address],
+                }
 
             results.append(result)
 

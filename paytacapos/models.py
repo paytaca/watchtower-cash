@@ -1,3 +1,4 @@
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db import models
 from django.utils import timezone
@@ -8,8 +9,9 @@ from main.models import WalletHistory, Wallet, Transaction
 from rampp2p.models import PaymentType, PaymentTypeField, FiatCurrency
 
 from decimal import Decimal
+from io import BytesIO
 
-from PIL import Image
+from main.utils.images import UnsupportedImageFormat, fit_within, open_image
 import os
 
 
@@ -182,6 +184,19 @@ class Merchant(models.Model):
         return f"Merchant ({self.name})"
 
     def save(self, *args, **kwargs):
+        if self.logo:
+            # Reject unsupported formats before the row and its files are
+            # persisted, and surface them as a validation error instead of an
+            # unhandled UnsupportedImageFormat (which callers treat as a 500).
+            self.logo.seek(0)
+            try:
+                with open_image(BytesIO(self.logo.read())):
+                    pass
+            except UnsupportedImageFormat as err:
+                raise ValidationError({"logo": str(err)})
+            finally:
+                self.logo.seek(0)
+
         super().save(*args, **kwargs)
 
         if self.logo:
@@ -192,9 +207,9 @@ class Merchant(models.Model):
                 (120,120),
             ]
 
+            img = open_image(self.logo.path)
             for size in sizes:
-                img = Image.open(self.logo.path)
-                img.thumbnail(size)
+                resized = fit_within(img, size)
                 django_image_name, django_image_ext = os.path.splitext(self.logo.name)
                 server_image_name, server_image_ext = os.path.splitext(self.logo.path)
 
@@ -202,7 +217,7 @@ class Merchant(models.Model):
 
                 logo_server_path = f'{server_image_name}_{_size}{server_image_ext}'
                 logo_django_path = f'{django_image_name}_{_size}{django_image_ext}'
-                img.save(logo_server_path)
+                resized.save(logo_server_path)
 
                 if _size == 30:
                     self.logo_30 = logo_django_path

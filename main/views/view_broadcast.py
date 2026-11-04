@@ -5,8 +5,7 @@ from rest_framework import status
 from rest_framework.views import APIView
 from main import serializers
 from main.models import TransactionBroadcast, AssetPriceLog
-from main.utils.broadcast import broadcast_transaction_sync
-from main.tasks import send_post_broadcast_notifications_task, process_mempool_transaction_fast
+from main.utils.broadcast import broadcast_transaction_sync, queue_post_broadcast_processing
 import logging
 
 LOGGER = logging.getLogger(__name__)
@@ -49,15 +48,7 @@ class BroadcastViewSet(generics.GenericAPIView):
                 # The transaction is confirmed in the mempool at this point.
                 # Trigger async post-broadcast processing (mempool tx processing
                 # and notifications) without blocking the HTTP response.
-                try:
-                    process_mempool_transaction_fast.delay(txid, transaction, True)
-                except Exception as exc:
-                    LOGGER.error(f'Failed to queue mempool processing for {txid}: {exc}')
-                
-                try:
-                    send_post_broadcast_notifications_task.delay(transaction)
-                except Exception as exc:
-                    LOGGER.error(f'Failed to queue post-broadcast notifications for {txid}: {exc}')
+                queue_post_broadcast_processing(txid, transaction)
             else:
                 response['txid'] = broadcast_result.get('txid')
                 response['error'] = broadcast_result.get('error', 'broadcast failed')

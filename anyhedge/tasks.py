@@ -2,7 +2,7 @@ import logging
 import pytz
 from datetime import datetime
 from celery import shared_task
-from django.db import models
+from django.db import models, transaction
 from django.utils import timezone
 from .models import (
     MutualRedemption,
@@ -12,7 +12,7 @@ from .models import (
     Oracle,
     PriceOracleMessage,
 )
-from .utils.api import broadcast_transaction
+from .utils.api import broadcast_transaction, get_bchn_instance
 from .utils.auth_token import get_settlement_service_auth_token
 from .utils.contract import get_contract_status
 from .utils.funding import (
@@ -44,6 +44,8 @@ from .utils.websocket import (
     send_settlement_update,
     send_funding_tx_update,
 )
+from main.models import Transaction
+from main.utils.broadcast import queue_post_broadcast_processing
 
 
 ## CELERY QUEUES
@@ -474,6 +476,11 @@ def complete_contract_funding(contract_address):
     if funding_tx_hash:
         hedge_position_obj.funding_tx_hash = funding_tx_hash
         hedge_position_obj.save()
+        # on_commit is a no-op outside a transaction (the save above commits
+        # immediately) and stays correct if this body is ever made atomic.
+        transaction.on_commit(
+            lambda: index_external_funding_transaction.delay(funding_tx_hash)
+        )
         response["success"] = True
         response["tx_hash"] = funding_tx_hash
         response["message"] = "found funding transaction in chain"
@@ -657,3 +664,40 @@ def parse_contracts_liquidity_fee():
             pass
 
     return contracts_parsed
+
+
+@shared_task(bind=True, queue=_QUEUE_FUNDING_PARSER, max_retries=18, time_limit=_TASK_TIME_LIMIT)
+def index_external_funding_transaction(self, tx_hash):
+    """
+    Index a funding transaction that was broadcast outside of Watchtower.
+
+    Contracts funded through the General Protocols liquidity provider service
+    are broadcast by the settlement service, bypassing Watchtower's broadcast
+    endpoint. This means the usual immediate mempool processing and
+    post-broadcast notifications never run, and the funding tx is only picked
+    up by the mempool listener or block parser (which can take minutes).
+
+    This task fetches the raw transaction from the node (retrying while the
+    transaction propagates) and runs the same indexing steps as the broadcast
+    endpoint.
+    """
+    if not tx_hash:
+        return
+
+    try:
+        tx_data = get_bchn_instance()._get_raw_transaction(tx_hash)
+    except Exception:
+        LOGGER.exception(f"Error fetching external funding tx: {tx_hash}")
+        # self.retry() raises Retry with throw=True (Celery's default), including
+        # when called via .run() in tests. Revisit if that default changes.
+        raise self.retry(countdown=10)
+
+    tx_hex = tx_data.get("hex") if tx_data else None
+    if not tx_hex:
+        raise self.retry(countdown=10)
+
+    if Transaction.objects.filter(txid=tx_hash).exists():
+        # Already indexed (mempool listener or block parser got to it first).
+        return
+
+    queue_post_broadcast_processing(tx_hash, tx_hex)

@@ -13,9 +13,20 @@ class DeviceWallet(models.Model):
     gcm_device = models.ForeignKey(push_notifications.GCMDevice, null=True)
     apns_device = models.ForeignKey(push_notifications.APNSDevice, null=True)
     wallet_hash = models.CharField(...)
-    multi_wallet_index = models.IntegerField(null=True, blank=True)
     last_active = models.DateTimeField()
 ```
+
+`last_active` records when a subscribe call last refreshed the link. It is
+bookkeeping only — it no longer drives send selection or ordering.
+
+A device may link to a wallet hash at most once (`unique_wallet_hash_per_gcm_device` /
+`unique_wallet_hash_per_apns_device`). Push sending fans out per linked device, so a
+duplicate row here means a duplicate notification for the same transaction.
+
+> The old `multi_wallet_index` column is gone. It recorded the app's vault *position*,
+> which shifts whenever the user reorders or removes a vault, so it was never a stable
+> identity — and grouping sends by it produced one identical notification per index the
+> wallet had ever occupied.
 
 ## API
 ### Device Registration - `'/push-notifications/subscribe/'`
@@ -28,7 +39,6 @@ The API expects the following payload:
         "registration_id": string,
         "device_id": uuid | integer, // ios | android
         "name": string,
-        "multi_wallet_index": null | integer, // paytaca supports multi wallet
         "application_id": string,
     },
     "wallet_hashes": string[],
@@ -37,8 +47,22 @@ The API expects the following payload:
 - Passing `gcm_device` or `apns_device` object will create a `push_notifications.GCMDevice` or `push_notifications.APNSDevice` instance, respectively. The API will search for an existing record on `push_notifications.GCMDevice` or `push_notifications.APNSDevice` with the same `registration_id` first before creating a new instance.
 
 - `wallet_hashes` will create a set of `notifications.DeviceWallet` that will be linked to the created `push_notifications.GCMDevice` or `push_notifications.APNSDevice`. This will sync with the existing records (if there are any)
-  - existing records that are not in `wallet_hashes` will be removed
   - non-existing records that are in `wallet_hashes` will be added
+  - **subscribing is additive**: existing records that are *not* in `wallet_hashes` are left alone
+
+Subscribing is additive because a client only knows the wallet the user currently has open. Installed apps re-subscribe on every launch and wallet switch with just the active wallet's hashes, so treating the list as the device's complete set would unlink every other vault on the device and silently stop its notifications.
+
+A client that does send its whole set can opt in to replacement semantics:
+
+```
+{
+    ...,
+    "wallet_hashes": string[],
+    "prune_unlisted": true,   // optional, default false
+}
+```
+
+With `prune_unlisted: true`, `DeviceWallet` rows for this device whose `wallet_hash` is not in the list are deleted. To stop receiving notifications for a wallet, use `'/push-notifications/unsubscribe/'`.
 
 
 ## Sending push notifications to specific wallet

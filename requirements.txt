@@ -78,7 +78,10 @@ prompt-toolkit==3.0.3
 psycopg2==2.8.4
 ptyprocess==0.6.0
 py==1.9.0
-Pillow==9.4.0
+# 10.4.0 is the newest release that supports Python 3.8 (Pillow 13, which
+# fixes CVE-2026-112900/112393/112403, requires Python >= 3.11). The reachable
+# code paths for those CVEs are mitigated in main/utils/images.py.
+Pillow==10.4.0
 protobuf==3.20.3
 pyasn1==0.6.1
 pyasn1_modules==0.4.1
@@ -127,4 +130,7 @@ uvicorn==0.32.0
 uvloop==0.21.0
 git+https://github.com/paytaca/python-bitcoinrpc
 bip32utils==0.3.post4
+# 0.2.1+ dropped macOS wheels; on Python <3.9 the sdist build fails because its
+# build backend requires puccinialin, which itself requires Python >=3.9.
+py-sr25519-bindings==0.2.0
 bip-utils==2.9.3

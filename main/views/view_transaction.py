@@ -1,4 +1,5 @@
 from django.db.models.functions import Coalesce
+from django.http import HttpResponse
 from rest_framework import viewsets
 from rest_framework import mixins
 from rest_framework import generics
@@ -12,6 +13,9 @@ from main.filters import TransactionOutputFilter
 from main.pagination import CustomLimitOffsetPagination
 from main.serializers import TransactionMetaAttributeSerializer, TransactionOutputSerializer
 from main.utils.queries.node import Node
+
+
+TRUE_VALUES = ('1', 'true', 'yes')
 
 
 class TransactionMetaAttributeView(generics.GenericAPIView):
@@ -31,16 +35,25 @@ class TransactionDetailsView(APIView):
 
     def get(self, request, *args, **kwargs):
         txid = kwargs.get('txid', '')
-        response = {
-            'valid': False,
-            'details': {}
-        }
+        raw = request.query_params.get('raw', '').lower() in TRUE_VALUES
+        include_hex = raw or request.query_params.get('include_hex', '').lower() in TRUE_VALUES
 
+        txn = None
         if txid:
             node = Node()
-            txn = node.BCH.get_transaction(txid)
-            response['valid'] = True
-            response['details'] = txn
+            txn = node.BCH.get_transaction(txid, include_hex=include_hex)
+
+        if raw:
+            # Kept compatible with ElectrumNetworkProvider.getRawTransaction(), so this
+            # endpoint can be used as a direct alternative to an electrum network provider.
+            if not txn or not txn.get('hex'):
+                return HttpResponse('', content_type='text/plain', status=status.HTTP_404_NOT_FOUND)
+            return HttpResponse(txn['hex'], content_type='text/plain')
+
+        response = {
+            'valid': bool(txn),
+            'details': txn or {},
+        }
 
         return Response(response, status=status.HTTP_200_OK)
 

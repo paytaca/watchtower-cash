@@ -18,7 +18,6 @@ class DeviceWalletSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "wallet_hash",
-            "multi_wallet_index",
             "last_active",
 
             "gcm_registration_id",
@@ -85,12 +84,17 @@ class APNSDeviceSerializer(serializers.ModelSerializer):
 class DeviceSubscriptionSerializer(serializers.Serializer):
     gcm_device = GCMDeviceSerializer(required=False)
     apns_device = APNSDeviceSerializer(required=False)
-    multi_wallet_index = serializers.IntegerField(required=False)
     wallet_hashes = serializers.ListSerializer(
         child=serializers.CharField(),
         required=True,
         write_only=True,
     )
+    # Subscribing is additive by default: the call registers the given wallet
+    # hashes and leaves every other wallet on the device alone. A client only
+    # knows the wallet the user currently has open, so treating the list as the
+    # device's complete subscription set would unlink every other vault. A
+    # client that really does send its whole set can opt in to that meaning.
+    prune_unlisted = serializers.BooleanField(required=False, default=False, write_only=True)
 
     def validate(self, data):
         if "gcm_device" not in data and "apns_device" not in data:
@@ -124,7 +128,7 @@ class DeviceSubscriptionSerializer(serializers.Serializer):
         self.sync_device_wallet_hashes(
             gcm_device,
             validated_data["wallet_hashes"],
-            multi_wallet_index=validated_data.get("multi_wallet_index"),
+            prune_unlisted=validated_data.get("prune_unlisted", False),
         )
         return gcm_device
 
@@ -139,18 +143,18 @@ class DeviceSubscriptionSerializer(serializers.Serializer):
         self.sync_device_wallet_hashes(
             apns_device,
             validated_data["wallet_hashes"],
-            multi_wallet_index=validated_data.get("multi_wallet_index"),
+            prune_unlisted=validated_data.get("prune_unlisted", False),
         )
         return apns_device
 
-    def sync_device_wallet_hashes(self, device, wallet_hashes, multi_wallet_index=None):
+    def sync_device_wallet_hashes(self, device, wallet_hashes, prune_unlisted=False):
         if not isinstance(device, GCMDevice) and not isinstance(device, APNSDevice):
             raise serializers.ValidationError("invalid device type")
 
         device_wallets = []
         now = timezone.now()
         for wallet_hash in wallet_hashes:
-            filter_kwargs = { "wallet_hash": wallet_hash, "multi_wallet_index": multi_wallet_index }
+            filter_kwargs = { "wallet_hash": wallet_hash }
             if isinstance(device, GCMDevice):
                 filter_kwargs["gcm_device"] = device
             elif isinstance(device, APNSDevice):
@@ -162,13 +166,9 @@ class DeviceSubscriptionSerializer(serializers.Serializer):
             )
             device_wallets.append(device_wallet)
 
-        device.device_wallets.filter(multi_wallet_index=multi_wallet_index).exclude(
-            wallet_hash__in=wallet_hashes
-        ).delete()
-
-        # this device wallet context maintained before multi wallet index is added
-        if isinstance(multi_wallet_index, int):
-            device.device_wallets.filter(multi_wallet_index=None).delete()
+        if prune_unlisted:
+            # Caller declared this to be its complete set, so drop the rest.
+            device.device_wallets.exclude(wallet_hash__in=wallet_hashes).delete()
 
         return device_wallets
 

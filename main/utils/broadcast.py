@@ -168,6 +168,28 @@ def broadcast_transaction_sync(transaction_hex, price_log=None, output_fiat_amou
     return result
 
 
+def queue_post_broadcast_processing(txid, tx_hex):
+    """
+    Queue the async steps that follow a successful broadcast.
+
+    Keeps the public /broadcast/ endpoint, the anyhedge broadcast helper and
+    externally broadcast funding txs in sync: fast mempool processing plus
+    post-broadcast notifications. Imported lazily because main.tasks imports
+    this module.
+    """
+    from main.tasks import process_mempool_transaction_fast, send_post_broadcast_notifications_task
+
+    try:
+        process_mempool_transaction_fast.delay(txid, tx_hex, True)
+    except Exception:
+        LOGGER.exception(f'Failed to queue mempool processing for txid {txid}')
+
+    try:
+        send_post_broadcast_notifications_task.delay(tx_hex)
+    except Exception:
+        LOGGER.exception(f'Failed to queue post-broadcast notifications for txid {txid}')
+
+
 def send_post_broadcast_notifications(transaction, extra_data:dict=None):
     results = []
     if extra_data:
@@ -183,7 +205,7 @@ def send_post_broadcast_notifications(transaction, extra_data:dict=None):
 
     input_0 = tx['vin'][0]
     input_details = NODE.BCH.get_input_details(input_0['txid'], input_0['vout'])
-    sender_0 = input_details['address']
+    sender_0 = input_details['address'] if input_details else None
 
     for tx_out in tx['vout']:
         _addrs = tx_out.get('scriptPubKey').get('addresses')

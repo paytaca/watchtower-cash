@@ -57,7 +57,8 @@ from main.utils.queries.parse_utils import (
 )
 from Crypto.Hash import SHA256  # pycryptodome
 import paho.mqtt.client as mqtt
-from PIL import Image, ImageFile
+from PIL import ImageFile
+from main.utils.images import UnsupportedImageFormat, fit_within, open_image
 from io import BytesIO 
 import pytz
 
@@ -1267,7 +1268,14 @@ def download_image(token_id, url, resize=False):
         if content_type.split('/')[0] == 'image':
             file_ext = content_type.split('/')[1]
 
-            img = Image.open(BytesIO(resp.content))
+            try:
+                img = open_image(BytesIO(resp.content))
+            except UnsupportedImageFormat as err:
+                # Treat an unsupported format as "no image available" so the
+                # celery task does not burn its retries on an unrecoverable file.
+                LOGGER.warning(f"Skipping image for token {token_id} from {url}: {err}")
+                return resp.status_code, None
+
             if resize:
                 LOGGER.info('Saving resized images...')
                 # Save medium size
@@ -1275,7 +1283,7 @@ def download_image(token_id, url, resize=False):
                 medium_width = 450
                 medium_height = medium_width * (height / width)
                 medium_size = (medium_width, int(medium_height))
-                medium_img = img.resize(medium_size, Image.ANTIALIAS)
+                medium_img = fit_within(img, medium_size)
                 out_path = f"{settings.TOKEN_IMAGES_DIR}/{token_id}_medium.{file_ext}"
                 medium_img.save(out_path, quality=95)
                 LOGGER.info(out_path)
@@ -1284,7 +1292,7 @@ def download_image(token_id, url, resize=False):
                 thumbnail_width = 150
                 thumbnail_height = thumbnail_width * (height / width)
                 thumbnail_size = (thumbnail_width, int(thumbnail_height))
-                thumbnail_img = img.resize(thumbnail_size, Image.ANTIALIAS)
+                thumbnail_img = fit_within(img, thumbnail_size)
                 out_path = f"{settings.TOKEN_IMAGES_DIR}/{token_id}_thumbnail.{file_ext}"
                 thumbnail_img.save(out_path, quality=95)
                 LOGGER.info(out_path)
