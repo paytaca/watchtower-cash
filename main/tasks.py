@@ -2791,62 +2791,26 @@ def fetch_latest_bch_fiat_prices(currencies=None):
     except Exception:
         pass
 
-    currencies_lower = [c.lower() for c in currencies if c]
-    if "usd" not in currencies_lower:
-        currencies_lower.append("usd")
-    vs_currencies = ",".join(currencies_lower)
-
+    # get_latest_bch_rates always requests USD and falls back to Yadio for
+    # currencies CoinGecko omits, so background prices cover the same
+    # currencies as the on-demand /api/asset-prices/ path.
     try:
-        resp = requests.get(
-            f"https://pro-api.coingecko.com/api/v3/simple/price/?ids=bitcoin-cash&vs_currencies={vs_currencies}",
-            timeout=15,
-            headers={"x-cg-pro-api-key": settings.COINGECKO_API_KEY},
-        )
-        resp.raise_for_status()
-        response_data = resp.json()
-    except (requests.RequestException, ValueError) as e:
-        LOGGER.error(f"CoinGecko fetch failed for currencies {vs_currencies}: {e}")
+        bch_rates = get_latest_bch_rates(currencies=currencies)
+    except Exception as e:
+        LOGGER.error(f"Failed to fetch BCH fiat prices for {currencies}: {e}")
         raise
-
-    response_timestamp = timezone.now()
-    date_header = resp.headers.get("Date")
-    if date_header:
-        response_timestamp = timezone.datetime.strptime(
-            date_header, "%a, %d %b %Y %H:%M:%S %Z"
-        ).replace(tzinfo=pytz.UTC)
-    rates = response_data.get("bitcoin-cash", {})
 
     results = []
     for currency in currencies:
-        currency_low = currency.lower()
-        if currency_low == "ars":
-            usd_rate = Decimal(str(rates.get("usd", 0)))
-            try:
-                yadio = requests.get(f"https://api.yadio.io/rate/{currency_low}/usd", timeout=15).json()
-            except (requests.RequestException, ValueError) as e:
-                LOGGER.warning(f"Yadio fetch failed for ARS: {e}")
-                continue
-            if isinstance(yadio, dict) and "rate" in yadio:
-                price_value = Decimal(str(yadio["rate"])) * usd_rate
-                yadio_ts = yadio.get("timestamp")
-                if yadio_ts:
-                    ts = timezone.datetime.fromtimestamp(yadio_ts / 1000, tz=pytz.UTC)
-                else:
-                    ts = response_timestamp
-                source = "coingecko-yadio"
-            else:
-                continue
-        elif currency_low in rates:
-            price_value = Decimal(str(rates[currency_low]))
-            ts = response_timestamp
-            source = "coingecko"
-        else:
+        bch_rate = bch_rates.get(currency.lower())
+        if not bch_rate:
             continue
 
+        price_value, timestamp, source = bch_rate
         instance, _ = AssetPriceLog.objects.update_or_create(
             currency=currency,
             relative_currency=RELATIVE_CURRENCY,
-            timestamp=ts,
+            timestamp=timestamp,
             source=source,
             defaults={"price_value": price_value},
         )
