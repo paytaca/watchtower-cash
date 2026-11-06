@@ -116,7 +116,7 @@ class Order(models.Model):
         return False
 
     def is_arbiter(self, wallet_hash):
-        return wallet_hash == self.arbiter.wallet_hash
+        return bool(self.arbiter) and wallet_hash == self.arbiter.wallet_hash
 
     def get_seller(self):
         if self.ad_snapshot.trade_type == TradeType.SELL:

@@ -535,6 +535,12 @@ class OrderViewSet(viewsets.GenericViewSet):
 
                 member_info = []
                 for member in members:
+                    if isinstance(member, models.Arbiter):
+                        role = "ARBITER"
+                    elif order.is_seller(member.wallet_hash):
+                        role = "SELLER"
+                    else:
+                        role = "BUYER"
                     member_info.append(
                         {
                             "id": member.id,
@@ -543,6 +549,7 @@ class OrderViewSet(viewsets.GenericViewSet):
                             "name": member.name,
                             "address": member.address,
                             "is_arbiter": isinstance(member, models.Arbiter),
+                            "role": role,
                         }
                     )
 
@@ -893,6 +900,22 @@ class OrderStatusViewSet(viewsets.GenericViewSet):
 
     @action(detail=True, methods=["get"])
     def list_status(self, request, pk):
+        try:
+            order = models.Order.objects.get(pk=pk)
+        except models.Order.DoesNotExist:
+            raise Http404
+
+        # Status events now carry the creator's name, so restrict to participants
+        if not (
+            order.is_seller(request.user.wallet_hash)
+            or order.is_buyer(request.user.wallet_hash)
+            or (order.arbiter and order.is_arbiter(request.user.wallet_hash))
+        ):
+            return Response(
+                {"error": "User not allowed to perform this action"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         queryset = models.Status.objects.filter(order__id=pk).order_by("-created_at")
         serializer = serializers.StatusSerializer(queryset, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -1180,7 +1203,11 @@ class OrderStatusViewSet(viewsets.GenericViewSet):
 
             # Create PAID_PENDING status for order
             serialized_status = serializers.StatusSerializer(
-                data={"status": StatusType.PAID_PENDING, "order": pk}
+                data={
+                    "status": StatusType.PAID_PENDING,
+                    "order": pk,
+                    "created_by": wallet_hash,
+                }
             )
             if not serialized_status.is_valid():
                 raise ValidationError(serialized_status.errors)
