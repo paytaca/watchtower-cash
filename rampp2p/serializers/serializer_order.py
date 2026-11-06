@@ -59,6 +59,7 @@ class OrderMemberSerializer(serializers.Serializer):
     name = serializers.CharField()
     address = serializers.CharField()
     is_arbiter = serializers.BooleanField()
+    role = serializers.CharField(required=False)
 
 class OrderArbiterSerializer(serializers.ModelSerializer):
     class Meta:

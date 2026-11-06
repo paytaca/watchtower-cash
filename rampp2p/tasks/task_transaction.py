@@ -17,7 +17,8 @@ from rampp2p.models import (
     Transaction, 
     StatusType, 
     Contract,
-    Appeal
+    Appeal,
+    Status
 )
 
 import subprocess
@@ -188,6 +189,13 @@ def handle_order_status(action: str, contract: Contract, txn: Dict):
             status_created_by = order_members['arbiter'].wallet_hash
             status_type = StatusType.REFUNDED
         if action == Transaction.ActionType.RELEASE:
+            # Released via an appealed release-pending decision -> arbiter, otherwise the seller
+            if Status.objects.filter(
+                order__id=contract.order.id, status=StatusType.RELEASE_PENDING
+            ).exists():
+                status_created_by = order_members['arbiter'].wallet_hash
+            else:
+                status_created_by = order_members['seller'].wallet_hash
             status_type = StatusType.RELEASED
         if action == Transaction.ActionType.ESCROW:
             status_created_by = order_members['seller'].wallet_hash
