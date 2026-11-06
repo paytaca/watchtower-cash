@@ -454,6 +454,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "rampp2p.tasks.task_ad.expire_ads",
         "schedule": 3600,  # run every 1 hour
     },
+    "send_ad_unavailable_reminders": {
+        "task": "rampp2p.tasks.task_ad.send_ad_unavailable_reminders",
+        "schedule": 3600,  # run every 1 hour
+    },
     # auto rebalancing 30 minutes before automatic shorting
     "rebalance_fund_allocation": {
         "task": "stablehedge.tasks.check_treasury_contracts_for_rebalance",

@@ -34,7 +34,10 @@ import rampp2p.utils.utils as utils
 import rampp2p.utils.websocket as websocket
 from rampp2p.utils import satoshi_to_bch, bch_to_fiat
 
-from rampp2p.utils.notifications import send_push_notification
+from rampp2p.utils.notifications import (
+    send_push_notification,
+    start_ad_unavailable_reminders,
+)
 from rampp2p.viewcodes import WSGeneralMessageType
 from rampp2p.validators import *
 
@@ -705,6 +708,7 @@ class OrderViewSet(viewsets.GenericViewSet):
     def update_ad_trade_amount(self, order=None):
         # Decrease the Ad's trade amount and limits
         ad = order.ad_snapshot.ad
+        was_unavailable = ad.get_unavailable_reason() is not None
         if order.ad_snapshot.trade_limits_in_fiat:
             order_amount_fiat = bch_to_fiat(
                 satoshi_to_bch(order.trade_amount), order.ad_snapshot.price
@@ -734,6 +738,14 @@ class OrderViewSet(viewsets.GenericViewSet):
             if ad.trade_amount_sats < ad.trade_ceiling_sats:
                 ad.trade_ceiling_sats = new_ad_quantity_sats
         ad.save()
+
+        # Notify the owner only on the transition into an unusable amount, so
+        # ads that were already exhausted before this order do not re-notify.
+        reason = ad.get_unavailable_reason()
+        if reason is not None and not was_unavailable:
+            transaction.on_commit(
+                lambda: start_ad_unavailable_reminders(ad, reason)
+            )
 
     def get_market_price(self, currency):
         market_price = models.MarketPrice.objects.filter(currency=currency)
