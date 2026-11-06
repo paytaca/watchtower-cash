@@ -1,6 +1,26 @@
 from rest_framework import serializers
 from rampp2p.models import Status, Order, Arbiter
 
+
+def serialize_creator(status: Status):
+	'''Build the creator payload shared by the REST and WebSocket paths.
+
+	`is_arbiter` is required because `Peer` and `Arbiter` have independent
+	primary keys, so an id alone cannot disambiguate them.
+	'''
+	creator = status.get_creator()
+	if creator:
+		return {
+			'id': creator.id,
+			'name': creator.name,
+			'chat_identity_id': creator.chat_identity_id,
+			'is_arbiter': isinstance(creator, Arbiter)
+		}
+	if status.created_by == 'SYSTEM_AUTOMATED':
+		return {'id': None, 'name': None, 'chat_identity_id': None, 'is_system': True}
+	return None
+
+
 class StatusSerializer(serializers.ModelSerializer):
 	order = serializers.PrimaryKeyRelatedField(queryset=Order.objects.all())
 	seller_read_at = serializers.DateTimeField(required=False)
@@ -22,17 +42,7 @@ class StatusSerializer(serializers.ModelSerializer):
 		]
 
 	def get_creator(self, obj: Status):
-		creator = obj.get_creator()
-		if creator:
-			return {
-				'id': creator.id,
-				'name': creator.name,
-				'chat_identity_id': creator.chat_identity_id,
-				'is_arbiter': isinstance(creator, Arbiter)
-			}
-		if obj.created_by == 'SYSTEM_AUTOMATED':
-			return {'id': None, 'name': None, 'chat_identity_id': None, 'is_system': True}
-		return None
+		return serialize_creator(obj)
 
 class StatusReadSerializer(serializers.ModelSerializer):
 	order = serializers.PrimaryKeyRelatedField(queryset=Order.objects.all())
@@ -58,11 +68,4 @@ class StatusReadSerializer(serializers.ModelSerializer):
 		}
 	
 	def get_creator(self, obj: Status):
-		creator = obj.get_creator()
-		if creator:
-			creator = {
-				'id': creator.id,
-				'name': creator.name,
-				'chat_identity_id': creator.chat_identity_id
-			}
-		return creator
+		return serialize_creator(obj)

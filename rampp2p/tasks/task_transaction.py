@@ -189,7 +189,10 @@ def handle_order_status(action: str, contract: Contract, txn: Dict):
             status_created_by = order_members['arbiter'].wallet_hash
             status_type = StatusType.REFUNDED
         if action == Transaction.ActionType.RELEASE:
-            # Released via an appealed release-pending decision -> arbiter, otherwise the seller
+            # Released via an appealed RELEASE_PENDING decision -> arbiter; otherwise the
+            # seller broadcast it. A RELEASE_PENDING status implies order.arbiter is set
+            # (view_appeal requires it before creating that status), so the arbiter
+            # lookup below cannot be None. Relaxing that check needs a guard here too.
             if Status.objects.filter(
                 order__id=contract.order.id, status=StatusType.RELEASE_PENDING
             ).exists():
