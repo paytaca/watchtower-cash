@@ -35,6 +35,7 @@ import rampp2p.serializers as serializers
 import rampp2p.models as models
 import rampp2p.utils.websocket as websocket
 from rampp2p.utils import bch_to_satoshi, fiat_to_bch
+from rampp2p.utils.notifications import clear_ad_unavailable_reminders
 
 import logging
 
@@ -907,6 +908,10 @@ class AdViewSet(viewsets.GenericViewSet):
         if private_to_public:
             ad.expires_at = timezone.now() + timedelta(days=30)
             ad.save(update_fields=['expires_at', 'modified_at'])
+
+        if (ad.unavailable_reminder_started_at is not None
+                and (not ad.is_public or ad.get_unavailable_reason() is None)):
+            clear_ad_unavailable_reminders(ad)
 
         context = {"wallet_hash": wallet_hash}
         serializer = serializers.AdSerializer(ad, context=context)

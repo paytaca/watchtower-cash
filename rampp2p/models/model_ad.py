@@ -59,6 +59,11 @@ class Ad(models.Model):
     modified_at = models.DateTimeField(auto_now=True)
     deleted_at = models.DateTimeField(blank=True, null=True)
 
+    # Tracks the reminder schedule after the ad runs out of tradeable amount.
+    unavailable_reminder_started_at = models.DateTimeField(blank=True, null=True)
+    unavailable_reminder_count = models.PositiveIntegerField(default=0)
+    unavailable_reminder_next_at = models.DateTimeField(blank=True, null=True)
+
     class Meta:
         indexes = [
             # Individual indexes on frequently filtered fields
@@ -80,6 +85,8 @@ class Ad(models.Model):
             models.Index(fields=['is_public', 'deleted_at', 'created_at'], name='rampp2p_ad_public_listing_idx'),
             # Index for expiry queries
             models.Index(fields=['expires_at'], name='rampp2p_ad_expires_at_idx'),
+            # Index for due unavailable-ad reminders
+            models.Index(fields=['unavailable_reminder_next_at'], name='rampp2p_ad_rem_next_idx'),
         ]
 
     def __str__(self):
@@ -139,6 +146,23 @@ class Ad(models.Model):
         
         return trade_amount
     
+    def get_unavailable_reason(self):
+        """Returns why the ad can no longer accept an order, or None if it still can."""
+        if self.trade_limits_in_fiat:
+            amount = self.trade_amount_fiat
+            trade_floor = self.trade_floor_fiat
+        else:
+            amount = self.trade_amount_sats
+            trade_floor = self.trade_floor_sats
+            amount = 0 if amount is None else amount
+            trade_floor = 0 if trade_floor is None else trade_floor
+
+        if amount <= 0:
+            return "EMPTY"
+        if amount < trade_floor:
+            return "BELOW_FLOOR"
+        return None
+
     def get_trade_count(self):
         Order = apps.get_model('rampp2p', 'Order')
         return Order.objects.filter(ad_snapshot__ad__id=self.id).count()
