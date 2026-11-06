@@ -695,9 +695,49 @@ class OrderViewSet(viewsets.GenericViewSet):
         ).values_list("id", flat=True)
         return queryset
 
+    def get_ad_unavailable_reason(self, ad):
+        """Returns why the ad can no longer accept an order, or None if it still can."""
+        if ad.trade_limits_in_fiat:
+            amount = ad.trade_amount_fiat
+            trade_floor = ad.trade_floor_fiat
+        else:
+            amount = ad.trade_amount_sats
+            trade_floor = ad.trade_floor_sats
+            amount = 0 if amount is None else amount
+            trade_floor = 0 if trade_floor is None else trade_floor
+
+        if amount <= 0:
+            return "EMPTY"
+        if amount < trade_floor:
+            return "BELOW_FLOOR"
+        return None
+
+    def notify_ad_owner_ad_unavailable(self, ad, reason):
+        try:
+            if ad.trade_limits_in_fiat:
+                symbol = ad.fiat_currency.symbol
+                amount = ad.trade_amount_fiat
+                trade_floor = ad.trade_floor_fiat
+            else:
+                symbol = ad.crypto_currency.symbol
+                amount = satoshi_to_bch(ad.trade_amount_sats or 0)
+                trade_floor = satoshi_to_bch(ad.trade_floor_sats or 0)
+
+            if reason == "EMPTY":
+                message = f"Your ad #{ad.id} has no remaining {symbol} to trade. Top up to keep receiving orders."
+            else:
+                message = f"Your ad #{ad.id} only has {amount} {symbol} left, below its minimum order of {trade_floor} {symbol}. Top up to keep receiving orders."
+
+            send_push_notification(
+                [ad.owner.wallet_hash], message, extra={"ad_id": ad.id}
+            )
+        except Exception as err:
+            logger.warning(f"Failed to notify owner of ad #{ad.id}: {err}")
+
     def update_ad_trade_amount(self, order=None):
         # Decrease the Ad's trade amount and limits
         ad = order.ad_snapshot.ad
+        was_unavailable = self.get_ad_unavailable_reason(ad) is not None
         if order.ad_snapshot.trade_limits_in_fiat:
             order_amount_fiat = bch_to_fiat(
                 satoshi_to_bch(order.trade_amount), order.ad_snapshot.price
@@ -727,6 +767,14 @@ class OrderViewSet(viewsets.GenericViewSet):
             if ad.trade_amount_sats < ad.trade_ceiling_sats:
                 ad.trade_ceiling_sats = new_ad_quantity_sats
         ad.save()
+
+        # Notify the owner only on the transition into an unusable amount, so
+        # ads that were already exhausted before this order do not re-notify.
+        reason = self.get_ad_unavailable_reason(ad)
+        if reason is not None and not was_unavailable:
+            transaction.on_commit(
+                lambda: self.notify_ad_owner_ad_unavailable(ad, reason)
+            )
 
     def get_market_price(self, currency):
         market_price = models.MarketPrice.objects.filter(currency=currency)
