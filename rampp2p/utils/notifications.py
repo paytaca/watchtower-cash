@@ -61,18 +61,25 @@ def notify_ad_owner_ad_unavailable(ad, reason, is_reminder=False):
         return False
 
 def start_ad_unavailable_reminders(ad, reason):
-    """Sends the initial notification and schedules the first reminder."""
+    """Sends the initial notification and schedules the first reminder.
+
+    The schedule is armed even if the initial push fails so the day-1 task
+    retries it; count stays 0 so that retry keeps the initial wording.
+    """
+    sent = notify_ad_owner_ad_unavailable(ad, reason)
     now = timezone.now()
     type(ad).objects.filter(pk=ad.pk).update(
         unavailable_reminder_started_at=now,
         unavailable_reminder_count=0,
         unavailable_reminder_next_at=now + UNAVAILABLE_REMINDER_INITIAL_DELAY,
     )
-    return notify_ad_owner_ad_unavailable(ad, reason)
+    return sent
 
 def advance_ad_unavailable_reminders(ad):
     """Advances the reminder schedule, stopping once the next delay exceeds max age."""
     count = ad.unavailable_reminder_count + 1
+    # Offsets are 3, 7, 15, 31, ... days from started_at; the seed reminder is
+    # day 1, set in start_ad_unavailable_reminders.
     next_at = ad.unavailable_reminder_started_at + timedelta(days=(2 ** (count + 1)) - 1)
     if next_at > ad.unavailable_reminder_started_at + UNAVAILABLE_REMINDER_MAX_AGE:
         next_at = None

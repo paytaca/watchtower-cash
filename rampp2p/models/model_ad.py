@@ -94,8 +94,17 @@ class Ad(models.Model):
 
     # modified for soft deletion
     def delete(self):
-        self.deleted_at = timezone.now()
-        self.save()
+        now = timezone.now()
+        self.deleted_at = now
+        # Clear reminder bookkeeping in the same write so soft-deleted rows stop
+        # matching the reminder index instead of relying on the task's filter.
+        type(self).objects.filter(pk=self.pk).update(
+            deleted_at=now,
+            modified_at=now,
+            unavailable_reminder_started_at=None,
+            unavailable_reminder_count=0,
+            unavailable_reminder_next_at=None,
+        )
     
     def save(self, *args, **kwargs):
         if not self.pk and not self.expires_at:

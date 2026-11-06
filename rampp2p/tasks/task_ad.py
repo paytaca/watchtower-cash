@@ -52,7 +52,11 @@ def send_ad_unavailable_reminders():
             clear_ad_unavailable_reminders(ad)
             continue
 
-        if not notify_ad_owner_ad_unavailable(ad, reason, is_reminder=True):
+        # count == 0 means no reminder has been sent yet, so this may be a retry
+        # of a failed initial push; keep the initial wording in that case.
+        if not notify_ad_owner_ad_unavailable(
+            ad, reason, is_reminder=ad.unavailable_reminder_count > 0
+        ):
             # Leave the schedule unchanged so the reminder is retried.
             continue
 
