@@ -47,6 +47,8 @@ class NostrRoom(models.Model):
     updated_at = models.DateTimeField()
     last_message_timestamp = models.DateTimeField(null=True, blank=True)
     archived = models.BooleanField(default=False)
+    # The wallet muted this room: group pushes for it are skipped.
+    muted = models.BooleanField(default=False)
 
     class Meta:
         unique_together = ('wallet_hash', 'room_id')

@@ -330,7 +330,7 @@ class NostrRoomDetailView(APIView):
             )
 
         update_fields = {}
-        for field in ('name', 'subject', 'archived', 'members', 'nostr_group_id'):
+        for field in ('name', 'subject', 'archived', 'muted', 'members', 'nostr_group_id'):
             if field in serializer.validated_data:
                 update_fields[field] = serializer.validated_data[field]
         update_fields['updated_at'] = timezone.now()

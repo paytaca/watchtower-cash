@@ -114,7 +114,7 @@ class RoomSerializer(serializers.ModelSerializer):
         model = NostrRoom
         fields = ('room_id', 'type', 'name', 'members', 'nostr_group_id', 'subject',
                   'avatar', 'created_at', 'updated_at',
-                  'last_message_timestamp', 'archived')
+                  'last_message_timestamp', 'archived', 'muted')
 
     def validate_nostr_group_id(self, value):
         if value is None:
@@ -152,6 +152,7 @@ class RoomUpdateSerializer(serializers.Serializer):
     name = serializers.CharField(max_length=255, required=False)
     subject = serializers.CharField(allow_null=True, required=False)
     archived = serializers.BooleanField(required=False)
+    muted = serializers.BooleanField(required=False)
     nostr_group_id = serializers.CharField(max_length=64, allow_null=True, required=False)
     members = serializers.ListField(
         child=serializers.CharField(max_length=64),

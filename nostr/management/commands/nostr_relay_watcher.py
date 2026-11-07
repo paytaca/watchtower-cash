@@ -76,17 +76,19 @@ class Command(BaseCommand):
         """
         try:
             connection.ensure_connection()
-            rows = NostrRoom.objects.filter(
+            rows = list(NostrRoom.objects.filter(
                 nostr_group_id__isnull=False,
                 archived=False,
-            ).values_list('nostr_group_id', 'members')
+            ).values_list('nostr_group_id', 'members', 'wallet_hash', 'muted'))
         except Exception as e:
             logger.error(f"Failed to refresh group cache: {e}")
             self._group_members_cache = {}
+            self._group_muted_pubkeys = {}
             return
 
         new_cache = {}
-        for nostr_group_id, members in rows:
+        muted_wallets = {}
+        for nostr_group_id, members, wallet_hash, muted in rows:
             if not isinstance(members, list):
                 logger.warning(
                     f"NostrRoom nostr_group_id={nostr_group_id[:16]}... has "
@@ -94,11 +96,47 @@ class Command(BaseCommand):
                     "skipping from group cache"
                 )
                 continue
+            if muted and wallet_hash:
+                muted_wallets.setdefault(nostr_group_id, set()).add(wallet_hash)
             recipients = new_cache.setdefault(nostr_group_id, set())
             for m in members:
                 if isinstance(m, str):
                     recipients.add(m)
         self._group_members_cache = new_cache
+        self._group_muted_pubkeys = self._resolve_muted_pubkeys(muted_wallets)
+
+    def _resolve_muted_pubkeys(self, muted_wallets):
+        """Map ``nostr_group_id`` -> pubkeys of the wallets that muted it.
+
+        Room rows store the full member list, so a muted row still contributes
+        every member to the group union — the mute has to be applied per
+        recipient instead. Each muted row is tied to a ``wallet_hash``; resolve
+        its registered pubkeys so those recipients (and only those) are skipped.
+        """
+        if not muted_wallets:
+            return {}
+        all_hashes = {w for wallets in muted_wallets.values() for w in wallets}
+        try:
+            connection.ensure_connection()
+            rows = NostrPubkey.objects.filter(
+                wallet_hash__in=all_hashes,
+            ).values_list('wallet_hash', 'pubkey_hex')
+        except Exception as e:
+            logger.error(f"Failed to resolve muted group pubkeys: {e}")
+            return {}
+
+        pubkeys_by_wallet = {}
+        for wallet_hash, pubkey_hex in rows:
+            pubkeys_by_wallet.setdefault(wallet_hash, set()).add(pubkey_hex)
+
+        resolved = {}
+        for nostr_group_id, wallets in muted_wallets.items():
+            pubkeys = set()
+            for wallet_hash in wallets:
+                pubkeys |= pubkeys_by_wallet.get(wallet_hash, set())
+            if pubkeys:
+                resolved[nostr_group_id] = pubkeys
+        return resolved
 
     def run_watcher(self, relay_url):
         # Obtain the shared Redis client configured in settings
@@ -109,6 +147,7 @@ class Command(BaseCommand):
         # Prime the in-memory lookups once before opening the socket so the
         # first few events don't hit the DB.
         self._group_members_cache = {}
+        self._group_muted_pubkeys = {}
         self._refresh_group_cache()
 
         pubkeys = set(self.get_registered_pubkeys())
@@ -299,4 +338,9 @@ class Command(BaseCommand):
         members = self._group_members_cache.get(nostr_group_id)
         if members is None:
             return set()
+        # Wallets that muted this room keep receiving the events but must not be
+        # pushed for them.
+        muted = self._group_muted_pubkeys.get(nostr_group_id)
+        if muted:
+            members = members - muted
         return members & registered_pubkeys
