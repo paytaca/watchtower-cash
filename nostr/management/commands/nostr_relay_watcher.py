@@ -15,6 +15,10 @@ logger = logging.getLogger(__name__)
 RELAY_URL = "wss://relay.paytaca.com"
 GIFT_WRAP_KIND = 1059
 GROUP_EVENT_KIND = 445  # NIP-EE MLS group message
+# Kind-445 events are signed with an ephemeral key, so the relay cannot
+# attribute them to a member. Clients add this tag with the sender's chat
+# pubkey so the sender can be dropped from the push recipient list.
+GROUP_SENDER_TAG = "sender"
 SUBSCRIPTION_KINDS = [GIFT_WRAP_KIND, GROUP_EVENT_KIND]
 PUBKEY_REFRESH_INTERVAL = 60  # seconds
 SEEN_EVENT_TTL = 60 * 60 * 24  # 24 hours — how long to remember processed event IDs
@@ -237,22 +241,8 @@ class Command(BaseCommand):
                     event_kind = event.get("kind")
 
                     if event_kind == GROUP_EVENT_KIND:
-                        # NIP-EE MLS group messages are signed with an ephemeral
-                        # key and carry only an "h" tag (the public
-                        # nostr_group_id), so the sender cannot be identified
-                        # here. Resolve recipients from the room -> member
-                        # mapping the client registered via /api/nostr/rooms/.
-                        h_tag = next(
-                            (
-                                tag[1]
-                                for tag in event_tags
-                                if isinstance(tag, list) and len(tag) >= 2 and tag[0] == "h"
-                            ),
-                            None,
-                        )
-                        recipient_pubkeys = (
-                            self.get_group_recipient_pubkeys(h_tag, pubkeys)
-                            if h_tag else set()
+                        recipient_pubkeys = self.get_group_event_recipients(
+                            event_tags, pubkeys
                         )
                     else:
                         # Gift-wraps (kind 1059) address recipients via "p" tags.
@@ -346,3 +336,30 @@ class Command(BaseCommand):
         if muted:
             members = members - muted
         return members & registered_pubkeys
+
+    def get_group_event_recipients(self, event_tags, registered_pubkeys):
+        """Push recipients for a NIP-EE group event, minus whoever sent it.
+
+        The sender has to be dropped: they already have the message on the
+        device that published it. A kind-445 event is signed with an ephemeral
+        key, so it cannot be attributed to a member from its signature; the
+        client adds a ``sender`` tag with its chat pubkey instead. Events from
+        clients that do not tag themselves fall back to notifying every member
+        (previous behaviour), never to notifying nobody.
+        """
+        h_tag = None
+        sender_pubkey = None
+        for tag in event_tags:
+            if not isinstance(tag, list) or len(tag) < 2:
+                continue
+            if tag[0] == "h" and h_tag is None:
+                h_tag = tag[1]
+            elif tag[0] == GROUP_SENDER_TAG and sender_pubkey is None:
+                if isinstance(tag[1], str):
+                    sender_pubkey = tag[1].lower()
+        if not h_tag:
+            return set()
+        recipients = self.get_group_recipient_pubkeys(h_tag, registered_pubkeys)
+        if sender_pubkey:
+            recipients = recipients - {sender_pubkey}
+        return recipients

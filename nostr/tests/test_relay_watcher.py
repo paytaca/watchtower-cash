@@ -268,3 +268,79 @@ class GetGroupRecipientPubkeysTestCase(TestCase):
             self.command.get_group_recipient_pubkeys(GROUP_ID, {MEMBER_A}),
             set(),
         )
+
+
+class GetGroupEventRecipientsTestCase(TestCase):
+    """A group message must not be pushed back to the client that sent it.
+
+    Kind-445 events are signed with an ephemeral key, so the sender is only
+    identifiable through the ``sender`` tag the client adds with its chat
+    pubkey."""
+
+    def setUp(self):
+        self.command = Command()
+        self.command._group_members_cache = {}
+        self.command._group_muted_pubkeys = {}
+        NostrRoom.objects.create(
+            room_id="room_a",
+            wallet_hash="wh_a",
+            type="mls-group",
+            name="Group",
+            members=[MEMBER_A, MEMBER_B, MEMBER_C],
+            nostr_group_id=GROUP_ID,
+            created_at=timezone.now(),
+            updated_at=timezone.now(),
+        )
+        for member in (MEMBER_A, MEMBER_B, MEMBER_C):
+            NostrPubkey.objects.create(wallet_hash=f"wh_{member[:2]}", pubkey_hex=member)
+        self.command._refresh_group_cache()
+        self.registered = {MEMBER_A, MEMBER_B, MEMBER_C}
+
+    def test_sender_is_excluded(self):
+        recipients = self.command.get_group_event_recipients(
+            [["h", GROUP_ID], ["sender", MEMBER_A]], self.registered,
+        )
+
+        self.assertEqual(recipients, {MEMBER_B, MEMBER_C})
+
+    def test_untagged_event_notifies_every_member(self):
+        recipients = self.command.get_group_event_recipients(
+            [["h", GROUP_ID]], self.registered,
+        )
+
+        self.assertEqual(recipients, self.registered)
+
+    def test_sender_tag_is_case_insensitive(self):
+        recipients = self.command.get_group_event_recipients(
+            [["h", GROUP_ID], ["sender", MEMBER_A.upper()]], self.registered,
+        )
+
+        self.assertEqual(recipients, {MEMBER_B, MEMBER_C})
+
+    def test_unknown_sender_tag_leaves_recipients_untouched(self):
+        recipients = self.command.get_group_event_recipients(
+            [["h", GROUP_ID], ["sender", UNREGISTERED]], self.registered,
+        )
+
+        self.assertEqual(recipients, self.registered)
+
+    def test_sender_and_muted_wallet_both_excluded(self):
+        # Muting is per wallet, so the muted room row needs a registered
+        # pubkey for its wallet for the mute to subtract anything.
+        NostrPubkey.objects.create(wallet_hash="wh_a", pubkey_hex=MEMBER_A)
+        NostrRoom.objects.filter(room_id="room_a").update(muted=True)
+        self.command._refresh_group_cache()
+
+        recipients = self.command.get_group_event_recipients(
+            [["h", GROUP_ID], ["sender", MEMBER_B]], self.registered,
+        )
+
+        # MEMBER_A muted the room, MEMBER_B sent it, MEMBER_C is the only
+        # device that should get a push.
+        self.assertEqual(recipients, {MEMBER_C})
+
+    def test_missing_group_id_returns_empty(self):
+        self.assertEqual(
+            self.command.get_group_event_recipients([["sender", MEMBER_A]], self.registered),
+            set(),
+        )
