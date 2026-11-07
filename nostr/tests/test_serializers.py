@@ -118,6 +118,12 @@ class RoomRolesSerializerTestCase(TestCase):
         self.assertTrue(serializer.is_valid(), serializer.errors)
         self.assertEqual(serializer.validated_data["admins"], [])
 
+    def test_admins_reject_null(self):
+        """``[]`` is the clear verb; ``null`` must not write SQL NULL into the
+        JSON column, which would change its stored shape from list to null."""
+        serializer = RoomUpdateSerializer(data={"wallet_hash": "wh1", "admins": None})
+        self.assertFalse(serializer.is_valid())
+
     def test_admins_reject_non_hex_entries(self):
         serializer = RoomUpdateSerializer(data={"wallet_hash": "wh1", "admins": ["nope"]})
         self.assertFalse(serializer.is_valid())

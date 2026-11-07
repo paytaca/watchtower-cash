@@ -109,9 +109,15 @@ class RoomRolesValidationMixin:
     Roles are claimed by the client and the server does not verify the claim:
     clients authorize role changes against the MLS ratchet tree, so a forged
     value here cannot grant control of a group.
+
+    Update verbs for the mirror: omitting a key preserves the stored value,
+    ``owner: null`` clears the owner, and ``admins: []`` clears the admin list.
+    ``admins: null`` is rejected so the JSON column always holds a list.
     """
 
     def validate_owner(self, value):
+        # ``None`` is the explicit "clear the owner" verb; an omitted key
+        # preserves the stored owner.
         if value is None:
             return value
         if not re.match(r'^[0-9a-fA-F]{64}$', value):
@@ -121,8 +127,8 @@ class RoomRolesValidationMixin:
         return value.lower()
 
     def validate_admins(self, value):
-        if value is None:
-            return value
+        # ``[]`` is the clear verb. The field rejects ``null`` so the column
+        # keeps its list shape; an omitted key preserves the stored list.
         cleaned = []
         for admin in value:
             if not isinstance(admin, str):
@@ -210,7 +216,6 @@ class RoomUpdateSerializer(RoomRolesValidationMixin, serializers.Serializer):
     admins = serializers.ListField(
         child=serializers.CharField(max_length=64),
         allow_empty=True,
-        allow_null=True,
         required=False,
     )
 

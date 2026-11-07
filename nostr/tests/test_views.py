@@ -202,7 +202,7 @@ class PubkeyLastOnlineViewTestCase(TestCase):
         self.assertEqual(response.data[VALID_HEX], expected)
         self.assertIsNone(response.data[OTHER_HEX])
 
-    @patch("nostr.views.Address.objects.filter")
+    @patch("main.models.Address.objects.filter")
     def test_requester_blocked_returns_all_null(self, mock_addr_filter):
         """When the requester has show_active_status=False on any of their
         wallets, all results must be null."""
@@ -508,6 +508,48 @@ class NostrRoomDetailViewTestCase(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.room.refresh_from_db()
         self.assertTrue(self.room.archived)
+
+    @patch("nostr.utils.auth.verify_wallet_ownership")
+    def test_update_room_muted_round_trip(self, mock_verify):
+        mock_verify.return_value = (True, None)
+
+        response = self.client.patch(self.url, {
+            "wallet_hash": self.wallet_hash,
+            "muted": True,
+        }, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.room.refresh_from_db()
+        self.assertTrue(self.room.muted)
+
+        response = self.client.get(
+            "/api/nostr/rooms/", {"wallet_hash": self.wallet_hash},
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        room = next(
+            r for r in response.data["rooms"] if r["room_id"] == self.room_id
+        )
+        self.assertTrue(room["muted"])
+
+        response = self.client.patch(self.url, {
+            "wallet_hash": self.wallet_hash,
+            "muted": False,
+        }, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.room.refresh_from_db()
+        self.assertFalse(self.room.muted)
+
+    @patch("nostr.utils.auth.verify_wallet_ownership")
+    def test_update_room_without_muted_keeps_it(self, mock_verify):
+        mock_verify.return_value = (True, None)
+        NostrRoom.objects.filter(pk=self.room.pk).update(muted=True)
+
+        response = self.client.patch(self.url, {
+            "wallet_hash": self.wallet_hash,
+            "name": "Renamed",
+        }, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.room.refresh_from_db()
+        self.assertTrue(self.room.muted)
 
     @patch("nostr.utils.auth.verify_wallet_ownership")
     def test_update_room_roles(self, mock_verify):

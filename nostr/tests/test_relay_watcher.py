@@ -3,7 +3,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from nostr.management.commands.nostr_relay_watcher import Command
-from nostr.models import NostrRoom
+from nostr.models import NostrPubkey, NostrRoom
 
 
 GROUP_ID = "aa" * 32
@@ -23,7 +23,8 @@ class GetGroupRecipientPubkeysTestCase(TestCase):
         self.command = Command()
         self.command._group_members_cache = {}
 
-    def _room(self, wallet_hash, room_id, members, nostr_group_id=GROUP_ID, archived=False):
+    def _room(self, wallet_hash, room_id, members, nostr_group_id=GROUP_ID,
+              archived=False, muted=False):
         return NostrRoom.objects.create(
             room_id=room_id,
             wallet_hash=wallet_hash,
@@ -32,8 +33,15 @@ class GetGroupRecipientPubkeysTestCase(TestCase):
             members=members,
             nostr_group_id=nostr_group_id,
             archived=archived,
+            muted=muted,
             created_at=timezone.now(),
             updated_at=timezone.now(),
+        )
+
+    def _pubkey(self, wallet_hash, pubkey_hex):
+        return NostrPubkey.objects.create(
+            wallet_hash=wallet_hash,
+            pubkey_hex=pubkey_hex,
         )
 
     def _refresh(self):
@@ -135,6 +143,88 @@ class GetGroupRecipientPubkeysTestCase(TestCase):
         self.assertEqual(
             self.command.get_group_recipient_pubkeys(GROUP_ID, {MEMBER_A}),
             {MEMBER_A},
+        )
+
+    def test_muted_wallet_pubkeys_excluded_from_group_recipients(self):
+        self._room("wh_a", "room_a", [MEMBER_A, MEMBER_B], muted=True)
+        self._pubkey("wh_a", MEMBER_A)
+
+        self._refresh()
+
+        recipients = self.command.get_group_recipient_pubkeys(
+            GROUP_ID, {MEMBER_A, MEMBER_B},
+        )
+
+        # The muted row still contributes both members to the union, so only
+        # the muted wallet's own pubkey is dropped.
+        self.assertEqual(recipients, {MEMBER_B})
+
+    def test_mute_only_excludes_muted_wallet_across_shared_group(self):
+        self._room("wh_a", "room_a", [MEMBER_A, MEMBER_B], muted=True)
+        self._room("wh_b", "room_b", [MEMBER_A, MEMBER_B], muted=False)
+        self._pubkey("wh_a", MEMBER_A)
+        self._pubkey("wh_b", MEMBER_B)
+
+        self._refresh()
+
+        recipients = self.command.get_group_recipient_pubkeys(
+            GROUP_ID, {MEMBER_A, MEMBER_B},
+        )
+
+        self.assertEqual(recipients, {MEMBER_B})
+
+    def test_multiple_muted_wallets_in_one_group_are_excluded(self):
+        self._room("wh_a", "room_a", [MEMBER_A, MEMBER_B, MEMBER_C], muted=True)
+        self._room("wh_b", "room_b", [MEMBER_A, MEMBER_B, MEMBER_C], muted=True)
+        self._pubkey("wh_a", MEMBER_A)
+        self._pubkey("wh_b", MEMBER_B)
+
+        self._refresh()
+
+        recipients = self.command.get_group_recipient_pubkeys(
+            GROUP_ID, {MEMBER_A, MEMBER_B, MEMBER_C},
+        )
+
+        self.assertEqual(recipients, {MEMBER_C})
+
+    def test_unmuting_restores_recipients_after_refresh(self):
+        self._room("wh_a", "room_a", [MEMBER_A, MEMBER_B], muted=True)
+        self._pubkey("wh_a", MEMBER_A)
+        self._refresh()
+        self.assertEqual(
+            self.command.get_group_recipient_pubkeys(
+                GROUP_ID, {MEMBER_A, MEMBER_B},
+            ),
+            {MEMBER_B},
+        )
+
+        NostrRoom.objects.filter(room_id="room_a").update(muted=False)
+        self._refresh()
+
+        self.assertEqual(
+            self.command.get_group_recipient_pubkeys(
+                GROUP_ID, {MEMBER_A, MEMBER_B},
+            ),
+            {MEMBER_A, MEMBER_B},
+        )
+
+    def test_muted_wallet_without_registered_pubkey_is_ignored(self):
+        self._room("wh_a", "room_a", [MEMBER_A, MEMBER_B, MEMBER_C], muted=True)
+        self._pubkey("wh_a", MEMBER_A)
+        self._room("wh_b", "room_b", [MEMBER_A, MEMBER_B, MEMBER_C], muted=True)
+        # wh_b has no NostrPubkey registration; there is nothing to subtract
+        # for it, and it must not suppress wh_a's mute either.
+        self._pubkey("wh_c", MEMBER_C)
+
+        self._refresh()
+
+        recipients = self.command.get_group_recipient_pubkeys(
+            GROUP_ID, {MEMBER_A, MEMBER_B, MEMBER_C},
+        )
+
+        self.assertEqual(recipients, {MEMBER_B, MEMBER_C})
+        self.assertEqual(
+            self.command._group_muted_pubkeys[GROUP_ID], {MEMBER_A},
         )
 
     def test_non_list_members_skipped_with_warning(self):

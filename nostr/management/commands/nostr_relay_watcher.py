@@ -134,6 +134,8 @@ class Command(BaseCommand):
             pubkeys = set()
             for wallet_hash in wallets:
                 pubkeys |= pubkeys_by_wallet.get(wallet_hash, set())
+            # A muted wallet with no registered pubkey is not a push recipient
+            # to begin with, so dropping the group here is intentional.
             if pubkeys:
                 resolved[nostr_group_id] = pubkeys
         return resolved
