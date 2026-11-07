@@ -245,6 +245,32 @@ class ShowActiveStatusView(APIView):
         }, status=status.HTTP_200_OK)
 
 
+def _room_upsert_defaults(room_data):
+    """Column values for a room row pushed by a client.
+
+    ``owner`` and ``admins`` mirror MLS group roles and are optional: a device
+    with no local copy of the roles (fresh install, second device) omits them,
+    and omitting must not clear what the group already agreed on. Only keys
+    present in the payload are written.
+    """
+    defaults = {
+        'type': room_data['type'],
+        'name': room_data['name'],
+        'members': room_data['members'],
+        'nostr_group_id': room_data.get('nostr_group_id'),
+        'subject': room_data.get('subject'),
+        'avatar': room_data.get('avatar'),
+        'created_at': room_data['created_at'],
+        'updated_at': room_data['updated_at'],
+        'last_message_timestamp': room_data.get('last_message_timestamp'),
+        'archived': room_data.get('archived', False),
+    }
+    for field in ('owner', 'admins'):
+        if field in room_data:
+            defaults[field] = room_data[field]
+    return defaults
+
+
 class NostrRoomListView(APIView):
     """List rooms for a wallet or create a new room."""
     authentication_classes = [BitcoinCashOAuthAuthentication]
@@ -288,18 +314,7 @@ class NostrRoomListView(APIView):
         NostrRoom.objects.update_or_create(
             wallet_hash=wallet_hash,
             room_id=room_data['room_id'],
-            defaults={
-                'type': room_data['type'],
-                'name': room_data['name'],
-                'members': room_data['members'],
-                'nostr_group_id': room_data.get('nostr_group_id'),
-                'subject': room_data.get('subject'),
-                'avatar': room_data.get('avatar'),
-                'created_at': room_data['created_at'],
-                'updated_at': room_data['updated_at'],
-                'last_message_timestamp': room_data.get('last_message_timestamp'),
-                'archived': room_data.get('archived', False),
-            },
+            defaults=_room_upsert_defaults(room_data),
         )
         return Response({"status": "created"}, status=status.HTTP_201_CREATED)
 
@@ -330,7 +345,8 @@ class NostrRoomDetailView(APIView):
             )
 
         update_fields = {}
-        for field in ('name', 'subject', 'archived', 'muted', 'members', 'nostr_group_id'):
+        for field in ('name', 'subject', 'archived', 'muted', 'members', 'nostr_group_id',
+                      'owner', 'admins'):
             if field in serializer.validated_data:
                 update_fields[field] = serializer.validated_data[field]
         update_fields['updated_at'] = timezone.now()
@@ -387,18 +403,7 @@ class NostrRoomBatchSyncView(APIView):
                 NostrRoom.objects.update_or_create(
                     wallet_hash=wallet_hash,
                     room_id=room_data['room_id'],
-                    defaults={
-                        'type': room_data['type'],
-                        'name': room_data['name'],
-                        'members': room_data['members'],
-                        'nostr_group_id': room_data.get('nostr_group_id'),
-                        'subject': room_data.get('subject'),
-                        'avatar': room_data.get('avatar'),
-                        'created_at': room_data['created_at'],
-                        'updated_at': room_data['updated_at'],
-                        'last_message_timestamp': room_data.get('last_message_timestamp'),
-                        'archived': room_data.get('archived', False),
-                    },
+                    defaults=_room_upsert_defaults(room_data),
                 )
                 synced.append(room_data['room_id'])
 

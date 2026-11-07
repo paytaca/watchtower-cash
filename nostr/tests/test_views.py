@@ -30,7 +30,7 @@ class PubkeyLastOnlineViewTestCase(TestCase):
         response = self.client.post(
             self.url,
             {"pubkeys": [VALID_HEX]},
-            content_type="application/json",
+            format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data[VALID_HEX], None)
@@ -46,7 +46,7 @@ class PubkeyLastOnlineViewTestCase(TestCase):
         response = self.client.post(
             self.url,
             {"pubkeys": [VALID_HEX, OTHER_HEX]},
-            content_type="application/json",
+            format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         expected = now.isoformat().replace("+00:00", "Z")
@@ -64,7 +64,7 @@ class PubkeyLastOnlineViewTestCase(TestCase):
         response = self.client.post(
             self.url,
             {"pubkeys": [VALID_HEX]},
-            content_type="application/json",
+            format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         expected = now.isoformat().replace("+00:00", "Z")
@@ -79,7 +79,7 @@ class PubkeyLastOnlineViewTestCase(TestCase):
         response = self.client.post(
             self.url,
             {"pubkeys": [VALID_HEX]},
-            content_type="application/json",
+            format="json",
         )
         self.assertIsNone(response.data[VALID_HEX])
 
@@ -87,7 +87,7 @@ class PubkeyLastOnlineViewTestCase(TestCase):
         response = self.client.post(
             self.url,
             {"pubkeys": [VALID_HEX]},
-            content_type="application/json",
+            format="json",
         )
         self.assertIsInstance(response.data, dict)
 
@@ -102,7 +102,7 @@ class PubkeyLastOnlineViewTestCase(TestCase):
         response = self.client.post(
             self.url,
             {"pubkeys": [VALID_HEX]},
-            content_type="application/json",
+            format="json",
         )
         ts = response.data[VALID_HEX]
         self.assertIsInstance(ts, str)
@@ -113,7 +113,7 @@ class PubkeyLastOnlineViewTestCase(TestCase):
         response = self.client.post(
             self.url,
             {"pubkeys": []},
-            content_type="application/json",
+            format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
@@ -121,7 +121,7 @@ class PubkeyLastOnlineViewTestCase(TestCase):
         response = self.client.post(
             self.url,
             {"pubkeys": ["not-a-valid-hex"]},
-            content_type="application/json",
+            format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
@@ -129,7 +129,7 @@ class PubkeyLastOnlineViewTestCase(TestCase):
         response = self.client.post(
             self.url,
             {},
-            content_type="application/json",
+            format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
@@ -138,7 +138,7 @@ class PubkeyLastOnlineViewTestCase(TestCase):
         response = unauth_client.post(
             self.url,
             {"pubkeys": [VALID_HEX]},
-            content_type="application/json",
+            format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
@@ -154,7 +154,7 @@ class PubkeyLastOnlineViewTestCase(TestCase):
         response = self.client.post(
             self.url,
             {"pubkeys": [VALID_HEX]},
-            content_type="application/json",
+            format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIsNone(response.data[VALID_HEX])
@@ -171,7 +171,7 @@ class PubkeyLastOnlineViewTestCase(TestCase):
         response = self.client.post(
             self.url,
             {"pubkeys": [VALID_HEX]},
-            content_type="application/json",
+            format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         expected = now.isoformat().replace("+00:00", "Z")
@@ -195,7 +195,7 @@ class PubkeyLastOnlineViewTestCase(TestCase):
         response = self.client.post(
             self.url,
             {"pubkeys": [VALID_HEX, OTHER_HEX]},
-            content_type="application/json",
+            format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         expected = now.isoformat().replace("+00:00", "Z")
@@ -226,7 +226,7 @@ class PubkeyLastOnlineViewTestCase(TestCase):
         response = self.client.post(
             self.url,
             {"pubkeys": [VALID_HEX]},
-            content_type="application/json",
+            format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIsNone(response.data[VALID_HEX])
@@ -250,14 +250,14 @@ class ShowActiveStatusViewTestCase(TestCase):
         mock_user.is_anonymous = False
         self.client.force_authenticate(user=mock_user)
 
-    @patch("nostr.views.verify_wallet_ownership")
+    @patch("nostr.utils.auth.verify_wallet_ownership")
     def test_toggle_on(self, mock_verify):
         mock_verify.return_value = (True, None)
 
         response = self.client.post(
             self.url,
             {"wallet_hash": self.wallet_hash, "show_active_status": True},
-            content_type="application/json",
+            format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["status"], "updated")
@@ -266,7 +266,7 @@ class ShowActiveStatusViewTestCase(TestCase):
         self.nostr_pubkey.refresh_from_db()
         self.assertTrue(self.nostr_pubkey.show_active_status)
 
-    @patch("nostr.views.verify_wallet_ownership")
+    @patch("nostr.utils.auth.verify_wallet_ownership")
     def test_toggle_off(self, mock_verify):
         mock_verify.return_value = (True, None)
 
@@ -276,7 +276,7 @@ class ShowActiveStatusViewTestCase(TestCase):
         response = self.client.post(
             self.url,
             {"wallet_hash": self.wallet_hash, "show_active_status": False},
-            content_type="application/json",
+            format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["status"], "updated")
@@ -285,14 +285,14 @@ class ShowActiveStatusViewTestCase(TestCase):
         self.nostr_pubkey.refresh_from_db()
         self.assertFalse(self.nostr_pubkey.show_active_status)
 
-    @patch("nostr.views.verify_wallet_ownership")
+    @patch("nostr.utils.auth.verify_wallet_ownership")
     def test_wallet_ownership_fails(self, mock_verify):
         mock_verify.return_value = (False, "Wallet does not belong to user")
 
         response = self.client.post(
             self.url,
             {"wallet_hash": self.wallet_hash, "show_active_status": True},
-            content_type="application/json",
+            format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
@@ -301,7 +301,7 @@ class ShowActiveStatusViewTestCase(TestCase):
         response = unauth_client.post(
             self.url,
             {"wallet_hash": self.wallet_hash, "show_active_status": True},
-            content_type="application/json",
+            format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
@@ -309,7 +309,7 @@ class ShowActiveStatusViewTestCase(TestCase):
         response = self.client.post(
             self.url,
             {"show_active_status": True},
-            content_type="application/json",
+            format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
@@ -317,7 +317,7 @@ class ShowActiveStatusViewTestCase(TestCase):
         response = self.client.post(
             self.url,
             {"wallet_hash": self.wallet_hash},
-            content_type="application/json",
+            format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
@@ -348,7 +348,7 @@ class NostrRoomListViewTestCase(TestCase):
         mock_user.is_anonymous = False
         self.client.force_authenticate(user=mock_user)
 
-    @patch("nostr.views.verify_wallet_ownership")
+    @patch("nostr.utils.auth.verify_wallet_ownership")
     def test_list_rooms(self, mock_verify):
         mock_verify.return_value = (True, None)
         NostrRoom.objects.create(
@@ -369,13 +369,13 @@ class NostrRoomListViewTestCase(TestCase):
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
-    @patch("nostr.views.verify_wallet_ownership")
+    @patch("nostr.utils.auth.verify_wallet_ownership")
     def test_list_rooms_ownership_fails(self, mock_verify):
         mock_verify.return_value = (False, "Wallet does not belong to user")
         response = self.client.get(self.url, {"wallet_hash": self.wallet_hash})
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
-    @patch("nostr.views.verify_wallet_ownership")
+    @patch("nostr.utils.auth.verify_wallet_ownership")
     def test_create_room(self, mock_verify):
         mock_verify.return_value = (True, None)
         now = timezone.now()
@@ -389,7 +389,7 @@ class NostrRoomListViewTestCase(TestCase):
                 "created_at": now.isoformat(),
                 "updated_at": now.isoformat(),
             },
-        }, content_type="application/json")
+        }, format="json")
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertTrue(
             NostrRoom.objects.filter(
@@ -399,8 +399,68 @@ class NostrRoomListViewTestCase(TestCase):
 
     def test_create_room_unauthenticated(self):
         unauth_client = APIClient()
-        response = unauth_client.post(self.url, {}, content_type="application/json")
+        response = unauth_client.post(self.url, {}, format="json")
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    @patch("nostr.utils.auth.verify_wallet_ownership")
+    def test_create_room_persists_roles(self, mock_verify):
+        mock_verify.return_value = (True, None)
+        now = timezone.now()
+        response = self.client.post(self.url, {
+            "wallet_hash": self.wallet_hash,
+            "room": {
+                "room_id": "roles_room",
+                "type": "group",
+                "name": "Roles Room",
+                "members": [VALID_HEX, OTHER_HEX],
+                "owner": VALID_HEX.upper(),
+                "admins": [OTHER_HEX],
+                "created_at": now.isoformat(),
+                "updated_at": now.isoformat(),
+            },
+        }, format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        room = NostrRoom.objects.get(
+            wallet_hash=self.wallet_hash, room_id="roles_room"
+        )
+        self.assertEqual(room.owner, VALID_HEX)
+        self.assertEqual(room.admins, [OTHER_HEX])
+
+    @patch("nostr.utils.auth.verify_wallet_ownership")
+    def test_create_room_rejects_malformed_owner(self, mock_verify):
+        mock_verify.return_value = (True, None)
+        now = timezone.now()
+        response = self.client.post(self.url, {
+            "wallet_hash": self.wallet_hash,
+            "room": {
+                "room_id": "bad_roles_room",
+                "type": "group",
+                "name": "Bad Roles",
+                "members": [VALID_HEX],
+                "owner": "not-a-pubkey",
+                "created_at": now.isoformat(),
+                "updated_at": now.isoformat(),
+            },
+        }, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(
+            NostrRoom.objects.filter(room_id="bad_roles_room").exists()
+        )
+
+    @patch("nostr.utils.auth.verify_wallet_ownership")
+    def test_list_rooms_returns_roles(self, mock_verify):
+        mock_verify.return_value = (True, None)
+        NostrRoom.objects.filter(
+            wallet_hash=self.wallet_hash, room_id=self.room_id,
+        ).update(owner=VALID_HEX, admins=[OTHER_HEX])
+
+        response = self.client.get(self.url, {"wallet_hash": self.wallet_hash})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        room = next(
+            r for r in response.data["rooms"] if r["room_id"] == self.room_id
+        )
+        self.assertEqual(room["owner"], VALID_HEX)
+        self.assertEqual(room["admins"], [OTHER_HEX])
 
 
 class NostrRoomDetailViewTestCase(TestCase):
@@ -427,46 +487,99 @@ class NostrRoomDetailViewTestCase(TestCase):
         mock_user.is_anonymous = False
         self.client.force_authenticate(user=mock_user)
 
-    @patch("nostr.views.verify_wallet_ownership")
+    @patch("nostr.utils.auth.verify_wallet_ownership")
     def test_update_room_name(self, mock_verify):
         mock_verify.return_value = (True, None)
         response = self.client.patch(self.url, {
             "wallet_hash": self.wallet_hash,
             "name": "Updated Name",
-        }, content_type="application/json")
+        }, format="json")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.room.refresh_from_db()
         self.assertEqual(self.room.name, "Updated Name")
 
-    @patch("nostr.views.verify_wallet_ownership")
+    @patch("nostr.utils.auth.verify_wallet_ownership")
     def test_update_room_archived(self, mock_verify):
         mock_verify.return_value = (True, None)
         response = self.client.patch(self.url, {
             "wallet_hash": self.wallet_hash,
             "archived": True,
-        }, content_type="application/json")
+        }, format="json")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.room.refresh_from_db()
         self.assertTrue(self.room.archived)
 
-    @patch("nostr.views.verify_wallet_ownership")
+    @patch("nostr.utils.auth.verify_wallet_ownership")
+    def test_update_room_roles(self, mock_verify):
+        mock_verify.return_value = (True, None)
+        response = self.client.patch(self.url, {
+            "wallet_hash": self.wallet_hash,
+            "owner": VALID_HEX,
+            "admins": [OTHER_HEX.upper()],
+        }, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.room.refresh_from_db()
+        self.assertEqual(self.room.owner, VALID_HEX)
+        self.assertEqual(self.room.admins, [OTHER_HEX])
+
+    @patch("nostr.utils.auth.verify_wallet_ownership")
+    def test_update_room_clears_owner(self, mock_verify):
+        mock_verify.return_value = (True, None)
+        NostrRoom.objects.filter(pk=self.room.pk).update(
+            owner=VALID_HEX, admins=[OTHER_HEX],
+        )
+        response = self.client.patch(self.url, {
+            "wallet_hash": self.wallet_hash,
+            "owner": None,
+            "admins": [],
+        }, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.room.refresh_from_db()
+        self.assertIsNone(self.room.owner)
+        self.assertEqual(self.room.admins, [])
+
+    @patch("nostr.utils.auth.verify_wallet_ownership")
+    def test_update_room_rejects_malformed_admin(self, mock_verify):
+        mock_verify.return_value = (True, None)
+        response = self.client.patch(self.url, {
+            "wallet_hash": self.wallet_hash,
+            "admins": ["zz" * 32],
+        }, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    @patch("nostr.utils.auth.verify_wallet_ownership")
+    def test_update_room_without_roles_keeps_them(self, mock_verify):
+        mock_verify.return_value = (True, None)
+        NostrRoom.objects.filter(pk=self.room.pk).update(
+            owner=VALID_HEX, admins=[OTHER_HEX],
+        )
+        response = self.client.patch(self.url, {
+            "wallet_hash": self.wallet_hash,
+            "name": "Renamed",
+        }, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.room.refresh_from_db()
+        self.assertEqual(self.room.owner, VALID_HEX)
+        self.assertEqual(self.room.admins, [OTHER_HEX])
+
+    @patch("nostr.utils.auth.verify_wallet_ownership")
     def test_delete_room(self, mock_verify):
         mock_verify.return_value = (True, None)
         response = self.client.delete(self.url, {
             "wallet_hash": self.wallet_hash,
-        }, content_type="application/json")
+        }, format="json")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertFalse(
             NostrRoom.objects.filter(room_id=self.room_id).exists()
         )
 
-    @patch("nostr.views.verify_wallet_ownership")
+    @patch("nostr.utils.auth.verify_wallet_ownership")
     def test_delete_room_not_found(self, mock_verify):
         mock_verify.return_value = (True, None)
         url = "/api/nostr/rooms/nonexistent/"
         response = self.client.delete(url, {
             "wallet_hash": self.wallet_hash,
-        }, content_type="application/json")
+        }, format="json")
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
 
@@ -484,7 +597,7 @@ class NostrRoomBatchSyncViewTestCase(TestCase):
         mock_user.is_anonymous = False
         self.client.force_authenticate(user=mock_user)
 
-    @patch("nostr.views.verify_wallet_ownership")
+    @patch("nostr.utils.auth.verify_wallet_ownership")
     def test_batch_sync(self, mock_verify):
         mock_verify.return_value = (True, None)
         now = timezone.now()
@@ -509,12 +622,75 @@ class NostrRoomBatchSyncViewTestCase(TestCase):
         response = self.client.post(self.url, {
             "wallet_hash": self.wallet_hash,
             "rooms": rooms_data,
-        }, content_type="application/json")
+        }, format="json")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data["rooms"]), 2)
         self.assertEqual(
             NostrRoom.objects.filter(wallet_hash=self.wallet_hash).count(), 2
         )
+
+    @patch("nostr.utils.auth.verify_wallet_ownership")
+    def test_batch_sync_persists_roles(self, mock_verify):
+        mock_verify.return_value = (True, None)
+        now = timezone.now()
+        response = self.client.post(self.url, {
+            "wallet_hash": self.wallet_hash,
+            "rooms": [{
+                "room_id": "roles_room",
+                "type": "group",
+                "name": "Roles",
+                "members": [VALID_HEX, OTHER_HEX],
+                "owner": VALID_HEX,
+                "admins": [OTHER_HEX],
+                "created_at": now.isoformat(),
+                "updated_at": now.isoformat(),
+            }],
+        }, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        room = NostrRoom.objects.get(
+            wallet_hash=self.wallet_hash, room_id="roles_room"
+        )
+        self.assertEqual(room.owner, VALID_HEX)
+        self.assertEqual(room.admins, [OTHER_HEX])
+
+    @patch("nostr.utils.auth.verify_wallet_ownership")
+    def test_batch_sync_without_roles_keeps_stored_roles(self, mock_verify):
+        """A device with no local role copy must not clear the server's.
+
+        Fresh installs push their whole room list without ``owner``/``admins``
+        and would otherwise erase what the group already agreed on.
+        """
+        mock_verify.return_value = (True, None)
+        now = timezone.now()
+        NostrRoom.objects.create(
+            room_id="roles_room",
+            wallet_hash=self.wallet_hash,
+            type="group",
+            name="Roles",
+            members=[VALID_HEX, OTHER_HEX],
+            owner=VALID_HEX,
+            admins=[OTHER_HEX],
+            created_at=now,
+            updated_at=now,
+        )
+        response = self.client.post(self.url, {
+            "wallet_hash": self.wallet_hash,
+            "rooms": [{
+                "room_id": "roles_room",
+                "type": "group",
+                "name": "Roles renamed",
+                "members": [VALID_HEX, OTHER_HEX],
+                "created_at": now.isoformat(),
+                "updated_at": now.isoformat(),
+            }],
+        }, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        room = NostrRoom.objects.get(
+            wallet_hash=self.wallet_hash, room_id="roles_room"
+        )
+        self.assertEqual(room.name, "Roles renamed")
+        self.assertEqual(room.owner, VALID_HEX)
+        self.assertEqual(room.admins, [OTHER_HEX])
 
 
 class NostrRoomTouchViewTestCase(TestCase):
@@ -541,35 +717,35 @@ class NostrRoomTouchViewTestCase(TestCase):
         mock_user.is_anonymous = False
         self.client.force_authenticate(user=mock_user)
 
-    @patch("nostr.views.verify_wallet_ownership")
+    @patch("nostr.utils.auth.verify_wallet_ownership")
     def test_touch_with_timestamp(self, mock_verify):
         mock_verify.return_value = (True, None)
         ts = timezone.now()
         response = self.client.post(self.url, {
             "wallet_hash": self.wallet_hash,
             "timestamp": ts.isoformat(),
-        }, content_type="application/json")
+        }, format="json")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.room.refresh_from_db()
         self.assertIsNotNone(self.room.last_message_timestamp)
 
-    @patch("nostr.views.verify_wallet_ownership")
+    @patch("nostr.utils.auth.verify_wallet_ownership")
     def test_touch_without_timestamp(self, mock_verify):
         mock_verify.return_value = (True, None)
         response = self.client.post(self.url, {
             "wallet_hash": self.wallet_hash,
-        }, content_type="application/json")
+        }, format="json")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.room.refresh_from_db()
         self.assertIsNotNone(self.room.last_message_timestamp)
 
-    @patch("nostr.views.verify_wallet_ownership")
+    @patch("nostr.utils.auth.verify_wallet_ownership")
     def test_touch_room_not_found(self, mock_verify):
         mock_verify.return_value = (True, None)
         url = "/api/nostr/rooms/nonexistent/touch/"
         response = self.client.post(url, {
             "wallet_hash": self.wallet_hash,
-        }, content_type="application/json")
+        }, format="json")
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
 
@@ -593,7 +769,7 @@ class NostrBlockListViewTestCase(TestCase):
         mock_user.is_anonymous = False
         self.client.force_authenticate(user=mock_user)
 
-    @patch("nostr.views.verify_wallet_ownership")
+    @patch("nostr.utils.auth.verify_wallet_ownership")
     def test_list_blocks(self, mock_verify):
         mock_verify.return_value = (True, None)
         response = self.client.get(self.url, {"wallet_hash": self.wallet_hash})
@@ -620,13 +796,13 @@ class NostrBlockContactViewTestCase(TestCase):
         mock_user.is_anonymous = False
         self.client.force_authenticate(user=mock_user)
 
-    @patch("nostr.views.verify_wallet_ownership")
+    @patch("nostr.utils.auth.verify_wallet_ownership")
     def test_block_contact(self, mock_verify):
         mock_verify.return_value = (True, None)
         response = self.client.post(self.url, {
             "wallet_hash": self.wallet_hash,
             "pub_key_hex": VALID_HEX,
-        }, content_type="application/json")
+        }, format="json")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertTrue(
             NostrBlockedContact.objects.filter(
@@ -634,7 +810,7 @@ class NostrBlockContactViewTestCase(TestCase):
             ).exists()
         )
 
-    @patch("nostr.views.verify_wallet_ownership")
+    @patch("nostr.utils.auth.verify_wallet_ownership")
     def test_unblock_contact(self, mock_verify):
         mock_verify.return_value = (True, None)
         NostrBlockedContact.objects.create(
@@ -643,7 +819,7 @@ class NostrBlockContactViewTestCase(TestCase):
         url = f"/api/nostr/blocks/contacts/{VALID_HEX}/"
         response = self.client.delete(url, {
             "wallet_hash": self.wallet_hash,
-        }, content_type="application/json")
+        }, format="json")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertFalse(
             NostrBlockedContact.objects.filter(
@@ -651,13 +827,13 @@ class NostrBlockContactViewTestCase(TestCase):
             ).exists()
         )
 
-    @patch("nostr.views.verify_wallet_ownership")
+    @patch("nostr.utils.auth.verify_wallet_ownership")
     def test_unblock_contact_not_found(self, mock_verify):
         mock_verify.return_value = (True, None)
         url = f"/api/nostr/blocks/contacts/{VALID_HEX}/"
         response = self.client.delete(url, {
             "wallet_hash": self.wallet_hash,
-        }, content_type="application/json")
+        }, format="json")
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
 
@@ -675,13 +851,13 @@ class NostrBlockGroupViewTestCase(TestCase):
         mock_user.is_anonymous = False
         self.client.force_authenticate(user=mock_user)
 
-    @patch("nostr.views.verify_wallet_ownership")
+    @patch("nostr.utils.auth.verify_wallet_ownership")
     def test_block_group(self, mock_verify):
         mock_verify.return_value = (True, None)
         response = self.client.post(self.url, {
             "wallet_hash": self.wallet_hash,
             "room_id": "group_123",
-        }, content_type="application/json")
+        }, format="json")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertTrue(
             NostrBlockedGroup.objects.filter(
@@ -689,7 +865,7 @@ class NostrBlockGroupViewTestCase(TestCase):
             ).exists()
         )
 
-    @patch("nostr.views.verify_wallet_ownership")
+    @patch("nostr.utils.auth.verify_wallet_ownership")
     def test_unblock_group(self, mock_verify):
         mock_verify.return_value = (True, None)
         NostrBlockedGroup.objects.create(
@@ -698,7 +874,7 @@ class NostrBlockGroupViewTestCase(TestCase):
         url = "/api/nostr/blocks/groups/group_123/"
         response = self.client.delete(url, {
             "wallet_hash": self.wallet_hash,
-        }, content_type="application/json")
+        }, format="json")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertFalse(
             NostrBlockedGroup.objects.filter(
@@ -723,7 +899,7 @@ class NostrRoomGroupIdTestCase(TestCase):
         mock_user.is_anonymous = False
         self.client.force_authenticate(user=mock_user)
 
-    @patch("nostr.views.verify_wallet_ownership")
+    @patch("nostr.utils.auth.verify_wallet_ownership")
     def test_create_room_persists_group_id(self, mock_verify):
         mock_verify.return_value = (True, None)
         now = timezone.now()
@@ -738,12 +914,12 @@ class NostrRoomGroupIdTestCase(TestCase):
                 "created_at": now.isoformat(),
                 "updated_at": now.isoformat(),
             },
-        }, content_type="application/json")
+        }, format="json")
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         room = NostrRoom.objects.get(wallet_hash=self.wallet_hash, room_id="mls_room_1")
         self.assertEqual(room.nostr_group_id, OTHER_HEX)
 
-    @patch("nostr.views.verify_wallet_ownership")
+    @patch("nostr.utils.auth.verify_wallet_ownership")
     def test_patch_room_updates_group_id(self, mock_verify):
         mock_verify.return_value = (True, None)
         room = NostrRoom.objects.create(
@@ -758,12 +934,12 @@ class NostrRoomGroupIdTestCase(TestCase):
         response = self.client.patch(f"/api/nostr/rooms/{room.room_id}/", {
             "wallet_hash": self.wallet_hash,
             "nostr_group_id": OTHER_HEX,
-        }, content_type="application/json")
+        }, format="json")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         room.refresh_from_db()
         self.assertEqual(room.nostr_group_id, OTHER_HEX)
 
-    @patch("nostr.views.verify_wallet_ownership")
+    @patch("nostr.utils.auth.verify_wallet_ownership")
     def test_batch_sync_persists_group_id(self, mock_verify):
         mock_verify.return_value = (True, None)
         now = timezone.now()
@@ -778,12 +954,12 @@ class NostrRoomGroupIdTestCase(TestCase):
                 "created_at": now.isoformat(),
                 "updated_at": now.isoformat(),
             }],
-        }, content_type="application/json")
+        }, format="json")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         room = NostrRoom.objects.get(wallet_hash=self.wallet_hash, room_id="mls_room_3")
         self.assertEqual(room.nostr_group_id, OTHER_HEX)
 
-    @patch("nostr.views.verify_wallet_ownership")
+    @patch("nostr.utils.auth.verify_wallet_ownership")
     def test_list_rooms_includes_group_id(self, mock_verify):
         mock_verify.return_value = (True, None)
         NostrRoom.objects.create(
@@ -801,7 +977,7 @@ class NostrRoomGroupIdTestCase(TestCase):
         rooms = {r["room_id"]: r for r in response.data["rooms"]}
         self.assertEqual(rooms["mls_room_4"]["nostr_group_id"], OTHER_HEX)
 
-    @patch("nostr.views.verify_wallet_ownership")
+    @patch("nostr.utils.auth.verify_wallet_ownership")
     def test_create_room_uppercase_group_id_lower(self, mock_verify):
         mock_verify.return_value = (True, None)
         now = timezone.now()
@@ -816,14 +992,14 @@ class NostrRoomGroupIdTestCase(TestCase):
                 "created_at": now.isoformat(),
                 "updated_at": now.isoformat(),
             },
-        }, content_type="application/json")
+        }, format="json")
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         room = NostrRoom.objects.get(
             wallet_hash=self.wallet_hash, room_id="mls_room_upper",
         )
         self.assertEqual(room.nostr_group_id, UPPERCASE_GROUP_ID.lower())
 
-    @patch("nostr.views.verify_wallet_ownership")
+    @patch("nostr.utils.auth.verify_wallet_ownership")
     def test_create_room_invalid_group_id_rejected(self, mock_verify):
         mock_verify.return_value = (True, None)
         now = timezone.now()
@@ -838,11 +1014,11 @@ class NostrRoomGroupIdTestCase(TestCase):
                 "created_at": now.isoformat(),
                 "updated_at": now.isoformat(),
             },
-        }, content_type="application/json")
+        }, format="json")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertFalse(NostrRoom.objects.filter(room_id="mls_room_bad").exists())
 
-    @patch("nostr.views.verify_wallet_ownership")
+    @patch("nostr.utils.auth.verify_wallet_ownership")
     def test_patch_uppercase_group_id_lower(self, mock_verify):
         mock_verify.return_value = (True, None)
         room = NostrRoom.objects.create(
@@ -857,12 +1033,12 @@ class NostrRoomGroupIdTestCase(TestCase):
         response = self.client.patch(f"/api/nostr/rooms/{room.room_id}/", {
             "wallet_hash": self.wallet_hash,
             "nostr_group_id": UPPERCASE_GROUP_ID,
-        }, content_type="application/json")
+        }, format="json")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         room.refresh_from_db()
         self.assertEqual(room.nostr_group_id, UPPERCASE_GROUP_ID.lower())
 
-    @patch("nostr.views.verify_wallet_ownership")
+    @patch("nostr.utils.auth.verify_wallet_ownership")
     def test_patch_invalid_group_id_rejected(self, mock_verify):
         mock_verify.return_value = (True, None)
         room = NostrRoom.objects.create(
@@ -878,12 +1054,12 @@ class NostrRoomGroupIdTestCase(TestCase):
         response = self.client.patch(f"/api/nostr/rooms/{room.room_id}/", {
             "wallet_hash": self.wallet_hash,
             "nostr_group_id": "too short",
-        }, content_type="application/json")
+        }, format="json")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         room.refresh_from_db()
         self.assertEqual(room.nostr_group_id, OTHER_HEX)
 
-    @patch("nostr.views.verify_wallet_ownership")
+    @patch("nostr.utils.auth.verify_wallet_ownership")
     def test_create_room_uppercase_member_lower(self, mock_verify):
         mock_verify.return_value = (True, None)
         now = timezone.now()
@@ -898,7 +1074,7 @@ class NostrRoomGroupIdTestCase(TestCase):
                 "created_at": now.isoformat(),
                 "updated_at": now.isoformat(),
             },
-        }, content_type="application/json")
+        }, format="json")
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         room = NostrRoom.objects.get(
             wallet_hash=self.wallet_hash, room_id="mls_room_member_upper",

@@ -103,10 +103,56 @@ class WalletHashSerializer(serializers.Serializer):
     wallet_hash = serializers.CharField(max_length=70)
 
 
-class RoomSerializer(serializers.ModelSerializer):
+class RoomRolesValidationMixin:
+    """Validates the MLS role mirror (``owner`` / ``admins``).
+
+    Roles are claimed by the client and the server does not verify the claim:
+    clients authorize role changes against the MLS ratchet tree, so a forged
+    value here cannot grant control of a group.
+    """
+
+    def validate_owner(self, value):
+        if value is None:
+            return value
+        if not re.match(r'^[0-9a-fA-F]{64}$', value):
+            raise serializers.ValidationError(
+                "owner must be a 64-character hex string."
+            )
+        return value.lower()
+
+    def validate_admins(self, value):
+        if value is None:
+            return value
+        cleaned = []
+        for admin in value:
+            if not isinstance(admin, str):
+                raise serializers.ValidationError(
+                    f"admin {admin!r} is not a string."
+                )
+            if not re.match(r'^[0-9a-fA-F]{64}$', admin):
+                raise serializers.ValidationError(
+                    f"admin '{admin}' is not a 64-character hex string."
+                )
+            cleaned.append(admin.lower())
+        # Order-preserving dedupe: the client resends the full list on every
+        # role change and a promotion may be announced twice.
+        return list(dict.fromkeys(cleaned))
+
+
+class RoomSerializer(RoomRolesValidationMixin, serializers.ModelSerializer):
     nostr_group_id = serializers.CharField(
         max_length=64,
         allow_null=True,
+        required=False,
+    )
+    owner = serializers.CharField(
+        max_length=64,
+        allow_null=True,
+        required=False,
+    )
+    admins = serializers.ListField(
+        child=serializers.CharField(max_length=64),
+        allow_empty=True,
         required=False,
     )
 
@@ -114,7 +160,8 @@ class RoomSerializer(serializers.ModelSerializer):
         model = NostrRoom
         fields = ('room_id', 'type', 'name', 'members', 'nostr_group_id', 'subject',
                   'avatar', 'created_at', 'updated_at',
-                  'last_message_timestamp', 'archived', 'muted')
+                  'last_message_timestamp', 'archived', 'muted', 'owner',
+                  'admins')
 
     def validate_nostr_group_id(self, value):
         if value is None:
@@ -147,7 +194,7 @@ class RoomCreateSerializer(serializers.Serializer):
     room = RoomSerializer()
 
 
-class RoomUpdateSerializer(serializers.Serializer):
+class RoomUpdateSerializer(RoomRolesValidationMixin, serializers.Serializer):
     wallet_hash = serializers.CharField(max_length=70)
     name = serializers.CharField(max_length=255, required=False)
     subject = serializers.CharField(allow_null=True, required=False)
@@ -157,6 +204,13 @@ class RoomUpdateSerializer(serializers.Serializer):
     members = serializers.ListField(
         child=serializers.CharField(max_length=64),
         allow_empty=True,
+        required=False,
+    )
+    owner = serializers.CharField(max_length=64, allow_null=True, required=False)
+    admins = serializers.ListField(
+        child=serializers.CharField(max_length=64),
+        allow_empty=True,
+        allow_null=True,
         required=False,
     )
 

@@ -1,5 +1,9 @@
 from django.test import TestCase
-from nostr.serializers import PubkeyLastOnlineSerializer, MAX_PUBKEYS, RoomUpdateSerializer
+from nostr.serializers import (
+    PubkeyLastOnlineSerializer,
+    MAX_PUBKEYS,
+    RoomUpdateSerializer,
+)
 
 
 VALID_HEX = "aabbccdd0011eeffaabbccdd0011eeffaabbccdd0011eeffaabbccdd0011eeff"
@@ -78,4 +82,46 @@ class RoomUpdateSerializerTestCase(TestCase):
             "wallet_hash": "wh1",
             "members": ["x" * 65],
         })
+        self.assertFalse(serializer.is_valid())
+
+
+class RoomRolesSerializerTestCase(TestCase):
+    def test_owner_is_lowercased(self):
+        serializer = RoomUpdateSerializer(data={
+            "wallet_hash": "wh1",
+            "owner": VALID_HEX.upper(),
+        })
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertEqual(serializer.validated_data["owner"], VALID_HEX)
+
+    def test_owner_allows_null(self):
+        serializer = RoomUpdateSerializer(data={"wallet_hash": "wh1", "owner": None})
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertIsNone(serializer.validated_data["owner"])
+
+    def test_owner_must_be_hex(self):
+        serializer = RoomUpdateSerializer(data={"wallet_hash": "wh1", "owner": "abc"})
+        self.assertFalse(serializer.is_valid())
+
+    def test_admins_are_lowercased_and_deduped(self):
+        serializer = RoomUpdateSerializer(data={
+            "wallet_hash": "wh1",
+            "admins": [VALID_HEX.upper(), VALID_HEX, f"{1:064x}"],
+        })
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertEqual(
+            serializer.validated_data["admins"], [VALID_HEX, f"{1:064x}"]
+        )
+
+    def test_admins_accept_empty_list(self):
+        serializer = RoomUpdateSerializer(data={"wallet_hash": "wh1", "admins": []})
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertEqual(serializer.validated_data["admins"], [])
+
+    def test_admins_reject_non_hex_entries(self):
+        serializer = RoomUpdateSerializer(data={"wallet_hash": "wh1", "admins": ["nope"]})
+        self.assertFalse(serializer.is_valid())
+
+    def test_admins_reject_non_string_entries(self):
+        serializer = RoomUpdateSerializer(data={"wallet_hash": "wh1", "admins": [1]})
         self.assertFalse(serializer.is_valid())

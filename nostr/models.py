@@ -49,6 +49,12 @@ class NostrRoom(models.Model):
     archived = models.BooleanField(default=False)
     # The wallet muted this room: group pushes for it are skipped.
     muted = models.BooleanField(default=False)
+    # Group roles, mirrored from the MLS group state. The MLS ratchet tree is
+    # the authority (clients authorize role changes against it); these columns
+    # only seed a device that has no local copy, e.g. a fresh install or a
+    # second device, so it does not have to wait for a role broadcast.
+    owner = models.CharField(max_length=64, null=True, blank=True)
+    admins = JSONField(default=list, blank=True)
 
     class Meta:
         unique_together = ('wallet_hash', 'room_id')
