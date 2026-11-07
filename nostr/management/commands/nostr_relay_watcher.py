@@ -346,6 +346,14 @@ class Command(BaseCommand):
         client adds a ``sender`` tag with its chat pubkey instead. Events from
         clients that do not tag themselves fall back to notifying every member
         (previous behaviour), never to notifying nobody.
+
+        Trust model: the ``sender`` tag is unauthenticated. The watcher cannot
+        verify it, so clients are trusted to publish their own chat pubkey and
+        MLS group membership is the authentication gate. The blast radius is
+        one push: ``recipients`` is already this group's registered members, so
+        the tag can only remove one of them from this one event's fan-out — it
+        cannot mute anyone for any other event, and an unrelated pubkey is a
+        no-op.
         """
         h_tag = None
         sender_pubkey = None
