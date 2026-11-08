@@ -3,6 +3,7 @@ from rest_framework import serializers
 from .models import NostrPubkey, NostrRoom, NostrBlockedContact, NostrBlockedGroup
 from main.utils.cache import set_last_active
 from nostr.utils.websocket import send_last_active_update
+from nostr.utils.rooms import room_push_token
 
 
 import re
@@ -161,13 +162,20 @@ class RoomSerializer(RoomRolesValidationMixin, serializers.ModelSerializer):
         allow_empty=True,
         required=False,
     )
+    # Read-only, derived from room_id. Clients put it on outbound gift-wraps so
+    # the relay watcher can skip pushes for a muted conversation without the
+    # relay learning the room id.
+    push_token = serializers.SerializerMethodField()
 
     class Meta:
         model = NostrRoom
         fields = ('room_id', 'type', 'name', 'members', 'nostr_group_id', 'subject',
                   'avatar', 'created_at', 'updated_at',
                   'last_message_timestamp', 'archived', 'muted', 'owner',
-                  'admins')
+                  'admins', 'push_token')
+
+    def get_push_token(self, room):
+        return room_push_token(room.room_id)
 
     def validate_nostr_group_id(self, value):
         if value is None:

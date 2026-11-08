@@ -5,8 +5,14 @@ import websocket
 from django.utils import timezone
 from django.core.management.base import BaseCommand
 from django.db import connection
+from django.db.models import Q
 from django.conf import settings
 from nostr.utils import send_nostr_push_notification
+from nostr.utils.rooms import (
+    ROOM_CACHE_DIRTY_KEY,
+    ROOM_PUSH_TOKEN_TAG,
+    room_push_token,
+)
 from nostr.models import NostrPubkey, NostrRoom
 
 
@@ -70,29 +76,42 @@ class Command(BaseCommand):
         return result is None  # None means key already existed → already seen
 
     def _refresh_group_cache(self):
-        """Rebuild the in-memory ``nostr_group_id -> {member pubkey hex}`` lookup.
+        """Rebuild the in-memory room lookups used on the push hot path.
 
-        Called every ``PUBKEY_REFRESH_INTERVAL`` seconds so the hot path never
-        hits Postgres per event. Archived rooms are excluded so that a wallet
-        deleting a group stops forcing pushes immediately. Membership of each
-        room row is unioned because each member has their own row keyed by
-        ``room_id`` (which is per-wallet) but shared ``nostr_group_id``.
+        Two mappings are built:
+
+        * ``nostr_group_id -> {member pubkey hex}`` for kind-445 group events,
+          unioned across room rows because each member has their own row keyed
+          by ``room_id`` but shared ``nostr_group_id``.
+        * ``room push token -> {muted wallet pubkey hex}`` for gift-wrapped
+          DMs and legacy group messages, where the relay cannot see the room.
+
+        Archived rows keep contributing their member list: every row carries the
+        full membership, so dropping the archived wallet's row would not remove
+        them from the union — their pubkeys still arrive through the other
+        members' rows. Archiving silences the wallet (archived implies muted),
+        it does not rewrite group membership.
         """
         try:
             connection.ensure_connection()
-            rows = list(NostrRoom.objects.filter(
+            group_rows = list(NostrRoom.objects.filter(
                 nostr_group_id__isnull=False,
-                archived=False,
-            ).values_list('nostr_group_id', 'members', 'wallet_hash', 'muted'))
+            ).values_list('nostr_group_id', 'members', 'wallet_hash', 'muted', 'archived'))
+            muted_room_rows = list(
+                NostrRoom.objects.filter(
+                    Q(muted=True) | Q(archived=True),
+                ).values_list('room_id', 'wallet_hash')
+            )
         except Exception as e:
-            logger.error(f"Failed to refresh group cache: {e}")
+            logger.error(f"Failed to refresh room caches: {e}")
             self._group_members_cache = {}
             self._group_muted_pubkeys = {}
+            self._room_muted_pubkeys = {}
             return
 
         new_cache = {}
         muted_wallets = {}
-        for nostr_group_id, members, wallet_hash, muted in rows:
+        for nostr_group_id, members, wallet_hash, muted, archived in group_rows:
             if not isinstance(members, list):
                 logger.warning(
                     f"NostrRoom nostr_group_id={nostr_group_id[:16]}... has "
@@ -100,22 +119,31 @@ class Command(BaseCommand):
                     "skipping from group cache"
                 )
                 continue
-            if muted and wallet_hash:
+            if (muted or archived) and wallet_hash:
                 muted_wallets.setdefault(nostr_group_id, set()).add(wallet_hash)
             recipients = new_cache.setdefault(nostr_group_id, set())
             for m in members:
                 if isinstance(m, str):
                     recipients.add(m)
+
+        muted_room_wallets = {}
+        for room_id, wallet_hash in muted_room_rows:
+            if room_id and wallet_hash:
+                token = room_push_token(room_id)
+                muted_room_wallets.setdefault(token, set()).add(wallet_hash)
+
         self._group_members_cache = new_cache
         self._group_muted_pubkeys = self._resolve_muted_pubkeys(muted_wallets)
+        self._room_muted_pubkeys = self._resolve_muted_pubkeys(muted_room_wallets)
 
     def _resolve_muted_pubkeys(self, muted_wallets):
-        """Map ``nostr_group_id`` -> pubkeys of the wallets that muted it.
+        """Map each muted key -> pubkeys of the wallets that muted it.
 
-        Room rows store the full member list, so a muted row still contributes
-        every member to the group union — the mute has to be applied per
-        recipient instead. Each muted row is tied to a ``wallet_hash``; resolve
-        its registered pubkeys so those recipients (and only those) are skipped.
+        Room rows store the full member list, so a muted (or archived) row still
+        contributes every member to the group union — the mute has to be applied
+        per recipient instead. Each muted row is tied to a ``wallet_hash``;
+        resolve its registered pubkeys so those recipients (and only those) are
+        skipped.
         """
         if not muted_wallets:
             return {}
@@ -126,7 +154,7 @@ class Command(BaseCommand):
                 wallet_hash__in=all_hashes,
             ).values_list('wallet_hash', 'pubkey_hex')
         except Exception as e:
-            logger.error(f"Failed to resolve muted group pubkeys: {e}")
+            logger.error(f"Failed to resolve muted room pubkeys: {e}")
             return {}
 
         pubkeys_by_wallet = {}
@@ -134,14 +162,14 @@ class Command(BaseCommand):
             pubkeys_by_wallet.setdefault(wallet_hash, set()).add(pubkey_hex)
 
         resolved = {}
-        for nostr_group_id, wallets in muted_wallets.items():
+        for muted_key, wallets in muted_wallets.items():
             pubkeys = set()
             for wallet_hash in wallets:
                 pubkeys |= pubkeys_by_wallet.get(wallet_hash, set())
             # A muted wallet with no registered pubkey is not a push recipient
-            # to begin with, so dropping the group here is intentional.
+            # to begin with, so dropping the key here is intentional.
             if pubkeys:
-                resolved[nostr_group_id] = pubkeys
+                resolved[muted_key] = pubkeys
         return resolved
 
     def run_watcher(self, relay_url):
@@ -151,9 +179,13 @@ class Command(BaseCommand):
             logger.warning("REDISKV not configured — event deduplication disabled")
 
         # Prime the in-memory lookups once before opening the socket so the
-        # first few events don't hit the DB.
+        # first few events don't hit the DB. This unconditional refresh already
+        # covers room changes made while the watcher was down; a dirty flag left
+        # over from then may cause one redundant refresh in the loop, which is
+        # harmless and avoids racing a concurrent mute if we cleared it here.
         self._group_members_cache = {}
         self._group_muted_pubkeys = {}
+        self._room_muted_pubkeys = {}
         self._refresh_group_cache()
 
         pubkeys = set(self.get_registered_pubkeys())
@@ -188,13 +220,26 @@ class Command(BaseCommand):
 
         while True:
             try:
-                # Refresh the registered pubkeys and group cache periodically
+                # Refresh the registered pubkeys and room caches periodically
                 # so newly registered wallets and any room-list changes
-                # (members, archive) take effect without per-event DB queries.
-                if time.time() - last_pubkey_refresh > PUBKEY_REFRESH_INTERVAL:
+                # (members, mute, archive) take effect without per-event DB
+                # queries. A room update marks the cache dirty so a mute is not
+                # delayed until the next scheduled refresh.
+                dirty = False
+                if redis_client is not None:
+                    try:
+                        dirty = bool(redis_client.get(ROOM_CACHE_DIRTY_KEY))
+                    except Exception as e:
+                        logger.warning(f"Failed to read room cache dirty flag: {e}")
+                if dirty or time.time() - last_pubkey_refresh > PUBKEY_REFRESH_INTERVAL:
                     pubkeys = set(self.get_registered_pubkeys())
                     self._refresh_group_cache()
                     last_pubkey_refresh = time.time()
+                    if dirty:
+                        try:
+                            redis_client.delete(ROOM_CACHE_DIRTY_KEY)
+                        except Exception as e:
+                            logger.warning(f"Failed to clear room cache dirty flag: {e}")
 
                 # Receive with timeout so we can refresh pubkeys periodically
                 msg_raw = ws.recv()
@@ -245,19 +290,9 @@ class Command(BaseCommand):
                             event_tags, pubkeys
                         )
                     else:
-                        # Gift-wraps (kind 1059) address recipients via "p" tags.
-                        # Collect unique recipient pubkeys to avoid sending
-                        # duplicate notifications when a pubkey appears more than
-                        # once. Exclude self-sends (event pubkey == recipient).
-                        event_pubkey = event.get("pubkey", "")
-                        recipient_pubkeys = {
-                            tag[1]
-                            for tag in event_tags
-                            if isinstance(tag, list) and len(tag) >= 2
-                            and tag[0] == "p"
-                            and tag[1] in pubkeys
-                            and tag[1] != event_pubkey
-                        }
+                        recipient_pubkeys = self.get_gift_wrap_recipients(
+                            event_tags, event.get("pubkey", ""), pubkeys
+                        )
 
                     now = timezone.now()
 
@@ -336,6 +371,30 @@ class Command(BaseCommand):
         if muted:
             members = members - muted
         return members & registered_pubkeys
+
+    def get_gift_wrap_recipients(self, event_tags, event_pubkey, registered_pubkeys):
+        """Resolve recipients for a gift-wrapped DM or legacy group message.
+
+        Gift-wraps address recipients via ``p`` tags. A client that supports
+        muting also puts an opaque ``ROOM_PUSH_TOKEN_TAG`` on the outer wrap so
+        the watcher can subtract only the wallets that muted that conversation,
+        without learning the room id or its members from the relay.
+        """
+        recipients = set()
+        room_token = None
+        for tag in event_tags:
+            if not isinstance(tag, list) or len(tag) < 2:
+                continue
+            if tag[0] == "p":
+                if tag[1] in registered_pubkeys and tag[1] != event_pubkey:
+                    recipients.add(tag[1])
+            elif tag[0] == ROOM_PUSH_TOKEN_TAG and isinstance(tag[1], str):
+                room_token = tag[1]
+
+        muted = self._room_muted_pubkeys.get(room_token) if room_token else None
+        if muted:
+            recipients -= muted
+        return recipients
 
     def get_group_event_recipients(self, event_tags, registered_pubkeys):
         """Push recipients for a NIP-EE group event, minus whoever sent it.

@@ -4,6 +4,7 @@ from django.utils import timezone
 
 from nostr.management.commands.nostr_relay_watcher import Command
 from nostr.models import NostrPubkey, NostrRoom
+from nostr.utils.rooms import ROOM_PUSH_TOKEN_TAG, room_push_token
 
 
 GROUP_ID = "aa" * 32
@@ -101,23 +102,36 @@ class GetGroupRecipientPubkeysTestCase(TestCase):
 
         self.assertEqual(recipients, set())
 
-    def test_archived_rooms_excluded_from_cache(self):
-        self._room("wh_a", "room_a", [MEMBER_A], archived=False)
-        self._room("wh_a", "room_b", [MEMBER_B], archived=True)
+    def test_archived_wallet_excluded_but_membership_kept(self):
+        # Real group rows each carry the full member list, so the archived
+        # wallet's pubkey keeps arriving through the other member's row.
+        # Archiving must silence that wallet without truncating the union.
+        self._room("wh_a", "room_a", [MEMBER_A, MEMBER_B], archived=True)
+        self._room("wh_b", "room_b", [MEMBER_A, MEMBER_B])
+        self._pubkey("wh_a", MEMBER_A)
+        self._pubkey("wh_b", MEMBER_B)
 
         self._refresh()
 
+        self.assertEqual(
+            self.command._group_members_cache[GROUP_ID], {MEMBER_A, MEMBER_B},
+        )
         recipients = self.command.get_group_recipient_pubkeys(
             GROUP_ID, {MEMBER_A, MEMBER_B},
         )
-        self.assertEqual(recipients, {MEMBER_A})
+        self.assertEqual(recipients, {MEMBER_B})
 
     def test_archive_drop_takes_effect_after_refresh(self):
-        self._room("wh_a", "room_a", [MEMBER_A])
+        self._room("wh_a", "room_a", [MEMBER_A, MEMBER_B])
+        self._room("wh_b", "room_b", [MEMBER_A, MEMBER_B])
+        self._pubkey("wh_a", MEMBER_A)
+        self._pubkey("wh_b", MEMBER_B)
         self._refresh()
         self.assertEqual(
-            self.command.get_group_recipient_pubkeys(GROUP_ID, {MEMBER_A}),
-            {MEMBER_A},
+            self.command.get_group_recipient_pubkeys(
+                GROUP_ID, {MEMBER_A, MEMBER_B},
+            ),
+            {MEMBER_A, MEMBER_B},
         )
 
         NostrRoom.objects.filter(room_id="room_a").update(archived=True)
@@ -125,8 +139,10 @@ class GetGroupRecipientPubkeysTestCase(TestCase):
         self._refresh()
 
         self.assertEqual(
-            self.command.get_group_recipient_pubkeys(GROUP_ID, {MEMBER_A}),
-            set(),
+            self.command.get_group_recipient_pubkeys(
+                GROUP_ID, {MEMBER_A, MEMBER_B},
+            ),
+            {MEMBER_B},
         )
 
     def test_new_room_picks_up_after_refresh(self):
@@ -339,8 +355,152 @@ class GetGroupEventRecipientsTestCase(TestCase):
         # device that should get a push.
         self.assertEqual(recipients, {MEMBER_C})
 
+    def test_archived_wallet_is_excluded(self):
+        # Archiving implies muting: the wallet that archived the group must not
+        # receive pushes for it, while the other members still do.
+        NostrPubkey.objects.create(wallet_hash="wh_a", pubkey_hex=MEMBER_A)
+        NostrRoom.objects.filter(room_id="room_a").update(archived=True)
+        self.command._refresh_group_cache()
+
+        recipients = self.command.get_group_event_recipients(
+            [["h", GROUP_ID], ["sender", MEMBER_B]], self.registered,
+        )
+
+        self.assertEqual(recipients, {MEMBER_C})
+
     def test_missing_group_id_returns_empty(self):
         self.assertEqual(
             self.command.get_group_event_recipients([["sender", MEMBER_A]], self.registered),
             set(),
         )
+
+
+class GetGiftWrapRecipientsTestCase(TestCase):
+    """Mute filtering for gift-wrapped DMs and legacy group messages.
+
+    The relay cannot see the room on a NIP-17 gift-wrap, so the sender adds an
+    opaque room push token to the outer wrap. Only wallets that muted that room
+    lose the push."""
+
+    ROOM_ID = "dm-room-a-b"
+    EPHEMERAL_PUBKEY = "ee" * 32
+
+    def setUp(self):
+        self.command = Command()
+        self.command._group_members_cache = {}
+        self.command._group_muted_pubkeys = {}
+        self.command._room_muted_pubkeys = {}
+        self.token = room_push_token(self.ROOM_ID)
+        self.registered = {MEMBER_A, MEMBER_B}
+
+    def _room(self, wallet_hash, room_id=None, muted=False, archived=False):
+        return NostrRoom.objects.create(
+            room_id=room_id or self.ROOM_ID,
+            wallet_hash=wallet_hash,
+            type="private",
+            name="DM",
+            members=[MEMBER_A, MEMBER_B],
+            nostr_group_id=None,
+            archived=archived,
+            muted=muted,
+            created_at=timezone.now(),
+            updated_at=timezone.now(),
+        )
+
+    def _pubkey(self, wallet_hash, pubkey_hex):
+        return NostrPubkey.objects.create(
+            wallet_hash=wallet_hash,
+            pubkey_hex=pubkey_hex,
+        )
+
+    def _tags(self, token=None):
+        tags = [["p", MEMBER_A], ["p", MEMBER_B]]
+        if token:
+            tags.append([ROOM_PUSH_TOKEN_TAG, token])
+        return tags
+
+    def _recipients(self, token=None):
+        return self.command.get_gift_wrap_recipients(
+            self._tags(token), self.EPHEMERAL_PUBKEY, self.registered,
+        )
+
+    def test_muted_wallet_excluded_without_affecting_the_other_member(self):
+        self._pubkey("wh_a", MEMBER_A)
+        self._pubkey("wh_b", MEMBER_B)
+        self._room("wh_a", muted=True)
+        self._room("wh_b")
+
+        self.command._refresh_group_cache()
+
+        self.assertEqual(self._recipients(self.token), {MEMBER_B})
+
+    def test_unmuted_room_notifies_both_members(self):
+        self._pubkey("wh_a", MEMBER_A)
+        self._pubkey("wh_b", MEMBER_B)
+        self._room("wh_a")
+        self._room("wh_b")
+
+        self.command._refresh_group_cache()
+
+        self.assertEqual(self._recipients(self.token), {MEMBER_A, MEMBER_B})
+
+    def test_archived_room_is_treated_as_muted(self):
+        self._pubkey("wh_a", MEMBER_A)
+        self._pubkey("wh_b", MEMBER_B)
+        self._room("wh_a", archived=True)
+        self._room("wh_b")
+
+        self.command._refresh_group_cache()
+
+        self.assertEqual(self._recipients(self.token), {MEMBER_B})
+
+    def test_without_push_token_notifies_both_members(self):
+        self._pubkey("wh_a", MEMBER_A)
+        self._pubkey("wh_b", MEMBER_B)
+        self._room("wh_a", muted=True)
+        self._room("wh_b")
+
+        self.command._refresh_group_cache()
+
+        # Older clients do not send the tag; they keep the previous behaviour.
+        self.assertEqual(self._recipients(), {MEMBER_A, MEMBER_B})
+
+    def test_token_for_a_different_room_does_not_suppress(self):
+        self._pubkey("wh_a", MEMBER_A)
+        self._pubkey("wh_b", MEMBER_B)
+        self._room("wh_a", room_id="some-other-room", muted=True)
+        self._room("wh_b")
+
+        self.command._refresh_group_cache()
+
+        self.assertEqual(self._recipients(self.token), {MEMBER_A, MEMBER_B})
+
+    def test_muted_wallet_without_registered_pubkey_is_ignored(self):
+        self._pubkey("wh_b", MEMBER_B)
+        self._room("wh_a", muted=True)
+        self._room("wh_b")
+
+        self.command._refresh_group_cache()
+
+        # wh_a has no push identity, so there is nothing to subtract.
+        self.assertEqual(self._recipients(self.token), {MEMBER_A, MEMBER_B})
+
+    def test_empty_tags_resolves_no_recipients(self):
+        self.assertEqual(
+            self.command.get_gift_wrap_recipients(
+                [], self.EPHEMERAL_PUBKEY, self.registered,
+            ),
+            set(),
+        )
+
+    def test_archived_dm_is_treated_as_muted(self):
+        # Archiving a DM must silence the wallet that archived it even when the
+        # explicit muted flag is still false.
+        self._pubkey("wh_a", MEMBER_A)
+        self._pubkey("wh_b", MEMBER_B)
+        self._room("wh_a", archived=True)
+        self._room("wh_b")
+
+        self.command._refresh_group_cache()
+
+        self.assertEqual(self._recipients(self.token), {MEMBER_B})

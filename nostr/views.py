@@ -29,6 +29,7 @@ from .authentication import BitcoinCashOAuthAuthentication
 from .models import NostrPubkey, NostrRoom, NostrBlockedContact, NostrBlockedGroup
 from main.utils.cache import get_last_active, set_last_active
 from nostr.utils.websocket import send_last_active_update
+from nostr.utils.rooms import mark_room_cache_dirty, room_push_token
 
 
 class PubkeyRegisterView(APIView):
@@ -316,7 +317,11 @@ class NostrRoomListView(APIView):
             room_id=room_data['room_id'],
             defaults=_room_upsert_defaults(room_data),
         )
-        return Response({"status": "created"}, status=status.HTTP_201_CREATED)
+        mark_room_cache_dirty()
+        return Response({
+            "status": "created",
+            "push_token": room_push_token(room_data['room_id']),
+        }, status=status.HTTP_201_CREATED)
 
 
 class NostrRoomDetailView(APIView):
@@ -354,6 +359,7 @@ class NostrRoomDetailView(APIView):
         NostrRoom.objects.filter(
             wallet_hash=wallet_hash, room_id=room_id,
         ).update(**update_fields)
+        mark_room_cache_dirty()
 
         return Response({"status": "updated"})
 
@@ -377,6 +383,7 @@ class NostrRoomDetailView(APIView):
                 {"error": "Room not found"},
                 status=status.HTTP_404_NOT_FOUND,
             )
+        mark_room_cache_dirty()
         return Response({"status": "deleted"})
 
 
@@ -406,6 +413,7 @@ class NostrRoomBatchSyncView(APIView):
                     defaults=_room_upsert_defaults(room_data),
                 )
                 synced.append(room_data['room_id'])
+        mark_room_cache_dirty()
 
         return Response({
             "status": "synced",
