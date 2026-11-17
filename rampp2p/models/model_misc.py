@@ -67,6 +67,7 @@ class TradeFee(models.Model):
 
 class FeatureControl(models.Model):
     class Type (models.TextChoices):
+        P2P_MAINTENANCE = 'P2P_MAINTENANCE', 'P2P maintenance (enabled = paused)'
         AD_SHARE_LINKS  = 'AD_SHARE_LINKS'
         ORDER_CREATE    = 'ORDER_CREATE'
         ORDER_ESCROW    = 'ORDER_ESCROW'

@@ -33,6 +33,7 @@ from decimal import Decimal
 
 import rampp2p.serializers as serializers
 import rampp2p.models as models
+from rampp2p.feature_control import require_p2p_feature
 import rampp2p.utils.websocket as websocket
 from rampp2p.utils import bch_to_satoshi, fiat_to_bch
 from rampp2p.utils.notifications import clear_ad_unavailable_reminders
@@ -783,6 +784,7 @@ class AdViewSet(viewsets.GenericViewSet):
         except ValidationError as err:
             return Response({"error": err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
 
+    @require_p2p_feature(models.FeatureControl.Type.AD_CREATE)
     def create(self, request):
         wallet_hash = request.headers.get("wallet_hash")
         payment_methods = request.data.get("payment_methods")
@@ -859,6 +861,7 @@ class AdViewSet(viewsets.GenericViewSet):
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+    @require_p2p_feature(models.FeatureControl.Type.AD_UPDATE)
     def partial_update(self, request, pk):
         wallet_hash = request.user.wallet_hash
         payment_methods = request.data.get("payment_methods")
@@ -1031,6 +1034,7 @@ class AdViewSet(viewsets.GenericViewSet):
 
 
 class AdShareLinkView(View):
+    @require_p2p_feature(models.FeatureControl.Type.AD_SHARE_LINKS)
     def get(self, request):
         ad_id = request.GET.get("id", "")
         ad = models.Ad.objects.filter(pk=ad_id)
