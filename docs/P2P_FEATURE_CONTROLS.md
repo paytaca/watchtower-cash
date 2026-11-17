@@ -25,13 +25,9 @@ authentication endpoints outside that namespace and background blockchain
 listeners are not blocked. Arrange admin/support handling for existing funded
 orders while their normal API screens are unavailable.
 
-The inspected frontend needs a successful order-detail request to initialize a
-fresh order screen. This pause prevents that fetch. **It does not remotely clear
-an already-open screen or cached contract data**, close existing WebSockets, or
-stop a wallet broadcasting a transaction. The existing frontend calls
-`pending-escrow` after sending BCH, so blocking that request alone cannot prevent
-funding. A frontend maintenance check before signing/sending is still required
-to cover already-open funding screens. Notify users not to fund existing orders.
+HTTP maintenance does not stop blockchain transactions, close WebSockets, or
+clear data already loaded by clients. Clients must check current availability
+before signing or sending escrow transactions and stop if the check fails.
 
 Verify on production that an order-detail request returns 503 with the
 maintenance code and the feature endpoint still returns the enabled flag. Until
@@ -69,13 +65,11 @@ and transaction verification retain their existing behavior and permissions.
 Escrow verification remains available to record funding already broadcast;
 release/refund verification remains available for existing funded orders **when
 full maintenance is off**. These five permissions alone pause only the listed operations.
-Peer/arbiter key and address updates are not controlled by these five flags.
 
 Keep frontend maintenance controls disabled as well. The server cannot prevent
 someone funding a previously known address or broadcasting a signed transaction
 directly to the blockchain. Requests already executing and previously queued
-tasks are not canceled when a toggle changes. Review existing contracts and
-funded orders separately before approving settlement.
+tasks are not canceled when a toggle changes.
 
 Run the API guard regression tests using synthetic test data:
 
