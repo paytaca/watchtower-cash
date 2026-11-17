@@ -45,6 +45,16 @@ class SignatureBackend(ModelBackend):
                 # Create an ECDSA public key object
                 vk = ecdsa.VerifyingKey.from_string(public_key_bytes, curve=ecdsa.SECP256k1)
 
+                if app in ('ramp-peer', 'ramp-arbiter'):
+                    registered_key = ecdsa.VerifyingKey.from_string(
+                        bytes.fromhex(wallet.public_key), curve=ecdsa.SECP256k1
+                    )
+                    # Compare curve points so compressed and uncompressed keys
+                    # for the same account remain compatible.
+                    if vk.to_string() != registered_key.to_string():
+                        raise InvalidSignature('Public key does not match account')
+                    vk = registered_key
+
                 # Verify the signature
                 valid = vk.verify(
                     der_signature_bytes,
@@ -68,7 +78,10 @@ class SignatureBackend(ModelBackend):
                 ArbiterWallet.DoesNotExist, 
                 AuthToken.DoesNotExist,
                 InvalidSignature,
-                TypeError) as err:
-            logger.warn(err.args[0])
+                TypeError,
+                ValueError,
+                ecdsa.BadSignatureError,
+                ecdsa.errors.MalformedPointError) as err:
+            logger.warning(err.args[0])
             error = err.args[0]
             return None, None, error
