@@ -29,6 +29,7 @@ from authentication.token import TokenAuthentication
 from authentication.permissions import RampP2PIsAuthenticated
 
 import rampp2p.models as models
+from rampp2p.feature_control import require_p2p_feature
 import rampp2p.serializers as serializers
 import rampp2p.utils.utils as utils
 import rampp2p.utils.websocket as websocket
@@ -431,6 +432,7 @@ class OrderViewSet(viewsets.GenericViewSet):
         }
         return Response(data, status.HTTP_200_OK)
 
+    @require_p2p_feature(models.FeatureControl.Type.ORDER_CREATE)
     def create(self, request):
         wallet_hash = request.user.wallet_hash
         try:
@@ -1092,6 +1094,7 @@ class OrderStatusViewSet(viewsets.GenericViewSet):
         return Response(serialized_status.data, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=["post"])
+    @require_p2p_feature(models.FeatureControl.Type.ORDER_ESCROW)
     def pending_escrow(self, request, pk):
         """Creates a status ESCROW_PENDING for a given order. Callable only by the order's seller."""
 

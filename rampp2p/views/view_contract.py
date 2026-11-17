@@ -13,6 +13,7 @@ from authentication.permissions import RampP2PIsAuthenticated
 from rampp2p.utils.fees import get_trading_fees
 import rampp2p.utils as utils
 import rampp2p.models as models
+from rampp2p.feature_control import require_p2p_feature
 import rampp2p.serializers as serializers
 import rampp2p.utils.websocket as websocket
 
@@ -49,6 +50,7 @@ class ContractViewSet(viewsets.GenericViewSet):
         except models.Contract.DoesNotExist:
             raise Http404
 
+    @require_p2p_feature(models.FeatureControl.Type.ORDER_ESCROW)
     def create(self, request):
         try:
             version = request.headers.get('version')
@@ -216,6 +218,7 @@ class ContractViewSet(viewsets.GenericViewSet):
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
 
     @action(detail=True, methods=['post'])
+    @require_p2p_feature(models.FeatureControl.Type.ORDER_ESCROW)
     def pending_escrow(self, request, pk):
         '''Creates a status ESCROW_PENDING for a given order. Callable only by the order's seller.'''
 

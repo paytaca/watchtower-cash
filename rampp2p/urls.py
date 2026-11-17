@@ -1,6 +1,7 @@
 from django.urls import path, re_path
 from rampp2p.views import *
 from rest_framework.routers import DefaultRouter
+from rampp2p.feature_control import p2p_maintenance_guard
 
 router = DefaultRouter()
 router.register(r"order/public", PublicOrdersViewSet, basename="public-orders")
@@ -265,3 +266,9 @@ urlpatterns = [
     path("feature-toggles/", check_feature_control),
     path("feature-control/", check_feature_control),
 ]
+
+# Cover every P2P HTTP route, including public router and cash-in aliases.
+# Keep feature reads available so clients can display the maintenance state.
+for route in urlpatterns:
+    if route.callback is not check_feature_control:
+        route.callback = p2p_maintenance_guard(route.callback)
