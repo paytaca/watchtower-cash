@@ -18,7 +18,7 @@ def canonical_key(value):
 
 
 def burst_order_ids(orders, count, minutes):
-    """Flag creator bursts, sorting input by creation time and primary key."""
+    """Flag creator bursts; sort by created_at, breaking timestamp ties by pk."""
     windows = defaultdict(deque)
     flagged = set()
     interval = timedelta(minutes=minutes)

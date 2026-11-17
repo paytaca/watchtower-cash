@@ -10,18 +10,26 @@ from authentication.backends import SignatureBackend
 
 class SignatureBackendTests(TestCase):
     def setUp(self):
-        self.account_key = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
+        self.account_keys = {
+            app: ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
+            for app in ('ramp-peer', 'ramp-arbiter')
+        }
         self.attacker_key = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
 
     def authenticate(self, app, signer=None, public_key=None,
                      registered_key=None, expired=False, nonce='123456',
                      signature=None):
-        signer = signer or self.account_key
-        self.wallet = SimpleNamespace(
-            wallet_hash='synthetic-wallet',
-            public_key=registered_key if registered_key is not None else
-            self.account_key.get_verifying_key().to_string('compressed').hex(),
-        )
+        signer = signer or self.account_keys[app]
+        wallets = {
+            account_app: SimpleNamespace(
+                wallet_hash='synthetic-' + account_app,
+                public_key=key.get_verifying_key().to_string('compressed').hex(),
+            )
+            for account_app, key in self.account_keys.items()
+        }
+        self.wallet = wallets[app]
+        if registered_key is not None:
+            self.wallet.public_key = registered_key
         self.token = SimpleNamespace(
             nonce=nonce,
             nonce_expires_at=object(),
@@ -36,13 +44,17 @@ class SignatureBackendTests(TestCase):
                 sigencode=ecdsa.util.sigencode_der,
             ).hex()
 
-        with patch('authentication.backends.PeerWallet.objects.get', return_value=self.wallet), \
-             patch('authentication.backends.ArbiterWallet.objects.get', return_value=self.wallet), \
+        with patch('authentication.backends.PeerWallet.objects.get', return_value=wallets['ramp-peer']) as peer_get, \
+             patch('authentication.backends.ArbiterWallet.objects.get', return_value=wallets['ramp-arbiter']) as arbiter_get, \
              patch('authentication.backends.AuthToken.objects.get', return_value=self.token):
-            return SignatureBackend().authenticate(
+            result = SignatureBackend().authenticate(
                 app=app, wallet_hash=self.wallet.wallet_hash,
                 public_key=public_key, signature=signature,
             )
+        expected_get, other_get = (peer_get, arbiter_get) if app == 'ramp-peer' else (arbiter_get, peer_get)
+        expected_get.assert_called_once_with(wallet_hash=self.wallet.wallet_hash)
+        other_get.assert_not_called()
+        return result
 
     def assert_rejected(self, result):
         self.assertIsNone(result[0])
@@ -69,7 +81,7 @@ class SignatureBackendTests(TestCase):
         for app in ('ramp-peer', 'ramp-arbiter'):
             with self.subTest(app=app):
                 result = self.authenticate(
-                    app, public_key=self.account_key.get_verifying_key()
+                    app, public_key=self.account_keys[app].get_verifying_key()
                     .to_string('uncompressed').hex().upper(),
                 )
                 self.assertIs(result[0], self.wallet)
@@ -79,7 +91,7 @@ class SignatureBackendTests(TestCase):
             with self.subTest(app=app):
                 self.assert_rejected(self.authenticate(
                     app, signer=self.attacker_key,
-                    public_key=self.account_key.get_verifying_key()
+                    public_key=self.account_keys[app].get_verifying_key()
                     .to_string('compressed').hex(),
                 ))
 
