@@ -22,13 +22,13 @@ class OrderAuditTests(TestCase):
             tracking_id='synthetic', created_at=self.now, trade_amount=10000,
             is_cash_in=False, ad_snapshot=NS(ad_id=20, trade_type='SELL', ad=NS(owner=self.ad_owner)),
         )
-        self.statuses = [self.status('SBM'), self.status('CNF')]
+        self.statuses = [self.status('SBM', pk=1), self.status('CNF', pk=2)]
         self.contract = NS(pk=30, address='synthetic-contract')
         self.members = [NS(member_type=role, member_ref_id=p.pk, pubkey=p.public_key, address=p.address)
                         for role, p in [('SELLER', self.ad_owner), ('BUYER', self.creator), ('ARBITER', self.arbiter)]]
 
-    def status(self, status, actor='creator'):
-        return NS(status=status, created_by=actor, created_at=self.now)
+    def status(self, status, actor='creator', pk=1, created_at=None):
+        return NS(pk=pk, status=status, created_by=actor, created_at=created_at or self.now)
 
     def audit(self, contract=None, members=None, transactions=None):
         return audit_order(self.order, contract, self.statuses, members or [], transactions or [])
@@ -50,6 +50,33 @@ class OrderAuditTests(TestCase):
         self.members[0].pubkey = UNCOMPRESSED.upper()
         self.assertEqual(canonical_key(KEY), canonical_key(UNCOMPRESSED))
         self.assertEqual(self.audit(self.contract, self.members)['review_flags'], [])
+
+    def test_off_curve_raw_key_cannot_masquerade_as_registered_key(self):
+        # Same x and y parity as KEY, but y=0 is not a point on secp256k1.
+        self.members[0].pubkey = KEY[2:] + '00' * 32
+        flags = self.audit(self.contract, self.members)['review_flags']
+        self.assertIn('SELLER_INVALID_KEY_ENCODING', flags)
+
+    def test_invalid_curve_points_and_missing_keys_are_rejected(self):
+        for key in ('02' + 'ff' * 32, '00' * 64, '', None):
+            with self.subTest(key=key):
+                with self.assertRaises(ValueError):
+                    canonical_key(key)
+
+    def test_unsorted_statuses_use_earliest_submission_and_latest_status(self):
+        self.statuses = [
+            self.status('CNF', pk=3, created_at=self.now + timedelta(minutes=2)),
+            self.status('SBM', 'ad-owner', pk=2, created_at=self.now + timedelta(minutes=1)),
+            self.status('SBM', pk=1),
+        ]
+        row = self.audit()
+        self.assertEqual(row['latest_status'], 'CNF')
+        self.assertNotIn('SUBMITTED_ACTOR_DIFFERS_FROM_CREATOR', row['review_flags'])
+        self.assertEqual([s['status'] for s in row['statuses']], ['SBM', 'SBM', 'CNF'])
+
+    def test_status_timestamp_ties_are_ordered_by_primary_key(self):
+        self.statuses = [self.status('CNF', pk=2), self.status('SBM', pk=1)]
+        self.assertEqual(self.audit()['latest_status'], 'CNF')
 
     def test_missing_member_and_invalid_key_are_flagged(self):
         self.members[0].pubkey = 'invalid'
@@ -85,3 +112,9 @@ class OrderAuditTests(TestCase):
         orders.append(NS(pk=99, owner_id=2, created_at=self.now + timedelta(minutes=4)))
         self.assertEqual(burst_order_ids(orders, 5, 5), set(range(5)))
         self.assertEqual(burst_order_ids(orders, 5, 3), set())
+
+    def test_unsorted_burst_input_matches_chronological_input(self):
+        orders = [NS(pk=i, owner_id=1, created_at=self.now + timedelta(minutes=i)) for i in range(8)]
+        self.assertEqual(burst_order_ids(reversed(orders), 5, 5), set(range(8)))
+        sparse = [NS(pk=i, owner_id=1, created_at=self.now + timedelta(minutes=i * 10)) for i in range(5)]
+        self.assertEqual(burst_order_ids(reversed(sparse), 3, 5), set())

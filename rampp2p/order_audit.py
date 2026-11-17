@@ -3,31 +3,35 @@
 from collections import defaultdict, deque
 from datetime import timedelta
 
+import ecdsa
+
 
 def canonical_key(value):
-    """Compare SEC key encodings; this is not curve-point validation."""
-    key = bytes.fromhex(value)
-    if len(key) == 33 and key[0] in (2, 3):
-        return key
-    if len(key) == 65 and key[0] == 4:
-        key = key[1:]
-    if len(key) == 64:
-        return bytes([2 + (key[-1] & 1)]) + key[:32]
-    raise ValueError('Unsupported public key encoding')
+    """Validate a secp256k1 curve point and return its compressed encoding."""
+    try:
+        key = ecdsa.VerifyingKey.from_string(
+            bytes.fromhex(value), curve=ecdsa.SECP256k1
+        )
+    except (ValueError, TypeError, ecdsa.errors.MalformedPointError) as error:
+        raise ValueError('Invalid secp256k1 public key') from error
+    return key.to_string('compressed')
 
 
 def burst_order_ids(orders, count, minutes):
-    """Flag every order in a creator's qualifying sliding window."""
+    """Flag creator bursts, sorting input by creation time and primary key."""
     windows = defaultdict(deque)
     flagged = set()
     interval = timedelta(minutes=minutes)
-    for order in orders:  # ordered by created_at, pk
+    for order in sorted(orders, key=lambda item: (item.created_at, item.pk)):
         window = windows[order.owner_id]
         while window and order.created_at - window[0].created_at > interval:
             window.popleft()
         window.append(order)
-        if len(window) >= count:
+        if len(window) == count:
             flagged.update(item.pk for item in window)
+        elif len(window) > count:
+            # Earlier members were flagged when the threshold was reached.
+            flagged.add(order.pk)
     return flagged
 
 
@@ -42,6 +46,8 @@ def account_data(account):
 
 
 def audit_order(order, contract, statuses, members, transactions, burst=False):
+    """Review an order, sorting status history by creation time and primary key."""
+    statuses = sorted(statuses, key=lambda item: (item.created_at, item.pk))
     ad_owner = order.ad_snapshot.ad.owner
     seller, buyer = (ad_owner, order.owner)
     if order.ad_snapshot.trade_type == 'BUY':
