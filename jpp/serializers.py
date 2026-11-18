@@ -271,7 +271,7 @@ class InvoiceSerializer(serializers.ModelSerializer):
             # description field (if present) will be included in output_data and saved
             InvoiceOutput.objects.create(**output_data)
 
-        send_invoice_push_notification(instance, self.context["request"])
+        # send_invoice_push_notification(instance, self.context["request"])
         return instance
 
 
