@@ -19,6 +19,8 @@ import base64
 import decimal
 from celery.schedules import crontab
 
+from watchtower.apns_settings import build_apns_settings
+
 # Memory optimization: Configure Python garbage collection to be more aggressive
 # This helps prevent memory fragmentation and reduces overall memory usage
 import gc
@@ -278,22 +280,8 @@ google_app_cert = firebase_admin.credentials.Certificate(google_app_credentials_
 firebase_app = firebase_admin.initialize_app(google_app_cert)
 
 
-def _apns_credential_path(setting_name):
-    """Resolve an APNs credential path against BASE_DIR, or None when unset.
-
-    Token-based auth only sets APNS_AUTH_KEY_PATH and cert-based auth only sets
-    APNS_CERTIFICATE_PATH, so neither may be assumed present. Absolute paths
-    pass through os.path.join unchanged.
-    """
-    path = config(setting_name, None)
-    if not path:
-        return None
-    return os.path.join(BASE_DIR, path)
-
-
-apns_certificate_path = _apns_credential_path("APNS_CERTIFICATE_PATH")
-apns_auth_key_path = _apns_credential_path("APNS_AUTH_KEY_PATH")
-
+# Sandbox default and presence rules live in watchtower/apns_settings.py so they
+# can be unit tested without importing this module.
 PUSH_NOTIFICATIONS_SETTINGS = {
     "CONFIG": "push_notifications.conf.LegacyConfig",
     # For Firebase (Android)
@@ -304,14 +292,8 @@ PUSH_NOTIFICATIONS_SETTINGS = {
     # "GCM_API_KEY": "[your api key]",
     # For Apple Push Notification Services (IOS)
     # -----------------------------------------
-    # Token-based (p8) auth needs no certificate; only join when a path is set,
-    # so deployments that rely on APNS_AUTH_KEY_PATH do not crash at startup.
-    "APNS_CERTIFICATE": apns_certificate_path,
-    "APNS_AUTH_KEY_PATH": apns_auth_key_path,
-    "APNS_AUTH_KEY_ID": config("APNS_AUTH_KEY_ID", None),
-    "APNS_TEAM_ID": config("APNS_TEAM_ID", None),
-    "APNS_USE_ALTERNATIVE_PORT": config("APNS_USE_ALTERNATIVE_PORT", None),
-    "APNS_TOPIC": config("APNS_TOPIC", None),
+    # Token-based (p8) auth only. Certificate auth is no longer supported.
+    # -----------------------------------------
     # For Webpush
     # -----------------------------------------
     # "WNS_PACKAGE_SECURITY_ID": "[your package security id, e.g: 'ms-app://e-3-4-6234...']",
@@ -319,6 +301,7 @@ PUSH_NOTIFICATIONS_SETTINGS = {
     # "WP_PRIVATE_KEY": "/path/to/your/private.pem",
     # "WP_CLAIMS": {'sub': "mailto: development@example.com"}
 }
+PUSH_NOTIFICATIONS_SETTINGS.update(build_apns_settings(BASE_DIR))
 
 
 DB_NUM = [3, 4, 5]

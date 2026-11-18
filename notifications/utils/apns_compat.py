@@ -26,8 +26,9 @@ import time
 
 LOGGER = logging.getLogger("django")
 
-# Same defaults as apns2 0.7.x. APNs rejects provider tokens older than one
-# hour; 45 minutes leaves room for clock skew and in-flight requests.
+# Not apns2's default: upstream uses 3600s, while APNs rejects provider tokens
+# older than one hour, so 45 minutes leaves room for clock skew and requests
+# already in flight. Overridable per instance via `token_lifetime`.
 DEFAULT_TOKEN_LIFETIME = 2700
 DEFAULT_TOKEN_ENCRYPTION_ALGORITHM = "ES256"
 

@@ -10,6 +10,7 @@ These tests are version-agnostic: instead of relying on the installed PyJWT,
 they drive `jwt.encode` to return a `str` (PyJWT 2.x) and assert the stock apns2
 class breaks there while the installed one works.
 """
+import os
 import time
 
 import pytest
@@ -146,4 +147,169 @@ def test_signing_key_read_once_at_construction(auth_key_path, monkeypatch):
     credentials._token = None
     assert credentials.get_authorization_header("com.paytaca.app").startswith(
         "bearer "
+    )
+
+
+# --- settings shape ---------------------------------------------------------
+# The rules live in `watchtower.apns_settings` because importing the project's
+# settings module pulls in every app; these exercise the builder directly.
+
+def _build(monkeypatch, env, base_dir="/code"):
+    """Call the builder with `os.environ` as the only config source.
+
+    `decouple` also reads `.env` from the working directory, so clearing the
+    variables alone would still pick up the developer's own settings.
+    """
+    for name in (
+        "APNS_AUTH_KEY_PATH",
+        "APNS_AUTH_KEY_ID",
+        "APNS_TEAM_ID",
+        "APNS_TOPIC",
+        "APNS_USE_ALTERNATIVE_PORT",
+        "APNS_USE_SANDBOX",
+        "BCH_NETWORK",
+    ):
+        monkeypatch.delenv(name, raising=False)
+    for name, value in env.items():
+        monkeypatch.setenv(name, value)
+
+    from watchtower import apns_settings
+
+    def environ_config(option, default=None, cast=None):
+        value = os.environ.get(option)
+        if value is None:
+            value = default
+        if value is None:
+            return None
+        if cast is bool:
+            return str(value).strip().lower() in ("1", "true", "yes", "on")
+        return value
+
+    monkeypatch.setattr(apns_settings, "config", environ_config)
+    return apns_settings.build_apns_settings(base_dir)
+
+
+def test_mainnet_uses_production_host_and_configured_key(monkeypatch):
+    apns = _build(
+        monkeypatch,
+        {
+            "BCH_NETWORK": "mainnet",
+            "APNS_AUTH_KEY_PATH": "compose/APNS_AuthKey.p8",
+            "APNS_AUTH_KEY_ID": "3U356XVXS2",
+            "APNS_TEAM_ID": "89X576BZBF",
+            "APNS_TOPIC": "com.paytaca.app",
+        },
+    )
+    assert apns["APNS_USE_SANDBOX"] is False
+    assert apns["APNS_AUTH_KEY_PATH"] == "/code/compose/APNS_AuthKey.p8"
+    assert apns["APNS_AUTH_KEY_ID"] == "3U356XVXS2"
+
+
+def test_chipnet_uses_sandbox_host_with_a_separate_key(monkeypatch):
+    """Chipnet/dev run with DEBUG=False, so DEBUG cannot pick the endpoint."""
+    apns = _build(
+        monkeypatch,
+        {
+            "BCH_NETWORK": "chipnet",
+            "APNS_AUTH_KEY_PATH": "/root/dev/AuthKey_sandbox.p8",
+            "APNS_AUTH_KEY_ID": "SANDBOXKEY",
+            "APNS_TEAM_ID": "89X576BZBF",
+        },
+    )
+    assert apns["APNS_USE_SANDBOX"] is True
+    # Absolute paths pass through os.path.join unchanged.
+    assert apns["APNS_AUTH_KEY_PATH"] == "/root/dev/AuthKey_sandbox.p8"
+
+
+def test_unset_credentials_are_omitted_not_inserted_as_none(monkeypatch):
+    """`has_auth_token_creds()` treats a present key as configured."""
+    apns = _build(monkeypatch, {"BCH_NETWORK": "mainnet"})
+    for name in (
+        "APNS_AUTH_KEY_PATH",
+        "APNS_AUTH_KEY_ID",
+        "APNS_TEAM_ID",
+        "APNS_TOPIC",
+        "APNS_USE_ALTERNATIVE_PORT",
+    ):
+        assert name not in apns, f"{name} must be absent when unset"
+    assert apns["APNS_USE_SANDBOX"] is False
+
+
+def test_blank_env_values_are_omitted(monkeypatch):
+    """An `APNS_AUTH_KEY_ID=` template line must not select token auth."""
+    apns = _build(
+        monkeypatch,
+        {
+            "BCH_NETWORK": "mainnet",
+            "APNS_AUTH_KEY_PATH": "",
+            "APNS_AUTH_KEY_ID": "",
+            "APNS_TEAM_ID": "",
+            "APNS_TOPIC": "",
+        },
+    )
+    assert "APNS_AUTH_KEY_PATH" not in apns
+    assert "APNS_AUTH_KEY_ID" not in apns
+    assert "APNS_TOPIC" not in apns
+
+
+def test_blank_sandbox_value_falls_back_to_the_default(monkeypatch):
+    """`APNS_USE_SANDBOX=` must not be read as False."""
+    apns = _build(monkeypatch, {"BCH_NETWORK": "chipnet", "APNS_USE_SANDBOX": ""})
+    assert apns["APNS_USE_SANDBOX"] is True
+
+    apns = _build(monkeypatch, {"BCH_NETWORK": "mainnet", "APNS_USE_SANDBOX": ""})
+    assert apns["APNS_USE_SANDBOX"] is False
+
+
+def test_explicit_sandbox_value_wins(monkeypatch):
+    apns = _build(monkeypatch, {"BCH_NETWORK": "mainnet", "APNS_USE_SANDBOX": "true"})
+    assert apns["APNS_USE_SANDBOX"] is True
+
+    apns = _build(monkeypatch, {"BCH_NETWORK": "chipnet", "APNS_USE_SANDBOX": "false"})
+    assert apns["APNS_USE_SANDBOX"] is False
+
+
+def test_library_selects_token_auth_only_when_credentials_are_set(monkeypatch):
+    """Pin the library's branch choice, not just our dict shape.
+
+    `LegacyConfig.has_auth_token_creds()` keys off *presence*, so the regression
+    that mattered was a real `get_manager()` answering `True` with no
+    credentials configured. The library snapshots `PUSH_NOTIFICATIONS_SETTINGS`
+    at import time, so patch the module reference it actually reads.
+    """
+    from push_notifications.conf import get_manager
+    from push_notifications.conf import legacy
+
+    monkeypatch.setattr(
+        legacy,
+        "SETTINGS",
+        {
+            "CONFIG": "push_notifications.conf.LegacyConfig",
+            **_build(monkeypatch, {"BCH_NETWORK": "mainnet"}),
+        },
+    )
+    assert get_manager(reload=True).has_auth_token_creds() is False
+
+    monkeypatch.setattr(
+        legacy,
+        "SETTINGS",
+        {
+            "CONFIG": "push_notifications.conf.LegacyConfig",
+            **_build(
+                monkeypatch,
+                {
+                    "BCH_NETWORK": "mainnet",
+                    "APNS_AUTH_KEY_PATH": "compose/APNS_AuthKey.p8",
+                    "APNS_AUTH_KEY_ID": "3U356XVXS2",
+                    "APNS_TEAM_ID": "89X576BZBF",
+                },
+            ),
+        },
+    )
+    manager = get_manager(reload=True)
+    assert manager.has_auth_token_creds() is True
+    assert manager.get_apns_auth_creds(application_id=None) == (
+        "/code/compose/APNS_AuthKey.p8",
+        "3U356XVXS2",
+        "89X576BZBF",
     )
