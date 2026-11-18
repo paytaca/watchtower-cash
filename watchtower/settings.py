@@ -266,7 +266,7 @@ CONSTANCE_CONFIG_FIELDSETS = {
 
 
 # Push notifications (django-push-notifications)
-# See https://github.com/jazzband/django-push-notifications
+# See https://github.com/django-commons/django-push-notifications
 import firebase_admin
 
 # Initialize the default app (either use `GOOGLE_APPLICATION_CREDENTIALS` environment variable, or pass a firebase_admin.credentials.Certificate instance)
@@ -276,6 +276,23 @@ google_app_credentials_path = os.path.join(
 )
 google_app_cert = firebase_admin.credentials.Certificate(google_app_credentials_path)
 firebase_app = firebase_admin.initialize_app(google_app_cert)
+
+
+def _apns_credential_path(setting_name):
+    """Resolve an APNs credential path against BASE_DIR, or None when unset.
+
+    Token-based auth only sets APNS_AUTH_KEY_PATH and cert-based auth only sets
+    APNS_CERTIFICATE_PATH, so neither may be assumed present. Absolute paths
+    pass through os.path.join unchanged.
+    """
+    path = config(setting_name, None)
+    if not path:
+        return None
+    return os.path.join(BASE_DIR, path)
+
+
+apns_certificate_path = _apns_credential_path("APNS_CERTIFICATE_PATH")
+apns_auth_key_path = _apns_credential_path("APNS_AUTH_KEY_PATH")
 
 PUSH_NOTIFICATIONS_SETTINGS = {
     "CONFIG": "push_notifications.conf.LegacyConfig",
@@ -287,9 +304,10 @@ PUSH_NOTIFICATIONS_SETTINGS = {
     # "GCM_API_KEY": "[your api key]",
     # For Apple Push Notification Services (IOS)
     # -----------------------------------------
-    "APNS_CERTIFICATE": os.path.join(
-        BASE_DIR, config("APNS_CERTIFICATE_PATH", "certificate.pem")
-    ),
+    # Token-based (p8) auth needs no certificate; only join when a path is set,
+    # so deployments that rely on APNS_AUTH_KEY_PATH do not crash at startup.
+    "APNS_CERTIFICATE": apns_certificate_path,
+    "APNS_AUTH_KEY_PATH": apns_auth_key_path,
     "APNS_AUTH_KEY_ID": config("APNS_AUTH_KEY_ID", None),
     "APNS_TEAM_ID": config("APNS_TEAM_ID", None),
     "APNS_USE_ALTERNATIVE_PORT": config("APNS_USE_ALTERNATIVE_PORT", None),
