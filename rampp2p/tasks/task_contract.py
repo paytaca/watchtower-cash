@@ -3,6 +3,7 @@ from typing import Dict
 from rampp2p.utils.websocket import send_order_update
 from main.utils.subscription import save_subscription
 from rampp2p.models import Contract
+from rampp2p.contract_access import order_is_canceled, canceled_contract_payload
 import subprocess
 import json
 import re
@@ -70,6 +71,8 @@ def contract_handler(response: Dict, **kwargs):
     """
     data = response.get('result')
     order_id = kwargs.get('order_id')
+    if order_is_canceled(order_id):
+        return send_order_update(canceled_contract_payload(), order_id)
     success = response.get('result').get('success')
     success = False if success == "false" else bool(success)
 
@@ -86,4 +89,7 @@ def contract_handler(response: Dict, **kwargs):
     else:
         data['error'] = response.get('error')
     
-    return send_order_update(data, contract.order.id)
+    # Cancellation may have happened while persisting/subscribing the address.
+    if order_is_canceled(order_id):
+        return send_order_update(canceled_contract_payload(), order_id)
+    return send_order_update(data, order_id)

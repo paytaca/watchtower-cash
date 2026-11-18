@@ -14,6 +14,7 @@ from rampp2p.utils.fees import get_trading_fees
 import rampp2p.utils as utils
 import rampp2p.models as models
 from rampp2p.feature_control import require_p2p_feature
+from rampp2p.contract_access import order_is_canceled, canceled_contract_payload
 import rampp2p.serializers as serializers
 import rampp2p.utils.websocket as websocket
 
@@ -33,8 +34,12 @@ class ContractViewSet(viewsets.GenericViewSet):
     def retrieve(self, request, pk):
         try:
             contract = self.get_queryset().get(pk=pk)
+            if order_is_canceled(contract.order_id):
+                return Response(canceled_contract_payload(), status=status.HTTP_410_GONE,
+                                headers={'Cache-Control': 'no-store'})
             serialized_contract = serializers.ContractSerializer(contract)
-            return Response(serialized_contract.data, status=status.HTTP_200_OK)
+            return Response(serialized_contract.data, status=status.HTTP_200_OK,
+                            headers={'Cache-Control': 'no-store'})
         except models.Contract.DoesNotExist:
             raise Http404
     
@@ -45,8 +50,12 @@ class ContractViewSet(viewsets.GenericViewSet):
             if not contract.exists():
                 raise models.Contract.DoesNotExist
             contract = contract.first()
+            if order_is_canceled(contract.order_id):
+                return Response(canceled_contract_payload(), status=status.HTTP_410_GONE,
+                                headers={'Cache-Control': 'no-store'})
             serialized_contract = serializers.ContractSerializer(contract)
-            return Response(serialized_contract.data, status=status.HTTP_200_OK)
+            return Response(serialized_contract.data, status=status.HTTP_200_OK,
+                            headers={'Cache-Control': 'no-store'})
         except models.Contract.DoesNotExist:
             raise Http404
 
@@ -82,6 +91,11 @@ class ContractViewSet(viewsets.GenericViewSet):
             contract_params = self._get_contract_params(arbiter, order)
         
             with transaction.atomic():
+                # Serialize generation with incident cancellation of this order.
+                order = models.Order.objects.select_for_update().get(pk=order_pk)
+                if order_is_canceled(order_pk):
+                    raise ValidationError('This order is canceled. Do not fund its contract.')
+                validate_status(order_pk, StatusType.CONFIRMED)
                 address = None
                 contract, created = models.Contract.objects.get_or_create(order=order)
                 timestamp = contract.created_at.timestamp()
