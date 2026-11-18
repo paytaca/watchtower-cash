@@ -59,7 +59,10 @@ def build_apns_settings(base_dir):
         ("APNS_AUTH_KEY_ID", config("APNS_AUTH_KEY_ID", None)),
         ("APNS_TEAM_ID", config("APNS_TEAM_ID", None)),
         ("APNS_TOPIC", config("APNS_TOPIC", None)),
-        ("APNS_USE_ALTERNATIVE_PORT", config("APNS_USE_ALTERNATIVE_PORT", None)),
+        # Not a raw string: apns2 does `ALTERNATIVE_PORT if use_alternative_port
+        # else DEFAULT_PORT`, so `APNS_USE_ALTERNATIVE_PORT=False` would be a
+        # truthy string and send to 2197 instead of 443.
+        ("APNS_USE_ALTERNATIVE_PORT", _bool("APNS_USE_ALTERNATIVE_PORT", False)),
     )
     for name, value in configured:
         if value:

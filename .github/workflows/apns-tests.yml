@@ -1,0 +1,53 @@
+name: apns tests
+
+# The APNs credentials tests are the only thing that pins the `apns2` +
+# PyJWT 2.x interaction and the PUSH_NOTIFICATIONS_SETTINGS branch selection.
+# They run in a purpose-built environment rather than the project's full
+# dependency set, because the failure mode under test is version-specific.
+
+on:
+  pull_request:
+    paths:
+      - "notifications/utils/apns_compat.py"
+      - "notifications/utils/live_activity.py"
+      - "notifications/apps.py"
+      - "watchtower/apns_settings.py"
+      - "watchtower/settings.py"
+      - "tests/test_apns_credentials.py"
+      - "tests/apns_ci_settings.py"
+      - "requirements.txt"
+      - ".github/workflows/apns-tests.yml"
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.8"
+
+      - name: Install the pinned versions this patch targets
+        run: |
+          python -m pip install --upgrade pip
+          pip install \
+            "Django==3.0.14" \
+            "apns2==0.7.1" \
+            "PyJWT==2.8.0" \
+            "django-push-notifications==3.1.0" \
+            "python-decouple==3.3" \
+            cryptography \
+            psycopg2-binary \
+            celery \
+            pytest \
+            pytest-django
+
+      # `notifications` imports `apns2` and `push_notifications` but not the
+      # rest of the project's apps, so no credentials or database are needed.
+      - name: Run APNs tests
+        env:
+          DJANGO_SETTINGS_MODULE: tests.apns_ci_settings
+          PYTHONPATH: ${{ github.workspace }}
+        run: pytest tests/test_apns_credentials.py -p no:cacheprovider -o addopts=""

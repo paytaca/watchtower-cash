@@ -142,8 +142,10 @@ def test_signing_key_read_once_at_construction(auth_key_path, monkeypatch):
     credentials = _new_credentials(auth_key_path)
     assert "PRIVATE KEY" in credentials._auth_key
 
+    # Deleting the file must not matter: if anything re-read it, this raises.
     import os
-    os.remove(auth_key_path)  # silently succeeds only if nothing re-reads it
+
+    os.remove(auth_key_path)
     credentials._token = None
     assert credentials.get_authorization_header("com.paytaca.app").startswith(
         "bearer "
@@ -157,8 +159,10 @@ def test_signing_key_read_once_at_construction(auth_key_path, monkeypatch):
 def _build(monkeypatch, env, base_dir="/code"):
     """Call the builder with `os.environ` as the only config source.
 
-    `decouple` also reads `.env` from the working directory, so clearing the
-    variables alone would still pick up the developer's own settings.
+    Backed by a real `decouple.Config` over an empty repository rather than a
+    stub, so the casts under test are the ones that run in production. The
+    repository is emptied because `decouple` otherwise reads `.env` from the
+    working directory and the developer's own settings leak in.
     """
     for name in (
         "APNS_AUTH_KEY_PATH",
@@ -173,19 +177,11 @@ def _build(monkeypatch, env, base_dir="/code"):
     for name, value in env.items():
         monkeypatch.setenv(name, value)
 
+    from decouple import Config, RepositoryEmpty
+
     from watchtower import apns_settings
 
-    def environ_config(option, default=None, cast=None):
-        value = os.environ.get(option)
-        if value is None:
-            value = default
-        if value is None:
-            return None
-        if cast is bool:
-            return str(value).strip().lower() in ("1", "true", "yes", "on")
-        return value
-
-    monkeypatch.setattr(apns_settings, "config", environ_config)
+    monkeypatch.setattr(apns_settings, "config", Config(RepositoryEmpty()))
     return apns_settings.build_apns_settings(base_dir)
 
 
@@ -313,3 +309,28 @@ def test_library_selects_token_auth_only_when_credentials_are_set(monkeypatch):
         "3U356XVXS2",
         "89X576BZBF",
     )
+
+
+def test_alternative_port_string_false_does_not_select_port_2197(monkeypatch):
+    """apns2 tests the flag for truthiness, so "False" would mean 2197."""
+    # "False" is falsy, so the key is omitted and the library's own
+    # setdefault(False) keeps the port at 443. What must never happen is a
+    # truthy leftover string.
+    apns = _build(
+        monkeypatch, {"BCH_NETWORK": "mainnet", "APNS_USE_ALTERNATIVE_PORT": "False"}
+    )
+    assert apns.get("APNS_USE_ALTERNATIVE_PORT", False) is False
+
+    apns = _build(
+        monkeypatch, {"BCH_NETWORK": "mainnet", "APNS_USE_ALTERNATIVE_PORT": "true"}
+    )
+    assert apns["APNS_USE_ALTERNATIVE_PORT"] is True
+
+    apns = _build(monkeypatch, {"BCH_NETWORK": "mainnet"})
+    assert apns.get("APNS_USE_ALTERNATIVE_PORT", False) is False
+
+
+def test_invalid_boolean_value_fails_loudly(monkeypatch):
+    """Production uses real decouple, which raises on an unparsable bool."""
+    with pytest.raises(ValueError):
+        _build(monkeypatch, {"BCH_NETWORK": "mainnet", "APNS_USE_SANDBOX": "maybe"})
