@@ -21,6 +21,7 @@ import logging
 import time
 
 from django.conf import settings
+from django.core.exceptions import ImproperlyConfigured
 from firebase_admin import messaging
 
 from push_notifications.conf import get_manager
@@ -100,13 +101,16 @@ def _apns_client(application_id=None):
     from apns2 import credentials as apns2_credentials
 
     manager = get_manager()
-    if manager.has_auth_token_creds(application_id):
-        key_path, key_id, team_id = manager.get_apns_auth_creds(application_id)
-        creds = apns2_credentials.TokenCredentials(key_path, key_id, team_id)
-    else:
-        creds = apns2_credentials.CertificateCredentials(
-            manager.get_apns_certificate(application_id)
+    # Token (p8) auth only; certificate auth is no longer supported. Raise
+    # rather than fall back to a certificate so a misconfigured deployment
+    # fails on a named error instead of an opaque credential error.
+    if not manager.has_auth_token_creds(application_id):
+        raise ImproperlyConfigured(
+            "APNs token credentials are not configured; set APNS_AUTH_KEY_PATH, "
+            "APNS_AUTH_KEY_ID and APNS_TEAM_ID."
         )
+    key_path, key_id, team_id = manager.get_apns_auth_creds(application_id)
+    creds = apns2_credentials.TokenCredentials(key_path, key_id, team_id)
 
     # Connecting is deferred to `connect()` (called by the send helpers), which
     # retries; this only builds the client.
