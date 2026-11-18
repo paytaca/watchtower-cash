@@ -20,7 +20,7 @@ from .utils.protobuf import (
     script_to_address,
     deserialize_payment_pb,
 )
-from .utils.notification import send_invoice_push_notification
+from .utils.notification import send_invoice_notifications
 from .utils.websocket import send_invoice_payment_update
 
 from .utils.verify import (
@@ -271,7 +271,7 @@ class InvoiceSerializer(serializers.ModelSerializer):
             # description field (if present) will be included in output_data and saved
             InvoiceOutput.objects.create(**output_data)
 
-        send_invoice_push_notification(instance, self.context["request"])
+        send_invoice_notifications(instance, self.context["request"])
         return instance
 
 

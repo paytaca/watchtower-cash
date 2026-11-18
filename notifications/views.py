@@ -41,6 +41,17 @@ class DeviceUnsubscribeView(APIView):
 
 class DeviceStatusView(APIView):
     """Get registered push notification devices for a wallet hash"""
+    authentication_classes = [
+        ApiTokenAuthentication,
+    ]
+
+    permission_classes = [
+        HasApiTokenScopePermission(
+            name="PushNotifApiTokenScope",
+            scopes=[ApiTokenScopes.PUSH_NOTIF],
+            match_all=True,
+        )
+    ]
 
     def get(self, request, *args, **kwargs):
         wallet_hash = request.query_params.get('wallet_hash')
@@ -68,36 +79,40 @@ class TestPushNotificationView(APIView):
     """Send a test push notification to a wallet hash"""
 
     def post(self, request, *args, **kwargs):
-        from notifications.utils.send import send_push_notification_to_wallet_hashes
+        return Response(
+            { "detail": "This feature is currently disabled while we resolve an ongoing issue." },
+            status=503
+        )
+        # from notifications.utils.send import send_push_notification_to_wallet_hashes
 
-        wallet_hash = request.data.get('wallet_hash')
-        if not wallet_hash:
-            return Response({'error': 'wallet_hash is required'}, status=400)
+        # wallet_hash = request.data.get('wallet_hash')
+        # if not wallet_hash:
+        #     return Response({'error': 'wallet_hash is required'}, status=400)
 
-        message = request.data.get('message', 'Test push notification')
-        title = request.data.get('title', 'Test')
+        # message = request.data.get('message', 'Test push notification')
+        # title = request.data.get('title', 'Test')
 
-        try:
-            gcm_response, apns_response = send_push_notification_to_wallet_hashes(
-                [wallet_hash],
-                message,
-                title=title,
-                extra={'type': 'test'},
-            )
+        # try:
+        #     gcm_response, apns_response = send_push_notification_to_wallet_hashes(
+        #         [wallet_hash],
+        #         message,
+        #         title=title,
+        #         extra={'type': 'test'},
+        #     )
 
-            return Response({
-                'success': True,
-                'wallet_hash': wallet_hash,
-                'message': message,
-                'title': title,
-                'gcm_response': str(gcm_response) if gcm_response else None,
-                'apns_response': str(apns_response) if apns_response else None,
-            })
-        except Exception as e:
-            return Response({
-                'success': False,
-                'error': str(e),
-            }, status=500)
+        #     return Response({
+        #         'success': True,
+        #         'wallet_hash': wallet_hash,
+        #         'message': message,
+        #         'title': title,
+        #         'gcm_response': str(gcm_response) if gcm_response else None,
+        #         'apns_response': str(apns_response) if apns_response else None,
+        #     })
+        # except Exception as e:
+        #     return Response({
+        #         'success': False,
+        #         'error': str(e),
+        #     }, status=500)
 
 
 class SendPushNotificationView(APIView):
@@ -115,18 +130,22 @@ class SendPushNotificationView(APIView):
         )
     ]
 
-    @swagger_auto_schema(
-        request_body=SendPushNotificationSerializer,
-        responses = { 200: SendPushNotificationSerializer },
-    )
+    # @swagger_auto_schema(
+    #     request_body=SendPushNotificationSerializer,
+    #     responses = { 200: SendPushNotificationSerializer },
+    # )
     def post(self, request, *args, **kwargs):
         """
             Sends push notification to paytaca app
         """
-        serializer = self.serializer_class(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        result = serializer.save()
-        return Response(result)
+        return Response(
+            { "detail": "This feature is currently disabled while we resolve an ongoing issue." },
+            status=503
+        )
+        # serializer = self.serializer_class(data=request.data)
+        # serializer.is_valid(raise_exception=True)
+        # result = serializer.save()
+        # return Response(result)
 
 
 class OrderLiveActivityView(APIView):
