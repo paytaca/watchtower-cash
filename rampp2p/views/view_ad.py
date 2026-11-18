@@ -29,6 +29,8 @@ import math
 from datetime import timedelta
 from authentication.token import TokenAuthentication
 from authentication.permissions import RampP2PIsAuthenticated
+from rest_framework.exceptions import PermissionDenied
+from rampp2p.order_access import order_participant_filter, require_order_participant
 from decimal import Decimal
 
 import rampp2p.serializers as serializers
@@ -1069,19 +1071,26 @@ class AdShareLinkView(View):
 
 class AdSnapshotViewSet(viewsets.GenericViewSet):
     authentication_classes = [TokenAuthentication]
+    permission_classes = [RampP2PIsAuthenticated]
 
-    def retrieve(self, _, pk):
+    def retrieve(self, request, pk):
         try:
             ad_snapshot = models.AdSnapshot.objects.get(pk=pk)
+            if not models.Order.objects.filter(ad_snapshot_id=pk).filter(
+                order_participant_filter(request.user)
+            ).exists():
+                raise PermissionDenied('Only order participants may access this snapshot.')
             serializer = serializers.AdSnapshotSerializer(ad_snapshot)
             return Response(serializer.data, status=status.HTTP_200_OK)
         except models.AdSnapshot.DoesNotExist as err:
             return Response({"error": err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
 
     @action(method="get", detail=True)
-    def retrieve_by_order(self, _, pk):
+    def retrieve_by_order(self, request, pk):
         try:
-            ad_snapshot = models.Order.objects.get(pk=pk).ad_snapshot
+            order = models.Order.objects.get(pk=pk)
+            require_order_participant(order, request.user)
+            ad_snapshot = order.ad_snapshot
             serializer = serializers.AdSnapshotSerializer(ad_snapshot)
             return Response(serializer.data, status=status.HTTP_200_OK)
         except models.Order.DoesNotExist as err:

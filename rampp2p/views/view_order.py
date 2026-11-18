@@ -2,6 +2,8 @@ from rest_framework import status, viewsets, mixins
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny
+from rest_framework.exceptions import PermissionDenied
+from rest_framework.serializers import IntegerField, ListField
 
 from django.http import Http404
 from django.utils import timezone
@@ -30,6 +32,9 @@ from authentication.permissions import RampP2PIsAuthenticated
 
 import rampp2p.models as models
 from rampp2p.feature_control import require_p2p_feature
+from rampp2p.order_access import (
+    order_participant_filter, require_order_participant, require_order_ad_owner,
+)
 import rampp2p.serializers as serializers
 import rampp2p.utils.utils as utils
 import rampp2p.utils.websocket as websocket
@@ -243,11 +248,8 @@ class OrderViewSet(viewsets.GenericViewSet):
         except models.Order.DoesNotExist:
             raise Http404
 
-        wallet_hash = request.headers.get("wallet_hash")
-        if wallet_hash is None:
-            return Response(
-                {"error": "wallet_hash is required"}, status=status.HTTP_400_BAD_REQUEST
-            )
+        require_order_participant(order, request.user)
+        wallet_hash = request.user.wallet_hash
 
         serialized_order = serializers.OrderSerializer(
             order,
@@ -283,7 +285,9 @@ class OrderViewSet(viewsets.GenericViewSet):
         except (ValueError, ValidationError) as err:
             return Response({"error": err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
 
-        queryset = _optimize_order_queryset(models.Order.objects.all())
+        queryset = _optimize_order_queryset(
+            models.Order.objects.filter(order_participant_filter(request.user))
+        )
 
         # fetches orders created by user
         owned_orders = Q(owner__wallet_hash=wallet_hash)
@@ -513,12 +517,13 @@ class OrderViewSet(viewsets.GenericViewSet):
         except models.Order.DoesNotExist:
             raise Http404
 
+        require_order_participant(order, request.user)
         wallet_hash = request.user.wallet_hash
         chat_session_ref = request.data.get("chat_session_ref")
 
         if chat_session_ref:
             order.chat_session_ref = chat_session_ref
-            order.save()
+            order.save(update_fields=['chat_session_ref'])
 
         serialized_order = serializers.OrderSerializer(
             order,
@@ -534,6 +539,7 @@ class OrderViewSet(viewsets.GenericViewSet):
         if request.method == "GET":
             try:
                 order = models.Order.objects.get(pk=pk)
+                require_order_participant(order, request.user)
                 members = [order.owner, order.ad_snapshot.ad.owner]
                 if order.arbiter:
                     members.append(order.arbiter)
@@ -561,6 +567,8 @@ class OrderViewSet(viewsets.GenericViewSet):
                 members = serializers.OrderMemberSerializer(member_info, many=True)
             except models.Order.DoesNotExist:
                 raise Http404
+            except PermissionDenied:
+                raise
             except Exception as err:
                 return Response(
                     {"error": err.args[0]}, status=status.HTTP_400_BAD_REQUEST
@@ -569,12 +577,17 @@ class OrderViewSet(viewsets.GenericViewSet):
 
         if request.method == "PATCH":
             wallet_hash = request.user.wallet_hash
+            try:
+                order = models.Order.objects.get(pk=pk)
+            except models.Order.DoesNotExist:
+                raise Http404
+            require_order_participant(order, request.user)
+            identity = (
+                Q(peer_id=request.user.pk) if isinstance(request.user, models.Peer)
+                else Q(arbiter_id=request.user.pk)
+            )
             member = models.OrderMember.objects.filter(
-                Q(order__id=pk)
-                & (
-                    Q(peer__wallet_hash=wallet_hash)
-                    | Q(arbiter__wallet_hash=wallet_hash)
-                )
+                Q(order__id=pk) & identity
             )
             if not member.exists():
                 return Response(
@@ -919,16 +932,7 @@ class OrderStatusViewSet(viewsets.GenericViewSet):
         except models.Order.DoesNotExist:
             raise Http404
 
-        # Status events now carry the creator's name, so restrict to participants
-        if not (
-            order.is_seller(request.user.wallet_hash)
-            or order.is_buyer(request.user.wallet_hash)
-            or (order.arbiter and order.is_arbiter(request.user.wallet_hash))
-        ):
-            return Response(
-                {"error": "User not allowed to perform this action"},
-                status=status.HTTP_403_FORBIDDEN,
-            )
+        require_order_participant(order, request.user)
 
         queryset = models.Status.objects.filter(order__id=pk).order_by("-created_at")
         serializer = serializers.StatusSerializer(queryset, many=True)
@@ -939,7 +943,7 @@ class OrderStatusViewSet(viewsets.GenericViewSet):
         try:
             order = models.Order.objects.get(id=pk)
             member = self._check_status_edit_permissions(
-                order, request.user.wallet_hash
+                order, request.user
             )
             statuses = models.Status.objects.filter(order__id=pk)
 
@@ -960,12 +964,23 @@ class OrderStatusViewSet(viewsets.GenericViewSet):
     @action(detail=False, methods=["patch"])
     def read_order_status(self, request):
         wallet_hash = request.user.wallet_hash
-        order_ids = request.data.get("order_ids", [])
-        statuses = models.Status.objects.filter(order__id__in=order_ids)
-        for status in statuses:
-            if not status.buyer_read_at:
-                status.buyer_read_at = timezone.now()
-                status.save()
+        order_ids = ListField(child=IntegerField(min_value=1)).run_validation(
+            request.data.get("order_ids", [])
+        )
+        with transaction.atomic():
+            orders = list(models.Order.objects.filter(pk__in=order_ids))
+            if {order.pk for order in orders} != set(order_ids):
+                raise PermissionDenied('Only the buyer may mark these orders as read.')
+            for order in orders:
+                buyer_id = (
+                    order.owner_id if order.ad_snapshot.trade_type == models.TradeType.SELL
+                    else order.ad_snapshot.ad.owner_id
+                )
+                if not isinstance(request.user, models.Peer) or request.user.pk != buyer_id:
+                    raise PermissionDenied('Only the buyer may mark these orders as read.')
+            models.Status.objects.filter(
+                order_id__in=order_ids, buyer_read_at__isnull=True,
+            ).update(buyer_read_at=timezone.now())
 
         has_cashin_alerts = utils.check_has_cashin_alerts(wallet_hash)
 
@@ -984,15 +999,24 @@ class OrderStatusViewSet(viewsets.GenericViewSet):
         wallet_hash = request.user.wallet_hash
         try:
             with transaction.atomic():
+                order = models.Order.objects.select_for_update().get(pk=pk)
+                require_order_ad_owner(order, request.user)
                 validate_status(pk, StatusType.SUBMITTED)
                 validate_status_inst_count(StatusType.CONFIRMED, pk)
                 validate_status_progression(StatusType.CONFIRMED, pk)
 
-                order = models.Order.objects.get(pk=pk)
                 if order.expires_at and order.expires_at < timezone.now():
                     raise ValidationError("Cannot confirm expired order")
 
-                order.save()
+                serialized_status = serializers.StatusSerializer(
+                    data={
+                        "status": StatusType.CONFIRMED,
+                        "order": pk,
+                        "created_by": wallet_hash,
+                    }
+                )
+                serialized_status.is_valid(raise_exception=True)
+                confirmed = serialized_status.save()
 
         except (
             ValidationError,
@@ -1002,20 +1026,7 @@ class OrderStatusViewSet(viewsets.GenericViewSet):
         ) as err:
             return Response({"error": err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
 
-        serialized_status = serializers.StatusSerializer(
-            data={
-                "status": StatusType.CONFIRMED,
-                "order": pk,
-                "created_by": wallet_hash,
-            }
-        )
-
-        if not serialized_status.is_valid():
-            return Response(
-                serialized_status.errors, status=status.HTTP_400_BAD_REQUEST
-            )
-
-        serialized_status = serializers.StatusReadSerializer(serialized_status.save())
+        serialized_status = serializers.StatusReadSerializer(confirmed)
 
         # send websocket notification
         websocket.send_order_update(
@@ -1293,12 +1304,11 @@ class OrderStatusViewSet(viewsets.GenericViewSet):
         except (ValidationError, models.Order.DoesNotExist) as err:
             return Response({"error": err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
 
-    def _check_status_edit_permissions(self, order, wallet_hash):
-        """Throws an error if wallet_hash is not a participant of status's order"""
-
+    def _check_status_edit_permissions(self, order, user):
+        require_order_participant(order, user, allow_arbiter=False)
         members = order.get_members()
-        if wallet_hash == members["seller"].peer.wallet_hash:
+        if members["seller"] and user.pk == members["seller"].peer_id:
             return members["seller"]
-        if wallet_hash == members["buyer"].peer.wallet_hash:
+        if members["buyer"] and user.pk == members["buyer"].peer_id:
             return members["buyer"]
-        raise ValidationError("User not allowed to perform this action")
+        raise PermissionDenied("User not allowed to perform this action")
