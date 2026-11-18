@@ -12,7 +12,7 @@ from notifications.utils.send import (
 from main.utils.broadcast import broadcast_to_engagementhub
 
 
-def send_invoice_push_notification(instance, request):
+def send_invoice_notifications(instance, request):
     try:
         address = instance.merchant_data["address"]
     except (AttributeError, TypeError, KeyError):
@@ -54,13 +54,14 @@ def send_invoice_push_notification(instance, request):
         'extra_data': extra['payment_url'],
         'date_posted': timezone.now().isoformat()
     })
+    return dict(success=True)
 
-    return send_push_notification_to_wallet_hashes(
-        wallet_hashes,
-        message,
-        title=title,
-        extra=extra,
-    )
+    # return send_push_notification_to_wallet_hashes(
+    #     wallet_hashes,
+    #     message,
+    #     title=title,
+    #     extra=extra,
+    # )
 
 def resolve_invoice_notif_message(instance):
     outputs = instance.outputs.all()

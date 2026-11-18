@@ -6,7 +6,7 @@ from .models import (
     InvoiceOutput,
     InvoicePayment,
 )
-from .utils.notification import send_invoice_push_notification
+from .utils.notification import send_invoice_notifications
 
 # Register your models here.
 
@@ -61,6 +61,6 @@ class InvoiceAdmin(admin.ModelAdmin):
                     continue
             except Invoice.payment.RelatedObjectDoesNotExist:
                 pass
-            result = send_invoice_push_notification(obj, request)
+            result = send_invoice_notifications(obj, request)
             messages.info(request, f"{obj} -> {result}")
 
