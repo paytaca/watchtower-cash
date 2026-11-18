@@ -1,8 +1,9 @@
 from rest_framework import serializers
 from rampp2p.serializers import FiatCurrencySerializer
 import rampp2p.models as models
+from .profile_identity import ImmutableProfileIdentityMixin
 
-class ArbiterSerializer(serializers.ModelSerializer):
+class ArbiterSerializer(ImmutableProfileIdentityMixin, serializers.ModelSerializer):
     id = serializers.CharField(read_only=True)
     wallet_hash = serializers.CharField(required=False, write_only=True)
     name = serializers.CharField(required=False)

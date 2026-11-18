@@ -2,7 +2,7 @@ from rest_framework import status, viewsets
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
-from rest_framework.exceptions import AuthenticationFailed
+from rest_framework.exceptions import AuthenticationFailed, PermissionDenied
 
 from django.core.exceptions import ValidationError
 from django.db.utils import IntegrityError
@@ -112,6 +112,8 @@ class ArbiterView(APIView):
         return Response(serialized_arbiter.data, status=status.HTTP_200_OK)
     
     def patch(self, request):
+        if not isinstance(request.user, models.Arbiter):
+            raise PermissionDenied('An arbiter account is required.')
         data = request.data.copy()
         inactive_hours = request.data.get('inactive_hours')
         if inactive_hours:
@@ -235,6 +237,8 @@ class PeerViewSet(viewsets.GenericViewSet):
         return reserved
     
     def partial_update(self, request):
+        if not isinstance(request.user, models.Peer):
+            raise PermissionDenied('A peer account is required.')
         try:
             name = request.data.get('name')
             if name:
@@ -558,4 +562,3 @@ class PeerFeedbackViewSet(viewsets.GenericViewSet):
             to_peer = order.owner
         
         return from_peer, to_peer, order
-    
