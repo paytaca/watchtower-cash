@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.utils import timezone
 from decimal import Decimal
 from urllib.parse import urlencode
@@ -13,6 +14,12 @@ from main.utils.broadcast import broadcast_to_engagementhub
 
 
 def send_invoice_notifications(instance, request):
+    # Kill switch, off by default. `merchant_data` is caller-supplied and the
+    # invoice endpoint does not prove the caller holds the named address, so the
+    # push could be aimed at any wallet. See JPP_PAYMENT_REQUEST_PUSH_ENABLED.
+    if not getattr(settings, "JPP_PAYMENT_REQUEST_PUSH_ENABLED", False):
+        return {"success": False, "reason": "payment request push is disabled"}
+
     try:
         address = instance.merchant_data["address"]
     except (AttributeError, TypeError, KeyError):
