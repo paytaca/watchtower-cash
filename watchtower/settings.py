@@ -482,6 +482,7 @@ CORS_ALLOW_HEADERS = list(default_headers) + [
     "signature",
     "timestamp",
     "public-key",
+    "registration-challenge",
     "version",
     "platform",
     "x-auth-pubkey",
