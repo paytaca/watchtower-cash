@@ -85,7 +85,7 @@ services:
     command: [ "supervisord", "-c", "/code/supervisord.conf", "--nodaemon" ]
     ports:
       - "8000:8000"
-      - "9001:9000"
+      - "9000:9000"
     env_file:
       - .env_dev
     depends_on:
