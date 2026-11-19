@@ -61,6 +61,6 @@ class InvoiceAdmin(admin.ModelAdmin):
                     continue
             except Invoice.payment.RelatedObjectDoesNotExist:
                 pass
-            result = send_invoice_notifications(obj, request)
+            result = send_invoice_notifications(obj, request, require_owner=False)
             messages.info(request, f"{obj} -> {result}")
 

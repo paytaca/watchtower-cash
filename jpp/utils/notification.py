@@ -1,33 +1,73 @@
+from django.conf import settings
 from django.utils import timezone
-from decimal import Decimal
 from urllib.parse import urlencode
 
-from main.models import (
-    Wallet, Address, CashFungibleToken,
-)
-from notifications.utils.send import (
-    send_push_notification_to_wallet_hashes,
-    NotificationTypes,
-)
+from main.models import Wallet, Address
+from notifications.utils.send import NotificationTypes
 from main.utils.broadcast import broadcast_to_engagementhub
 
 
-def send_invoice_notifications(instance, request):
+def get_authenticated_wallet(request):
+    """Return the Wallet the request proved it holds, or None.
+
+    "Proved" means the wallet-hash header plus the AuthToken key, which is what
+    `WalletAuthentication` checks; it sets `is_authenticated` only after the key
+    validates. A wallet-hash header on its own is unproven — anyone can send
+    someone else's hash, and `WalletAuthentication` admits that as anonymous.
+    """
+    wallet = getattr(request, "user", None) if request is not None else None
+    if isinstance(wallet, Wallet) and wallet.is_authenticated:
+        return wallet
+    return None
+
+
+def send_invoice_notifications(instance, request, require_owner=True):
+    """Notify the wallet that owns the address named in `merchant_data`.
+
+    `merchant_data` is caller-supplied, so the address in it is not evidence of
+    anything. Without the owner gate, any anonymous caller could create an
+    invoice naming a victim's address and have this server push a payment
+    request to that victim — with only the invoice's own name in the payload, so
+    it reads as a genuine request.
+
+    The gate means the notification only fires when the request authenticated as
+    the wallet that holds the address. `require_owner=False` is for trusted
+    callers only (the Django admin action), where the staff user is the
+    authority and no wallet headers are present.
+
+    `settings.JPP_PAYMENT_REQUEST_PUSH_ENABLED` is the kill switch and defaults
+    to False: the whole push is off until the endpoint is proven safe, whatever
+    the caller. Restoring it is a config flip, not a code change.
+    """
+    if not getattr(settings, "JPP_PAYMENT_REQUEST_PUSH_ENABLED", False):
+        return {"success": False, "reason": "payment request push is disabled"}
+
     try:
         address = instance.merchant_data["address"]
     except (AttributeError, TypeError, KeyError):
-        return
+        return {"success": False, "reason": "no merchant_data address"}
 
-    wallet_hashes = Wallet.objects.filter(addresses__address=address) \
-        .values_list("wallet_hash", flat=True) \
-        .distinct()
+    if not isinstance(address, str):
+        return {"success": False, "reason": "merchant_data address is not a string"}
+
+    if require_owner:
+        wallet = get_authenticated_wallet(request)
+        if wallet is None:
+            return {"success": False, "reason": "caller is not an authenticated wallet"}
+        if not Address.objects.filter(address=address, wallet=wallet).exists():
+            return {"success": False, "reason": "caller does not own merchant_data address"}
+        wallet_hashes = [wallet.wallet_hash]
+    else:
+        wallet_hashes = [*Wallet.objects.filter(addresses__address=address)
+            .values_list("wallet_hash", flat=True)
+            .distinct()]
+
+    if not wallet_hashes:
+        return {"success": False, "reason": "no wallet owns merchant_data address"}
+
     address_path = Address.objects.filter(address=address) \
         .values_list("address_path", flat=True) \
         .first()
-
-    wallet_hashes = [*wallet_hashes]
-    if not wallet_hashes:
-        return
 
     payment_url_params = urlencode({
         "r": instance.get_absolute_uri(request),
@@ -46,7 +86,7 @@ def send_invoice_notifications(instance, request):
     title = "Payment Request"
     message = f"You have a payment request of {total_bch} BCH"
 
-    broadcast_to_engagementhub({
+    result = broadcast_to_engagementhub({
         'title': title,
         'message': message,
         'wallet_hash': wallet_hashes,
@@ -54,77 +94,4 @@ def send_invoice_notifications(instance, request):
         'extra_data': extra['payment_url'],
         'date_posted': timezone.now().isoformat()
     })
-    return dict(success=True)
-
-    # return send_push_notification_to_wallet_hashes(
-    #     wallet_hashes,
-    #     message,
-    #     title=title,
-    #     extra=extra,
-    # )
-
-def resolve_invoice_notif_message(instance):
-    outputs = instance.outputs.all()
-
-    token_amounts = {}
-    nft_outputs = []
-    include_bch_amount_text = False
-    for output in outputs:
-        # if there is non cashtoken output or cashtoken output with sats grater than CT dust
-        if not output.category or output.amount > 1000:
-            include_bch_amount_text = True
-
-        if output.token_amount:
-            category = output.category
-            token_amounts[category] = token_amounts.get(category, 0) + output.token_amount
-        elif output.capability:
-            nft_outputs.append(output)
-
-    amounts_text = []
-    if include_bch_amount_text:
-        total_bch = abs(instance.total_bch)
-        total_bch = f'{total_bch:.5f}'.rstrip('0').rstrip('.')
-        amounts_text.append(f"{total_bch} BCH")
-
-    token_amounts_text = []
-    for category, amount in token_amounts.items():
-        if len(token_amounts_text) >= 2:
-            break
-
-        formatted_amount = format_token_amount(category, amount)
-        if formatted_amount:
-            token_amounts_text.append(formatted_amount)
-
-    other_token_count = len(token_amounts.keys()) - len(token_amounts_text) 
-    if other_token_count > 0:
-        token_amounts_text.append(f"{other_token_count} fungible {'token' if other_token_count == 1 else 'tokens'}")
-    amounts_text += token_amounts_text
-
-    if nft_outputs:
-        nft_count = len(nft_outputs)
-        amounts_text.append(f"{nft_count} " + ("NFT" if nft_count == 1 else "NFTs"))
-
-    return f"You have a payment request of {join_with_and(amounts_text)}"
-
-
-def format_token_amount(category, amount):
-    ft_obj = CashFungibleToken.objects.filter(category=category).first()
-    if not ft_obj or not ft_obj.info:
-        return
-
-    info = ft_obj.info
-    if not info.symbol: return
-    if info.decimals is None: return
-
-    parsed_amount = Decimal(amount) / Decimal(10 ** info.decimals)
-    parsed_amount = round(parsed_amount, info.decimals)
-    return f"{parsed_amount} {info.symbol}"
-
-def join_with_and(items):
-    if not items:
-        return ''
-    if len(items) == 1:
-        return items[0]
-    if len(items) == 2:
-        return f"{items[0]} and {items[1]}"
-    return ", ".join(items[:-1]) + f", and {items[-1]}"
+    return dict(success=True, broadcast=result)

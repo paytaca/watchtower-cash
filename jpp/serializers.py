@@ -4,7 +4,6 @@ from urllib.parse import urlencode
 from django.utils import timezone
 from django.db import transaction
 from rest_framework import serializers
-from main.utils.broadcast import broadcast_to_engagementhub
 
 from .models import (
     Invoice,

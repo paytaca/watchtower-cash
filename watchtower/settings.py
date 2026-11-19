@@ -303,6 +303,13 @@ PUSH_NOTIFICATIONS_SETTINGS = {
 }
 PUSH_NOTIFICATIONS_SETTINGS.update(build_apns_settings(BASE_DIR))
 
+# The JPP "Payment Request" push, sent on behalf of whoever created the invoice.
+# Off until the invoice endpoint proves the caller owns the wallet it notifies;
+# see jpp/utils/notification.py. Flip to True to restore it.
+JPP_PAYMENT_REQUEST_PUSH_ENABLED = config(
+    "JPP_PAYMENT_REQUEST_PUSH_ENABLED", default=False, cast=bool
+)
+
 
 DB_NUM = [3, 4, 5]
 if DEPLOYMENT_INSTANCE == "prod":

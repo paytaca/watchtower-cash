@@ -8,7 +8,6 @@ from rest_framework import (
     renderers,
     exceptions,
 )
-from rest_framework.settings import api_settings
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from drf_yasg import openapi
@@ -41,6 +40,7 @@ from .utils.protobuf import (
     serialize_invoice,
     serialize_invoice_payment_ack,
 )
+from authentication.token import WalletAuthentication
 
 LOGGER = logging.getLogger("main")
 
@@ -239,6 +239,27 @@ class InvoiceViewSet(
 ):
     lookup_field = "uuid"
     serializer_class = InvoiceSerializer
+
+    def initialize_request(self, request, *args, **kwargs):
+        # ViewSetMixin resolves `self.action` after building the request, but
+        # building it is what calls `get_authenticators()`. Resolve it first.
+        if request.method.lower() == "options":
+            self.action = "metadata"
+        else:
+            self.action = self.action_map.get(request.method.lower())
+        return super().initialize_request(request, *args, **kwargs)
+
+    def get_authenticators(self):
+        # Only `create` sends a payment request to the wallet holding
+        # `merchant_data["address"]`, so only it needs the caller to prove that
+        # ownership. WalletAuthentication is optional (no `wallet-hash` header
+        # -> anonymous, still allowed) and first, so wallet tokens are not
+        # rejected by the stock DRF classes. Everything else keeps the previous
+        # behaviour.
+        authenticators = super().get_authenticators()
+        if self.action == "create":
+            return [WalletAuthentication(), *authenticators]
+        return authenticators
 
     parser_classes = (
         parsers.JSONParser,
