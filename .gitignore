@@ -211,6 +211,9 @@ supervisord.pid
 
 # exclude pem certificates
 **.pem 
+# APNs provider signing keys (.p8). Never commit one: it can mint tokens for
+# the absolutely identifiable topic under the team's account.
+**.p8
 images
 compose/firebase-admin-credentials.json
 

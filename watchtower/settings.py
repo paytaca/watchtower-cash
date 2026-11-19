@@ -19,6 +19,8 @@ import base64
 import decimal
 from celery.schedules import crontab
 
+from watchtower.apns_settings import build_apns_settings
+
 # Memory optimization: Configure Python garbage collection to be more aggressive
 # This helps prevent memory fragmentation and reduces overall memory usage
 import gc
@@ -266,7 +268,7 @@ CONSTANCE_CONFIG_FIELDSETS = {
 
 
 # Push notifications (django-push-notifications)
-# See https://github.com/jazzband/django-push-notifications
+# See https://github.com/django-commons/django-push-notifications
 import firebase_admin
 
 # Initialize the default app (either use `GOOGLE_APPLICATION_CREDENTIALS` environment variable, or pass a firebase_admin.credentials.Certificate instance)
@@ -277,6 +279,9 @@ google_app_credentials_path = os.path.join(
 google_app_cert = firebase_admin.credentials.Certificate(google_app_credentials_path)
 firebase_app = firebase_admin.initialize_app(google_app_cert)
 
+
+# Sandbox default and presence rules live in watchtower/apns_settings.py so they
+# can be unit tested without importing this module.
 PUSH_NOTIFICATIONS_SETTINGS = {
     "CONFIG": "push_notifications.conf.LegacyConfig",
     # For Firebase (Android)
@@ -287,13 +292,8 @@ PUSH_NOTIFICATIONS_SETTINGS = {
     # "GCM_API_KEY": "[your api key]",
     # For Apple Push Notification Services (IOS)
     # -----------------------------------------
-    "APNS_CERTIFICATE": os.path.join(
-        BASE_DIR, config("APNS_CERTIFICATE_PATH", "certificate.pem")
-    ),
-    "APNS_AUTH_KEY_ID": config("APNS_AUTH_KEY_ID", None),
-    "APNS_TEAM_ID": config("APNS_TEAM_ID", None),
-    "APNS_USE_ALTERNATIVE_PORT": config("APNS_USE_ALTERNATIVE_PORT", None),
-    "APNS_TOPIC": config("APNS_TOPIC", None),
+    # Token-based (p8) auth only. Certificate auth is no longer supported.
+    # -----------------------------------------
     # For Webpush
     # -----------------------------------------
     # "WNS_PACKAGE_SECURITY_ID": "[your package security id, e.g: 'ms-app://e-3-4-6234...']",
@@ -301,6 +301,14 @@ PUSH_NOTIFICATIONS_SETTINGS = {
     # "WP_PRIVATE_KEY": "/path/to/your/private.pem",
     # "WP_CLAIMS": {'sub': "mailto: development@example.com"}
 }
+PUSH_NOTIFICATIONS_SETTINGS.update(build_apns_settings(BASE_DIR))
+
+# The JPP "Payment Request" push, sent on behalf of whoever created the invoice.
+# Off until the invoice endpoint proves the caller owns the wallet it notifies;
+# see jpp/utils/notification.py. Flip to True to restore it.
+JPP_PAYMENT_REQUEST_PUSH_ENABLED = config(
+    "JPP_PAYMENT_REQUEST_PUSH_ENABLED", default=False, cast=bool
+)
 
 
 DB_NUM = [3, 4, 5]
