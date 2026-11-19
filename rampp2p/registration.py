@@ -1,6 +1,7 @@
 """Bound, expiring registration challenges and shared request limits."""
 import hashlib
 import json
+from ipaddress import ip_address
 from datetime import timedelta
 from uuid import UUID
 
@@ -8,6 +9,7 @@ from ecdsa import SECP256k1, VerifyingKey
 from ecdsa.errors import MalformedPointError
 
 from django.conf import settings
+from django.core.exceptions import ImproperlyConfigured
 from django.db.models import F
 from django.utils import timezone
 from rest_framework.exceptions import PermissionDenied, ValidationError
@@ -20,6 +22,34 @@ from rampp2p.viewcodes import ViewCode
 
 
 CHALLENGE_TTL = timedelta(minutes=5)
+
+
+def registration_client_ip(request):
+    """Use an explicit trusted proxy count, or the direct peer in local mode."""
+    hops = getattr(settings, 'P2P_REGISTRATION_PROXY_HOPS', 0)
+    if not isinstance(hops, int) or not 0 <= hops <= 10:
+        raise ImproperlyConfigured('P2P_REGISTRATION_PROXY_HOPS must be an integer between 0 and 10.')
+    if hops:
+        # Production must keep the backend HTTP port private. Each trusted
+        # proxy appends its observed peer; caller-supplied prefixes are ignored.
+        forwarded = request.META.get('HTTP_X_FORWARDED_FOR', '')
+        if not isinstance(forwarded, str) or len(forwarded) > 4096:
+            raise ValidationError({'client_ip': 'Invalid trusted proxy header.'})
+        chain = forwarded.split(',')
+        if len(chain) < hops:
+            raise ValidationError({'client_ip': 'Trusted proxy client IP is missing.'})
+        value = chain[-hops].strip()
+    else:
+        # Direct development/test requests never trust forwarded headers.
+        value = request.META.get('REMOTE_ADDR', '')
+    try:
+        if not isinstance(value, str) or '%' in value:
+            raise ValueError
+        address = ip_address(value.strip())
+        # Collapse equivalent IPv6 spellings and IPv4-mapped IPv6 addresses.
+        return str(getattr(address, 'ipv4_mapped', None) or address)
+    except ValueError as err:
+        raise ValidationError({'client_ip': 'A valid client IP address is required.'}) from err
 
 
 def registration_identity(request, account_type):
@@ -101,9 +131,7 @@ class RegistrationThrottle(BaseThrottle):
             raise ValidationError('A registration JSON object is required.')
         now = timezone.now()
         self.retry_after = 0
-        # REMOTE_ADDR must be supplied by the trusted reverse proxy. Never trust
-        # client-supplied X-Forwarded-For headers here.
-        ip = request.META.get('REMOTE_ADDR') or 'unknown'
+        ip = registration_client_ip(request)
         key = request.headers.get('public-key') or request.headers.get('public_key') or request.data.get('public_key') or ''
         if not isinstance(key, str):
             key = ''

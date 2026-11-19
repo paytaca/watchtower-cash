@@ -11,6 +11,8 @@ services:
     image: watchtower_web
     command: [ "supervisord", "-c", "/code/supervisord-mainnet.conf", "--nodaemon" ]
     env_file: /root/watchtower/compose/.env_mainnet
+    environment:
+      P2P_REGISTRATION_PROXY_HOPS: "${P2P_REGISTRATION_PROXY_HOPS:-1}"
     volumes:
       - /var/www/images:/images
       - /var/opt/watchtower/private-p2p-proofs:/code/private-p2p-proofs
@@ -18,5 +20,6 @@ services:
       - /code/anyhedge/js/node_modules
       - /code/stablehedge/js/node_modules
     ports:
-      - 8000:8000
-      - 9000:9000
+      # Both WSGI and ASGI accept HTTP; only host Nginx may reach published ports.
+      - "127.0.0.1:8000:8000"
+      - "127.0.0.1:9000:9000"

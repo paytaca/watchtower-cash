@@ -5,17 +5,19 @@ from unittest.mock import patch
 
 import ecdsa
 from django.core.management import call_command
+from django.core.exceptions import ImproperlyConfigured
 from django.test import TestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APIRequestFactory
 
 from rampp2p.models import Arbiter, Peer, RegistrationChallenge, RegistrationRequestBucket, ReservedName
-from rampp2p.registration import RegistrationThrottle
+from rampp2p.registration import RegistrationThrottle, registration_client_ip
 from rampp2p.views.view_registration import RegistrationChallengeView
 from rampp2p.views.view_user import ArbiterView, PeerViewSet
 
 
 @override_settings(
+    P2P_REGISTRATION_PROXY_HOPS=0,
     P2P_REGISTRATION_IP_PER_MINUTE=1000, P2P_REGISTRATION_IP_PER_DAY=1000,
     P2P_REGISTRATION_KEY_PER_MINUTE=1000, P2P_REGISTRATION_KEY_PER_DAY=1000,
 )
@@ -196,6 +198,78 @@ class RegistrationTests(TestCase):
     def test_spoofed_forwarded_for_does_not_bypass_ip_limit(self):
         self.assertEqual(self.challenge(HTTP_X_FORWARDED_FOR='192.0.2.1').status_code, 201)
         self.assertEqual(self.challenge(HTTP_X_FORWARDED_FOR='192.0.2.2').status_code, 429)
+
+    @override_settings(P2P_REGISTRATION_PROXY_HOPS=1, P2P_REGISTRATION_IP_PER_MINUTE=1)
+    def test_distinct_clients_behind_one_proxy_have_separate_ip_buckets(self):
+        for client in ('192.0.2.1', '192.0.2.2'):
+            response = self.challenge(REMOTE_ADDR='172.18.0.1', HTTP_X_FORWARDED_FOR=client)
+            self.assertEqual(response.status_code, 201)
+
+    @override_settings(P2P_REGISTRATION_PROXY_HOPS=1, P2P_REGISTRATION_IP_PER_MINUTE=1)
+    def test_same_client_keeps_its_limit_across_proxy_addresses(self):
+        self.assertEqual(self.challenge(REMOTE_ADDR='172.18.0.1', HTTP_X_FORWARDED_FOR='192.0.2.1').status_code, 201)
+        response = self.challenge(REMOTE_ADDR='172.19.0.1', HTTP_X_FORWARDED_FOR='192.0.2.1')
+        self.assertEqual(response.status_code, 429)
+        self.assertIn('Retry-After', response)
+
+    @override_settings(P2P_REGISTRATION_PROXY_HOPS=1, P2P_REGISTRATION_IP_PER_MINUTE=1)
+    def test_caller_supplied_prefix_cannot_rotate_the_real_client_bucket(self):
+        self.assertEqual(self.challenge(HTTP_X_FORWARDED_FOR='198.51.100.1, 192.0.2.1').status_code, 201)
+        self.assertEqual(self.challenge(HTTP_X_FORWARDED_FOR='198.51.100.2, 192.0.2.1').status_code, 429)
+
+    @override_settings(P2P_REGISTRATION_PROXY_HOPS=2, P2P_REGISTRATION_IP_PER_MINUTE=1)
+    def test_two_trusted_hops_ignore_untrusted_prefixes(self):
+        first = self.challenge(HTTP_X_FORWARDED_FOR='198.51.100.1, 192.0.2.1, 10.0.0.1')
+        second = self.challenge(HTTP_X_FORWARDED_FOR='198.51.100.2, 192.0.2.1, 10.0.0.1')
+        distinct = self.challenge(HTTP_X_FORWARDED_FOR='198.51.100.3, 192.0.2.2, 10.0.0.1')
+        self.assertEqual(first.status_code, 201)
+        self.assertEqual(second.status_code, 429)
+        self.assertEqual(distinct.status_code, 201)
+
+    @override_settings(P2P_REGISTRATION_PROXY_HOPS=1)
+    def test_missing_or_invalid_trusted_proxy_ip_does_not_create_buckets(self):
+        for forwarded in (None, '', 'invalid', '192.0.2.1:443', 'fe80::1%eth0'):
+            headers = {} if forwarded is None else {'HTTP_X_FORWARDED_FOR': forwarded}
+            with self.subTest(forwarded=forwarded):
+                self.assertEqual(self.challenge(**headers).status_code, 400)
+        self.assertFalse(RegistrationRequestBucket.objects.exists())
+        self.assertFalse(RegistrationChallenge.objects.exists())
+
+    @override_settings(P2P_REGISTRATION_PROXY_HOPS=2)
+    def test_short_forwarded_chain_is_rejected_instead_of_sharing_proxy_bucket(self):
+        self.assertEqual(self.challenge(HTTP_X_FORWARDED_FOR='192.0.2.1').status_code, 400)
+        self.assertFalse(RegistrationRequestBucket.objects.exists())
+
+    @override_settings(P2P_REGISTRATION_PROXY_HOPS=1, P2P_REGISTRATION_IP_PER_MINUTE=1)
+    def test_equivalent_ipv6_spellings_share_a_bucket(self):
+        self.assertEqual(self.challenge(HTTP_X_FORWARDED_FOR='2001:db8::1').status_code, 201)
+        self.assertEqual(self.challenge(HTTP_X_FORWARDED_FOR='2001:0db8:0000:0000:0000:0000:0000:0001').status_code, 429)
+
+    @override_settings(P2P_REGISTRATION_PROXY_HOPS=1, P2P_REGISTRATION_IP_PER_MINUTE=1)
+    def test_ipv4_mapped_ipv6_cannot_bypass_ipv4_bucket(self):
+        self.assertEqual(self.challenge(HTTP_X_FORWARDED_FOR='192.0.2.1').status_code, 201)
+        self.assertEqual(self.challenge(HTTP_X_FORWARDED_FOR='::ffff:192.0.2.1').status_code, 429)
+
+    @override_settings(P2P_REGISTRATION_PROXY_HOPS=1, P2P_REGISTRATION_IP_PER_MINUTE=2)
+    def test_proxied_challenge_and_submission_share_the_client_bucket(self):
+        challenge = self.challenge(REMOTE_ADDR='172.18.0.1', HTTP_X_FORWARDED_FOR='192.0.2.1')
+        headers = self.signed_headers(challenge)
+        headers['HTTP_X_FORWARDED_FOR'] = '192.0.2.1'
+        self.assertEqual(self.register(challenge, headers=headers).status_code, 201)
+        self.assertEqual(self.challenge(wallet='another-wallet', HTTP_X_FORWARDED_FOR='192.0.2.1').status_code, 429)
+
+    def test_direct_mode_rejects_missing_or_invalid_socket_ip(self):
+        for remote in ('', None, 'invalid'):
+            with self.subTest(remote=remote):
+                self.assertEqual(self.challenge(REMOTE_ADDR=remote).status_code, 400)
+        self.assertFalse(RegistrationRequestBucket.objects.exists())
+
+    def test_invalid_proxy_configuration_fails_closed(self):
+        request = self.factory.post('/unused/', {}, format='json')
+        for hops in (-1, 11, '1'):
+            with self.subTest(hops=hops), override_settings(P2P_REGISTRATION_PROXY_HOPS=hops):
+                with self.assertRaises(ImproperlyConfigured):
+                    registration_client_ip(request)
 
     @override_settings(P2P_REGISTRATION_KEY_PER_MINUTE=1)
     def test_key_limit_applies_across_ips_and_account_types(self):
