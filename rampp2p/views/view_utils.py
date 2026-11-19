@@ -5,7 +5,7 @@ from rest_framework.response import Response
 import os
 from django.conf import settings
 from django.http import FileResponse
-from django.http import HttpResponse, JsonResponse
+from django.http import HttpResponse, JsonResponse, HttpResponseNotAllowed
 
 from main.utils.subscription import save_subscription
 from rampp2p.utils.fees import get_trading_fees
@@ -76,12 +76,42 @@ class SubscribeContractAddress(APIView):
         return Response({'success': created}, status.HTTP_200_OK)
     
 def media_proxy_view(request, *args, **kwargs):
-    path = kwargs.get("path", "")
+    """Serve a file from MEDIA_ROOT without letting the URL escape it.
+
+    Media is only ever read, so anything but GET/HEAD is rejected, the
+    caller-supplied path is normalised, and the resolved target (symlinks
+    included) must still live inside MEDIA_ROOT. Treat every failure as an
+    indistinguishable 404 so the endpoint cannot be used to probe the disk.
+    """
+    if request.method not in ("GET", "HEAD"):
+        return HttpResponseNotAllowed(["GET", "HEAD"])
+
+    path = kwargs.get("path", "").replace("\\", "/")
     if path.endswith("/"): path = path[:-1]
 
-    file_path = os.path.join(settings.MEDIA_ROOT, path)
-
-    if os.path.exists(file_path):
-        return FileResponse(open(file_path, 'rb'))
-    else:
+    # Check before touching the filesystem: `os.path.join` discards the base
+    # for an absolute path (`/etc/passwd`), and `..` segments walk upwards.
+    # A NUL byte would raise from the filesystem calls below, so reject it too.
+    if not path or os.path.isabs(path) or ".." in path.split("/") or "\x00" in path:
         return HttpResponse(status=404)
+
+    media_root = os.path.realpath(settings.MEDIA_ROOT)
+
+    try:
+        file_path = os.path.realpath(os.path.join(media_root, path))
+    except (OSError, ValueError):
+        return HttpResponse(status=404)
+
+    # `realpath` also resolves symlinks, so a link planted inside the media
+    # tree cannot point back out of it. `commonpath` is path-aware, unlike a
+    # string prefix check (`/srv/media-secrets` vs `/srv/media`).
+    try:
+        within_media_root = os.path.commonpath([media_root, file_path]) == media_root
+    except ValueError:
+        # Mixed absolute/relative paths or different drives.
+        within_media_root = False
+
+    if not within_media_root or not os.path.isfile(file_path):
+        return HttpResponse(status=404)
+
+    return FileResponse(open(file_path, 'rb'), as_attachment=True)
