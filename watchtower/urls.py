@@ -16,7 +16,6 @@ Including another URLconf
 
 from django.contrib import admin
 from django.urls import path
-from django.conf.urls.static import static
 from django.conf import settings
 from django.conf.urls import url
 from django.urls import path, include
@@ -35,7 +34,6 @@ from anyhedge.urls import urlpatterns as anyhedge_urlpatterns
 from notifications.urls import urlpatterns as notifications_urlpatterns
 from nostr.urls import urlpatterns as nostr_urlpatterns
 from jpp.urls import urlpatterns as jpp_urlpatterns
-from django.conf.urls.static import static
 from django.conf import settings
 from ramp.urls import urlpatterns as ramp_urlpatterns
 from rampp2p.urls import urlpatterns as ramp_p2p_urlpatterns
@@ -249,16 +247,13 @@ urlpatterns += [
     path("api/", include(paytacagifts_urlpatterns)),
 ]
 
-if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
-else:
-    import re
-    from django.urls import re_path
-    from django.conf import settings
-    from rampp2p.views.view_utils import media_proxy_view
+# Use the same guarded media handler in development and production.
+import re
+from django.urls import re_path
+from rampp2p.views.view_utils import media_proxy_view
 
-    base_media_url = settings.MEDIA_URL.strip("/")
-    urlpatterns += [
-        re_path(r"^" + re.escape(base_media_url) + r"/(?P<path>.*)$", media_proxy_view),
-        path(base_media_url, media_proxy_view),
-    ]
+base_media_url = settings.MEDIA_URL.strip("/")
+urlpatterns += [
+    re_path(r"^" + re.escape(base_media_url) + r"/(?P<path>.*)$", media_proxy_view),
+    path(base_media_url, media_proxy_view),
+]

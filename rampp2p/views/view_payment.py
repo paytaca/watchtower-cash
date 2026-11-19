@@ -6,6 +6,11 @@ from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
 
 from django.db import transaction
+from django.http import FileResponse, Http404
+from django.utils.cache import patch_vary_headers
+import mimetypes
+
+from rampp2p.proof_storage import proof_file_path
 from django.core.exceptions import ValidationError
 from django.db.models import OuterRef, Subquery, Q
 from django.utils.translation import gettext_lazy as _
@@ -290,6 +295,35 @@ class OrderPaymentViewSet(viewsets.GenericViewSet):
             return Response(serializer.data, status=status.HTTP_200_OK)
         except models.OrderPayment.DoesNotExist as err:
             return Response({"error": err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=True, methods=["get"])
+    def retrieve_image(self, request, pk):
+        orders = models.Order.objects.filter(order_participant_filter(request.user))
+        attachment = models.OrderPaymentAttachment.objects.select_related('image').filter(
+            image_id=pk, payment__order__in=orders,
+        ).first()
+        if attachment is None:
+            raise Http404
+        try:
+            path = proof_file_path(attachment.image.url_path)
+            content_type = mimetypes.guess_type(path.name)[0]
+            if content_type not in {
+                'image/png', 'image/jpeg', 'image/gif', 'image/webp',
+                'image/bmp', 'image/x-icon', 'image/vnd.microsoft.icon',
+            }:
+                content_type = 'application/octet-stream'
+            response = FileResponse(
+                path.open('rb'), content_type=content_type,
+                as_attachment=content_type == 'application/octet-stream',
+                filename=path.name,
+            )
+        except (OSError, ValueError, RuntimeError):
+            raise Http404
+        response['Cache-Control'] = 'private, no-store'
+        response['Pragma'] = 'no-cache'
+        response['X-Content-Type-Options'] = 'nosniff'
+        patch_vary_headers(response, ['Authorization', 'wallet-hash', 'wallet_hash'])
+        return response
 
     @action(detail=True, methods=["post"])
     def upload_attachment(self, request, pk):

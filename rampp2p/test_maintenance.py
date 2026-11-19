@@ -37,6 +37,7 @@ class P2PMaintenanceTests(TestCase):
             '/order/123/contract/', '/order/123/contract/fees/',
             '/order/123/contract/transactions/', '/order/contract/123/',
             '/order/contract/123/transactions/', '/ad/snapshot/123/',
+            '/order/payment/image/123/',
         )
         for path in paths:
             with self.subTest(path=path), self.assertNumQueries(1):

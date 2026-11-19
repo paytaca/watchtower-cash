@@ -3,6 +3,7 @@ from unittest.mock import Mock, patch
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db.models.signals import post_save
 from django.test import TestCase
+from django.urls import reverse
 from rest_framework.test import APIRequestFactory, force_authenticate
 
 from rampp2p.models import (
@@ -122,7 +123,7 @@ class PaymentProofAccessTests(TestCase):
             for actor in (self.outsider, self.other_arbiter):
                 self.assertEqual(self.request('retrieve', actor, pk=payment.pk).status_code, 403)
         response = self.request('retrieve', self.buyer, pk=self.sell_payment.pk)
-        self.assertEqual(response.data['attachments'][0]['image']['url_path'], self.image.url_path)
+        self.assertEqual(response.data['attachments'][0]['image']['url_path'], reverse('order-payment-image', kwargs={'pk': self.image.pk}))
 
     def test_headers_cannot_impersonate_a_participant(self):
         headers = {'HTTP_WALLET_HASH': self.buyer.wallet_hash}

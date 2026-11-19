@@ -772,6 +772,8 @@ from requests.compat import urljoin
 IMAGE_UPLOAD_FOLDER = "image_uploads"
 IMAGE_UPLOAD_PATH = urljoin(MEDIA_URL, IMAGE_UPLOAD_FOLDER)
 IMAGE_UPLOAD_ROOT = os.path.join(MEDIA_ROOT, IMAGE_UPLOAD_FOLDER)
+# Proof files must be persistent and outside all public media/static roots.
+P2P_PROOF_ROOT = config("P2P_PROOF_ROOT", default=os.path.join(BASE_DIR, "private-p2p-proofs"))
 
 P2P_EXCHANGE_SLACKBOT_USER_TOKEN = config("P2P_EXCHANGE_SLACKBOT_USER_TOKEN", "")
 P2P_EXCHANGE_SLACK_CHANNEL = config(

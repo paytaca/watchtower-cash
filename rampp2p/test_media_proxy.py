@@ -3,6 +3,7 @@ from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 from django.test import RequestFactory, SimpleTestCase, override_settings
+from django.urls import resolve
 
 from rampp2p.views.view_utils import media_proxy_view
 
@@ -87,3 +88,36 @@ class MediaProxyTests(SimpleTestCase):
             response = self.response('uploads/receipt.png')
         self.assertEqual(response.status_code, 200)
         self.assertEqual(b''.join(response.streaming_content), b'synthetic-image')
+
+    def test_legacy_proofs_and_aliases_are_not_public_even_without_database_records(self):
+        legacy = self.media / 'image_uploads'
+        legacy.mkdir()
+        (legacy / 'proof.png').write_bytes(b'synthetic-proof')
+        (self.media / 'alias.png').symlink_to(legacy / 'proof.png')
+        with override_settings(IMAGE_UPLOAD_ROOT=str(legacy)):
+            for path in ('image_uploads/proof.png', 'alias.png'):
+                with self.subTest(path=path):
+                    self.assert_not_found(path)
+
+    def test_symlinks_to_private_proofs_are_not_public(self):
+        private = self.root / 'private-proofs'
+        private.mkdir()
+        (private / 'proof.png').write_bytes(b'synthetic-private-proof')
+        (self.media / 'alias.png').symlink_to(private / 'proof.png')
+        with override_settings(P2P_PROOF_ROOT=str(private)):
+            self.assert_not_found('alias.png')
+
+    def test_actual_media_route_blocks_proofs_in_debug_and_production(self):
+        legacy = self.media / 'image_uploads'
+        legacy.mkdir()
+        (legacy / 'proof.png').write_bytes(b'synthetic-proof')
+        for debug in (True, False):
+            with self.subTest(debug=debug), override_settings(
+                ROOT_URLCONF='watchtower.urls', DEBUG=debug, IMAGE_UPLOAD_ROOT=str(legacy),
+            ):
+                match = resolve('/media/image_uploads/proof.png')
+                self.assertIs(match.func, media_proxy_view)
+                with patch('pathlib.Path.open') as open_file:
+                    response = match.func(self.request, **match.kwargs)
+                    self.assertEqual(response.status_code, 404)
+                    open_file.assert_not_called()

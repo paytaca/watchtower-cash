@@ -157,6 +157,11 @@ urlpatterns = [
     path("order/status/", OrderStatusViewSet.as_view({"patch": "read_order_status"})),
     # Payment
     path(
+        "order/payment/image/<int:pk>/",
+        OrderPaymentViewSet.as_view({"get": "retrieve_image"}),
+        name="order-payment-image",
+    ),
+    path(
         "order/payment/",
         OrderPaymentViewSet.as_view({"get": "list"}),
         name="order-payment-list",

@@ -3,6 +3,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 
 from pathlib import Path
+from rampp2p.proof_storage import is_public_proof_path
 from django.conf import settings
 from django.http import FileResponse
 from django.http import HttpResponse, JsonResponse
@@ -87,7 +88,7 @@ def media_proxy_view(request, *args, **kwargs):
         # Resolve symlinks before checking containment. A string-prefix check
         # would also allow sibling directories such as "media-private".
         file_path.relative_to(media_root)
-        if not file_path.is_file():
+        if is_public_proof_path(relative_path, file_path) or not file_path.is_file():
             return HttpResponse(status=404)
         return FileResponse(file_path.open('rb'))
     except (OSError, ValueError, RuntimeError):
