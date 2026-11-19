@@ -970,17 +970,25 @@ class OrderStatusViewSet(viewsets.GenericViewSet):
         with transaction.atomic():
             orders = list(models.Order.objects.filter(pk__in=order_ids))
             if {order.pk for order in orders} != set(order_ids):
-                raise PermissionDenied('Only the buyer may mark these orders as read.')
+                raise PermissionDenied('Only buyers and sellers may mark their own orders as read.')
+            buyer_order_ids, seller_order_ids = [], []
             for order in orders:
+                require_order_participant(order, request.user, allow_arbiter=False)
                 buyer_id = (
                     order.owner_id if order.ad_snapshot.trade_type == models.TradeType.SELL
                     else order.ad_snapshot.ad.owner_id
                 )
-                if not isinstance(request.user, models.Peer) or request.user.pk != buyer_id:
-                    raise PermissionDenied('Only the buyer may mark these orders as read.')
+                if request.user.pk == buyer_id:
+                    buyer_order_ids.append(order.pk)
+                else:
+                    seller_order_ids.append(order.pk)
+            read_at = timezone.now()
             models.Status.objects.filter(
-                order_id__in=order_ids, buyer_read_at__isnull=True,
-            ).update(buyer_read_at=timezone.now())
+                order_id__in=buyer_order_ids, buyer_read_at__isnull=True,
+            ).update(buyer_read_at=read_at)
+            models.Status.objects.filter(
+                order_id__in=seller_order_ids, seller_read_at__isnull=True,
+            ).update(seller_read_at=read_at)
 
         has_cashin_alerts = utils.check_has_cashin_alerts(wallet_hash)
 

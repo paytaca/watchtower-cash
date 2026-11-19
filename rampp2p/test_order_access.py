@@ -268,29 +268,82 @@ class OrderAccessTests(TestCase):
         self.mocks['push'].assert_not_called()
 
     def test_mixed_bulk_read_request_cannot_write_any_statuses(self):
-        response = self.request(
-            OrderStatusViewSet, 'read_order_status', self.buyer, method='patch',
-            data={'order_ids': [self.order.pk, self.foreign_order.pk]},
-        )
-        self.assertEqual(response.status_code, 403)
-        self.assertFalse(Status.objects.filter(buyer_read_at__isnull=False).exists())
+        for actor in (self.buyer, self.seller):
+            with self.subTest(actor=actor.name):
+                response = self.request(
+                    OrderStatusViewSet, 'read_order_status', actor, method='patch',
+                    data={'order_ids': [self.order.pk, self.foreign_order.pk]},
+                )
+                self.assertEqual(response.status_code, 403)
+                self.assertFalse(Status.objects.filter(buyer_read_at__isnull=False).exists())
+                self.assertFalse(Status.objects.filter(seller_read_at__isnull=False).exists())
         self.mocks['general_websocket'].assert_not_called()
 
-    def test_only_buyer_can_bulk_mark_buy_and_sell_orders_read(self):
-        for actor in (self.seller, self.outsider, self.arbiter, self.other_arbiter):
+    def test_only_trading_peers_can_bulk_mark_buy_and_sell_orders_read(self):
+        for actor in (self.outsider, self.arbiter, self.other_arbiter):
             with self.subTest(actor=actor.name):
                 response = self.request(
                     OrderStatusViewSet, 'read_order_status', actor, method='patch',
                     data={'order_ids': [self.order.pk, self.buy_order.pk]},
                 )
                 self.assertEqual(response.status_code, 403)
+        for actor, own_column, other_column in (
+            (self.buyer, 'buyer_read_at', 'seller_read_at'),
+            (self.seller, 'seller_read_at', 'buyer_read_at'),
+        ):
+            with self.subTest(actor=actor.name):
+                Status.objects.all().update(buyer_read_at=None, seller_read_at=None)
+                response = self.request(
+                    OrderStatusViewSet, 'read_order_status', actor, method='patch',
+                    data={'order_ids': [self.order.pk, self.buy_order.pk]},
+                )
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(Status.objects.filter(**{own_column + '__isnull': False}).count(), 2)
+                self.assertFalse(Status.objects.filter(**{other_column + '__isnull': False}).exists())
+                untouched = Status.objects.get(order=self.foreign_order)
+                self.assertIsNone(untouched.buyer_read_at)
+                self.assertIsNone(untouched.seller_read_at)
+
+    def test_bulk_read_resolves_each_order_role_in_a_mixed_role_batch(self):
+        original = self.order.ad_snapshot
+        with patch('rampp2p.signals.AdSummaryMessage.send_safe'):
+            ad = Ad.objects.create(
+                owner=self.buyer, trade_type='SELL', price_type='FIXED',
+                fiat_currency=original.fiat_currency, crypto_currency=original.crypto_currency,
+            )
+        snapshot = AdSnapshot.objects.create(
+            ad=ad, trade_type='SELL', price_type='FIXED',
+            fiat_currency=original.fiat_currency, crypto_currency=original.crypto_currency,
+            appeal_cooldown_choice=60,
+        )
+        reverse_order = Order.objects.create(
+            owner=self.seller, ad_snapshot=snapshot, trade_amount=10000,
+        )
+        Status.objects.bulk_create([Status(order=reverse_order, status='SBM')])
         response = self.request(
             OrderStatusViewSet, 'read_order_status', self.buyer, method='patch',
-            data={'order_ids': [self.order.pk, self.buy_order.pk]},
+            data={'order_ids': [self.order.pk, reverse_order.pk]},
         )
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(Status.objects.filter(buyer_read_at__isnull=False).count(), 2)
-        self.assertFalse(Status.objects.filter(order=self.foreign_order, buyer_read_at__isnull=False).exists())
+        buying = Status.objects.get(order=self.order)
+        selling = Status.objects.get(order=reverse_order)
+        self.assertIsNotNone(buying.buyer_read_at)
+        self.assertIsNone(buying.seller_read_at)
+        self.assertIsNotNone(selling.seller_read_at)
+        self.assertIsNone(selling.buyer_read_at)
+
+    def test_bulk_read_preserves_existing_acknowledgments_for_both_roles(self):
+        earlier = timezone.now() - timedelta(hours=1)
+        Status.objects.filter(order=self.order).update(buyer_read_at=earlier, seller_read_at=earlier)
+        for actor in (self.buyer, self.seller):
+            response = self.request(
+                OrderStatusViewSet, 'read_order_status', actor, method='patch',
+                data={'order_ids': [self.order.pk, self.buy_order.pk]},
+            )
+            self.assertEqual(response.status_code, 200)
+            stored = Status.objects.get(order=self.order)
+            self.assertEqual(stored.buyer_read_at, earlier)
+            self.assertEqual(stored.seller_read_at, earlier)
 
     def test_unknown_or_invalid_bulk_order_ids_do_not_change_records(self):
         for ids, expected in (([self.order.pk, 999999], 403), ('not-a-list', 400), ([None], 400)):
