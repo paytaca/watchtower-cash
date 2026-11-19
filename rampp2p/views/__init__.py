@@ -7,3 +7,4 @@ from .view_contract import *
 from .view_appeal import *
 from .view_payment import *
 from .view_misc import *
+from .view_registration import RegistrationChallengeView

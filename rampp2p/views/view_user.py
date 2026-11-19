@@ -2,7 +2,7 @@ from rest_framework import status, viewsets
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
-from rest_framework.exceptions import AuthenticationFailed, PermissionDenied
+from rest_framework.exceptions import APIException, AuthenticationFailed, PermissionDenied
 
 from django.core.exceptions import ValidationError
 from django.db.utils import IntegrityError
@@ -18,8 +18,9 @@ from authentication.permissions import RampP2PIsAuthenticated
 
 import rampp2p.serializers as serializers
 import rampp2p.models as models
-from rampp2p.viewcodes import ViewCode
-from rampp2p.utils.signature import verify_signature, get_verification_headers
+from rampp2p.registration import (
+    RegistrationThrottle, consume_registration_challenge, registration_identity,
+)
 from rampp2p.slackbot.send import MessageBase
 
 import math
@@ -56,6 +57,12 @@ class UserAuthView(APIView):
 class ArbiterView(APIView):
     authentication_classes = [TokenAuthentication]
 
+    def get_authenticators(self):
+        return [] if self.request.method == 'POST' else super().get_authenticators()
+
+    def get_throttles(self):
+        return [RegistrationThrottle()] if self.request.method == 'POST' else super().get_throttles()
+
     def get(self, request, wallet_hash=None):
         if wallet_hash:
             try:
@@ -85,32 +92,21 @@ class ArbiterView(APIView):
             return Response(serializer.data, status.HTTP_200_OK)
     
     def post(self, request):
-        public_key = request.data.get('public_key')
-        if public_key is None:
-            return Response({'error': 'public_key is required'}, status=status.HTTP_400_BAD_REQUEST)
-        
-        # validate signature
-        signature, timestamp, wallet_hash = get_verification_headers(request)
-        message = ViewCode.ARBITER_CREATE.value + '::' + timestamp
-        verify_signature(wallet_hash, signature, message, public_key=public_key)
-        
-        peer = models.Peer.objects.filter(wallet_hash=wallet_hash)
-        if peer.exists():
-            return Response({'error': 'Users cannot be both Peer and Arbiter'}, status=status.HTTP_400_BAD_REQUEST)
-        
-        data = request.data.copy()
-        data['wallet_hash'] = wallet_hash
-
-        serialized_arbiter = serializers.ArbiterSerializer(data=data)
-        if not serialized_arbiter.is_valid():
-            return Response(serialized_arbiter.errors, status=status.HTTP_400_BAD_REQUEST)
-
+        wallet_hash, public_key = registration_identity(request, 'arbiter')
         try:
-            serialized_arbiter = serializers.ArbiterSerializer(serialized_arbiter.save())
+            with transaction.atomic():
+                consume_registration_challenge(request, 'arbiter', wallet_hash, public_key)
+                if models.Peer.objects.filter(wallet_hash=wallet_hash).exists():
+                    return Response({'error': 'Users cannot be both Peer and Arbiter'}, status=status.HTTP_400_BAD_REQUEST)
+                data = request.data.copy()
+                data['wallet_hash'] = wallet_hash
+                serializer = serializers.ArbiterSerializer(data=data)
+                serializer.is_valid(raise_exception=True)
+                arbiter = serializer.save()
+            return Response(serializers.ArbiterSerializer(arbiter).data, status=status.HTTP_200_OK)
         except IntegrityError:
             return Response({'error': 'arbiter with wallet_hash already exists'}, status=status.HTTP_400_BAD_REQUEST)
-        return Response(serialized_arbiter.data, status=status.HTTP_200_OK)
-    
+
     def patch(self, request):
         if not isinstance(request.user, models.Arbiter):
             raise PermissionDenied('An arbiter account is required.')
@@ -162,77 +158,50 @@ class PeerViewSet(viewsets.GenericViewSet):
         except models.Peer.DoesNotExist:
             raise Http404
     
+    def get_throttles(self):
+        if self.request.method == 'POST' and 'pk' not in self.kwargs:
+            return [RegistrationThrottle()]
+        return super().get_throttles()
+
     def create(self, request):
         try:
-            auth_headers = self.parse_auth_headers(request)
-            wallet_hash = auth_headers['wallet_hash']
-            public_key = auth_headers['public_key']
-            message = ViewCode.PEER_CREATE.value + '::' + auth_headers['timestamp']
-            verify_signature(
-                wallet_hash, 
-                auth_headers['signature'], 
-                message,
-                public_key=public_key
-            )
+            wallet_hash, public_key = registration_identity(request, 'peer')
+            with transaction.atomic():
+                consume_registration_challenge(request, 'peer', wallet_hash, public_key)
+                self.validate_user_arbiter(wallet_hash)
+                username = request.data.get('name')
+                if not isinstance(username, str) or not username:
+                    raise ValidationError('name is required')
+                prefix = 'reserved-'
+                reserved = None
+                if username.startswith(prefix):
+                    reserved = self.get_reserved_username(username[len(prefix):])
+                else:
+                    if (models.Peer.objects.filter(name__iexact=username).exists()
+                            or models.ReservedName.objects.filter(name__iexact=username).exists()):
+                        raise ValidationError('similar username already exists')
 
-            self.validate_user_arbiter(auth_headers['wallet_hash'])
-
-            username = request.data.get('name')
-            prefix = 'reserved-'
-            reserved = None
-            if (username.startswith(prefix)):
-                reserved = self.get_reserved_username(username[len(prefix):])
-            else:
-                username_exists = models.Peer.objects.filter(name__iexact=username).exists()
-                reservedname_exists = models.ReservedName.objects.filter(name__iexact=username).exists()
-                if username_exists or reservedname_exists:
-                    raise ValidationError('similar username already exists')
-        
-            data = request.data.copy()
-            data['name'] = username
-            data['wallet_hash'] = wallet_hash
-            data['public_key'] = public_key
-            
-            serializer = serializers.PeerCreateSerializer(data=data)
-            if not serializer.is_valid():
-                raise ValidationError(serializer.errors)
-            
-            peer = serializer.save()
-            serializer = serializers.PeerSerializer(peer)
-            if reserved:
-                reserved.peer = peer
-                reserved.redeemed_at = timezone.now()
-                reserved.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        
-        except Exception as err:
-            logger.exception(err)
+                data = request.data.copy()
+                data.update(name=username, wallet_hash=wallet_hash, public_key=public_key)
+                serializer = serializers.PeerCreateSerializer(data=data)
+                serializer.is_valid(raise_exception=True)
+                peer = serializer.save()
+                if reserved:
+                    reserved.peer = peer
+                    reserved.redeemed_at = timezone.now()
+                    reserved.save(update_fields=['peer', 'redeemed_at'])
+            return Response(serializers.PeerSerializer(peer).data, status=status.HTTP_201_CREATED)
+        except APIException:
+            raise
+        except (ValidationError, IntegrityError, models.ReservedName.DoesNotExist) as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
-    
-    def parse_auth_headers(self, request):
-        signature = request.headers.get('signature', None)
-        timestamp = request.headers.get('timestamp', None)
-        wallet_hash = request.headers.get('wallet_hash', None)
-        public_key = request.headers.get('public_key')
-        
-        if  (wallet_hash is None or
-            signature is None or 
-            timestamp is None):
-            raise ValidationError('credentials not provided')
-        
-        return {
-            'wallet_hash': wallet_hash,
-            'public_key': public_key,
-            'signature': signature, 
-            'timestamp': timestamp, 
-        }
-    
+
     def validate_user_arbiter (self, wallet_hash):
         is_arbiter = models.Arbiter.objects.filter(wallet_hash=wallet_hash).exists()
         if is_arbiter: raise ValidationError('Users cannot be both Peer and Arbiter')
 
     def get_reserved_username (self, key):
-        reserved = models.ReservedName.objects.get(key=key)
+        reserved = models.ReservedName.objects.select_for_update().get(key=key)
         if reserved.peer: raise ValidationError('similar username already exists')
         return reserved
     

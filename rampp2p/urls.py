@@ -23,6 +23,7 @@ urlpatterns = [
     path("ad/snapshot/<int:pk>/", AdSnapshotViewSet.as_view({"get": "retrieve"})),
     re_path(r"^ad/share/$", AdShareLinkView.as_view(), name="adview"),
     path("user/", UserAuthView.as_view(), name="user-profile"),
+    path("registration/challenge/", RegistrationChallengeView.as_view(), name="registration-challenge"),
     path(
         "peer/",
         PeerViewSet.as_view(
