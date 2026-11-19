@@ -65,12 +65,14 @@ def registration_identity(request, account_type):
 def validate_identity(wallet_hash, public_key):
     if not isinstance(wallet_hash, str) or not 0 < len(wallet_hash) <= 75:
         raise ValidationError({'wallet_hash': 'A wallet hash of at most 75 characters is required.'})
-    if not isinstance(public_key, str) or len(public_key) not in (66, 128, 130):
-        raise ValidationError({'public_key': 'A valid secp256k1 public key is required.'})
+    # Peer and Arbiter store at most 75 characters; require the 33-byte
+    # compressed encoding rather than accepting keys that cannot be persisted.
+    if not isinstance(public_key, str) or len(public_key) != 66 or public_key[:2] not in ('02', '03'):
+        raise ValidationError({'public_key': 'A valid compressed secp256k1 public key (66 hex characters) is required.'})
     try:
         VerifyingKey.from_string(bytes.fromhex(public_key), curve=SECP256k1)
     except (ValueError, MalformedPointError) as err:
-        raise ValidationError({'public_key': 'A valid secp256k1 public key is required.'}) from err
+        raise ValidationError({'public_key': 'A valid compressed secp256k1 public key (66 hex characters) is required.'}) from err
 
 
 def payload_digest(account_type, wallet_hash, public_key, data):

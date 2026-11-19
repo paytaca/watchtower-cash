@@ -185,6 +185,39 @@ class RegistrationTests(TestCase):
         self.assertEqual(self.challenge(public_key='ff' * 33).status_code, 400)
         self.assertFalse(RegistrationChallenge.objects.exists())
 
+    def test_noncompressed_keys_cannot_receive_registration_challenges(self):
+        for account_type in ('peer', 'arbiter'):
+            for encoding in ('raw', 'uncompressed', 'hybrid'):
+                with self.subTest(account_type=account_type, encoding=encoding):
+                    public_key = self.key.verifying_key.to_string(encoding).hex()
+                    data = {**self.data, 'public_key': public_key} if account_type == 'arbiter' else self.data
+                    response = self.challenge(account_type, data=data, public_key=public_key)
+                    self.assertEqual(response.status_code, 400)
+                    self.assertIn('public_key', response.data)
+        self.assertFalse(RegistrationChallenge.objects.exists())
+        self.assertFalse(Peer.objects.exists())
+        self.assertFalse(Arbiter.objects.exists())
+
+    def test_noncompressed_keys_are_rejected_before_challenge_consumption(self):
+        for account_type in ('peer', 'arbiter'):
+            self.wallet = 'synthetic-' + account_type + '-wallet'
+            data = {**self.data, 'public_key': self.public_key} if account_type == 'arbiter' else self.data
+            challenge = self.challenge(account_type, data=data)
+            self.assertEqual(challenge.status_code, 201)
+            for encoding in ('raw', 'uncompressed', 'hybrid'):
+                with self.subTest(account_type=account_type, encoding=encoding):
+                    public_key = self.key.verifying_key.to_string(encoding).hex()
+                    submitted_data = {**data, 'public_key': public_key} if account_type == 'arbiter' else data
+                    response = self.register(
+                        challenge, account_type=account_type, data=submitted_data,
+                        headers=self.signed_headers(challenge, public_key=public_key),
+                    )
+                    self.assertEqual(response.status_code, 400)
+                    self.assertIn('public_key', response.data)
+                    self.assertIsNone(RegistrationChallenge.objects.get(pk=challenge.data['challenge_id']).consumed_at)
+            self.assertEqual(self.register(challenge, account_type=account_type, data=data).status_code,
+                             201 if account_type == 'peer' else 200)
+
     @override_settings(P2P_REGISTRATION_IP_PER_MINUTE=2)
     def test_ip_limit_is_shared_across_challenge_and_submission_and_returns_retry_after(self):
         challenge = self.challenge()
