@@ -3,6 +3,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied
 
 from django.db import transaction
 from django.core.exceptions import ValidationError
@@ -15,6 +16,7 @@ from authentication.permissions import RampP2PIsAuthenticated
 import rampp2p.models as models
 import rampp2p.serializers as serializers
 import rampp2p.utils.file_upload as file_upload_utils
+from rampp2p.order_access import order_participant_filter, require_order_participant
 from main.utils.images import UnsupportedImageFormat, open_image
 
 import logging
@@ -268,6 +270,10 @@ class OrderPaymentViewSet(viewsets.GenericViewSet):
     parser_classes = [MultiPartParser]
     queryset = models.OrderPayment.objects.all()
 
+    def get_queryset(self):
+        orders = models.Order.objects.filter(order_participant_filter(self.request.user))
+        return super().get_queryset().filter(order__in=orders)
+
     def list(self, request):
         queryset = self.get_queryset()
         order_id = request.query_params.get("order_id")
@@ -278,7 +284,8 @@ class OrderPaymentViewSet(viewsets.GenericViewSet):
 
     def retrieve(self, request, pk):
         try:
-            queryset = self.get_queryset().get(pk=pk)
+            queryset = models.OrderPayment.objects.get(pk=pk)
+            require_order_participant(queryset.order, request.user)
             serializer = serializers.OrderPaymentSerializer(queryset)
             return Response(serializer.data, status=status.HTTP_200_OK)
         except models.OrderPayment.DoesNotExist as err:
@@ -294,6 +301,7 @@ class OrderPaymentViewSet(viewsets.GenericViewSet):
                 "order"
             ).get(id=pk)
 
+            self._require_buyer(order_payment_obj.order, request.user)
             self._validate_awaiting_payment(order_payment_obj.order)
 
             filesize = image_file.size
@@ -332,22 +340,12 @@ class OrderPaymentViewSet(viewsets.GenericViewSet):
 
             with transaction.atomic():
                 order = models.Order.objects.get(pk=order_id)
+                self._require_buyer(order, request.user)
                 payment_method = models.PaymentMethod.objects.get(pk=payment_method_id)
 
                 self._validate_awaiting_payment(order)
 
-                buyer = None
-                seller = None
-                if order.ad_snapshot.trade_type == models.TradeType.SELL:
-                    buyer = order.owner
-                    seller = order.ad_snapshot.ad.owner
-                else:
-                    buyer = order.ad_snapshot.ad.owner
-                    seller = order.owner
-                if request.user.wallet_hash != buyer.wallet_hash:
-                    raise ValidationError("Only the buyer can upload payment proof")
-
-                if payment_method.owner.wallet_hash != seller.wallet_hash:
+                if payment_method.owner_id != order.get_seller().pk:
                     raise ValidationError("Payment method does not belong to the seller")
 
                 order_payment, _ = models.OrderPayment.objects.get_or_create(
@@ -385,13 +383,26 @@ class OrderPaymentViewSet(viewsets.GenericViewSet):
     def delete_attachment(self, request, pk):
         try:
             attachment = models.OrderPaymentAttachment.objects.get(id=pk)
+            self._require_buyer(attachment.payment.order, request.user)
             self._validate_awaiting_payment(attachment.payment.order)
-            file_upload_utils.delete_file(attachment.image.url_path)
+            # Images are content-addressed and may be shared by other proofs.
+            if not models.OrderPaymentAttachment.objects.filter(
+                image__url_path=attachment.image.url_path,
+            ).exclude(pk=attachment.pk).exists():
+                file_upload_utils.delete_file(attachment.image.url_path)
             attachment.delete()
             return Response(status=status.HTTP_200_OK)
 
+        except PermissionDenied:
+            raise
         except (models.OrderPaymentAttachment.DoesNotExist, Exception) as err:
             return Response({"error": err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+
+    @staticmethod
+    def _require_buyer(order, user):
+        require_order_participant(order, user, allow_arbiter=False)
+        if user.pk != order.get_buyer().pk:
+            raise PermissionDenied("Only the buyer may change payment proof.")
 
     def _validate_awaiting_payment(self, order):
         """Validates that `order` is awaiting fiat payment. Raises ValidationError
