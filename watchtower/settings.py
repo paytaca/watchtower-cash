@@ -579,6 +579,9 @@ SIDESHIFT_AFFILIATE_ID = config("SIDESHIFT_AFFILIATE_ID")
 # python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 WEBHOOK_SECRET_KEY = config("WEBHOOK_SECRET_KEY", default=None)
 
+# Public key corresponding to the chat service's CHAT_WEBHOOK_PRIVATE_KEY.
+P2P_CHAT_WEBHOOK_PUBLIC_KEY = config("P2P_CHAT_WEBHOOK_PUBLIC_KEY", default="")
+
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,

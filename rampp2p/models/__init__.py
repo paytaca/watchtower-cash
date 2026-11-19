@@ -8,3 +8,4 @@ from .model_misc import *
 from .model_report import *
 from .model_slackbot import *
 from .model_registration import *
+from .model_webhook import *
