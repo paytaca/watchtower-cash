@@ -7,6 +7,7 @@ import logging
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from django.db.models import Q
+from django.db.models.signals import post_save
 from django.utils import timezone
 
 from rampp2p.models import (
@@ -18,29 +19,63 @@ PRE_ESCROW_STATUSES = {StatusType.SUBMITTED, StatusType.CONFIRMED, StatusType.ES
 
 
 def notify_cancellation(order_id, wallets, is_cash_in, creator_wallet):
-    # Publish only after the cancellation commits. Preserve the database change
-    # if a notification service is unavailable.
+    """Deliver normal status hooks and cancellation notifications after commit."""
     try:
-        from rampp2p.serializers import StatusReadSerializer
-        from rampp2p.utils import websocket
-        from rampp2p.utils.notifications import send_push_notification
-
-        canceled = Status.objects.filter(
+        canceled = Status.objects.select_related('order').filter(
             order_id=order_id, status=StatusType.CANCELED,
         ).order_by('-created_at', '-pk').first()
+    except Exception:
+        logger.exception('Failed to load committed cancellation of order %s', order_id)
+        return
+    if canceled is None:
+        logger.warning('No committed cancellation found for order %s', order_id)
+        return
+
+    def best_effort(label, operation):
+        try:
+            operation()
+        except Exception:
+            logger.exception('Failed cancellation %s for order %s', label, order_id)
+
+    def status_hooks():
+        # bulk_create deliberately deferred this event until commit. Include
+        # every normal receiver (Slack, Live Activity and future status hooks).
+        for receiver, result in post_save.send_robust(
+            sender=Status, instance=canceled, created=True, raw=False,
+            using=canceled._state.db, update_fields=None,
+        ):
+            if isinstance(result, Exception):
+                logger.error(
+                    'Cancellation status receiver %s failed for order %s',
+                    getattr(receiver, '__qualname__', repr(receiver)), order_id,
+                    exc_info=(type(result), result, result.__traceback__),
+                )
+
+    def order_websocket():
+        from rampp2p.serializers import StatusReadSerializer
+        from rampp2p.utils import websocket
         websocket.send_order_update({
             'success': True, 'status': StatusReadSerializer(canceled).data,
         }, order_id)
-        if is_cash_in:
-            websocket.send_cashin_order_alert(
-                {'type': 'ORDER_STATUS_UPDATED', 'order': order_id}, creator_wallet,
-            )
+
+    def cashin_websocket():
+        from rampp2p.utils import websocket
+        websocket.send_cashin_order_alert(
+            {'type': 'ORDER_STATUS_UPDATED', 'order': order_id}, creator_wallet,
+        )
+
+    def push_notification():
+        from rampp2p.utils.notifications import send_push_notification
         send_push_notification(
             wallets, 'Order #{} canceled. Do not fund its contract.'.format(order_id),
             extra={'order_id': order_id},
         )
-    except Exception:
-        logger.exception('Failed to notify cancellation of order %s', order_id)
+
+    best_effort('status hooks', status_hooks)
+    best_effort('order WebSocket', order_websocket)
+    if is_cash_in:
+        best_effort('cash-in WebSocket', cashin_websocket)
+    best_effort('push notification', push_notification)
 
 
 class Command(BaseCommand):
@@ -134,8 +169,8 @@ class Command(BaseCommand):
                 for order in orders:
                     if order.pk not in eligible_ids:
                         continue
-                    # Avoid synchronous signal side effects before commit;
-                    # notify participants explicitly through on_commit below.
+                    # Defer normal status signals and participant notifications
+                    # until commit; do not run services for rolled-back rows.
                     Status.objects.bulk_create([Status(
                         order_id=order.pk, status=StatusType.CANCELED,
                         created_by='SYSTEM_AUTOMATED',

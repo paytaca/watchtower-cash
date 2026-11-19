@@ -323,3 +323,102 @@ class CancelPendingOrdersCommandTests(CancellationFixtures):
         result = self.apply()
         self.assertEqual(result['canceled_order_ids'], [])
         self.assertEqual(Status.objects.filter(order=self.order, status=StatusType.CANCELED).count(), 1)
+
+
+class CancellationNotificationParityTests(CancellationFixtures):
+    def setUp(self):
+        FeatureControl.objects.filter(pk=self.maintenance.pk).update(is_enabled=True)
+        self.effects = {}
+        for name, target in (
+            ('summary', 'rampp2p.signals.OrderSummaryMessage.send_safe'),
+            ('status_slack', 'rampp2p.signals.OrderStatusUpdateMessage.send_safe'),
+            ('live', 'rampp2p.utils.live_activity.update_order_live_activity'),
+            ('websocket', 'rampp2p.utils.websocket.send_order_update'),
+            ('cashin', 'rampp2p.utils.websocket.send_cashin_order_alert'),
+            ('push', 'rampp2p.utils.notifications.send_push_notification'),
+        ):
+            patcher = patch(target)
+            self.effects[name] = patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def apply(self):
+        output = io.StringIO()
+        call_command(
+            'cancel_pending_p2p_orders', peer_id=self.creator.pk,
+            peer_name=self.creator.name, order_id=[self.order.pk],
+            verified_unfunded=True,
+            verified_contract_address=[self.contract.address], apply=True,
+            stdout=output,
+        )
+        return json.loads(output.getvalue())
+
+    def cancellation_callback(self):
+        with patch('rampp2p.management.commands.cancel_pending_p2p_orders.transaction.on_commit') as commit:
+            result = self.apply()
+        self.assertEqual(result['canceled_order_ids'], [self.order.pk])
+        for effect in self.effects.values():
+            effect.assert_not_called()
+        return commit.call_args[0][0]
+
+    def test_normal_status_hooks_and_notifications_run_only_after_commit(self):
+        self.cancellation_callback()()
+        self.effects['summary'].assert_called_once_with(self.order.pk)
+        self.effects['status_slack'].assert_called_once_with(self.order.pk)
+        self.effects['live'].assert_called_once()
+        order, status = self.effects['live'].call_args[0]
+        self.assertEqual(order.pk, self.order.pk)
+        self.assertEqual(status.status, StatusType.CANCELED)
+        self.effects['websocket'].assert_called_once()
+        payload, order_id = self.effects['websocket'].call_args[0]
+        self.assertEqual(order_id, self.order.pk)
+        self.assertEqual(payload['status']['status']['value'], StatusType.CANCELED)
+        self.assertTrue(payload['status']['creator']['is_system'])
+        self.effects['push'].assert_called_once()
+        self.effects['cashin'].assert_not_called()
+
+    def test_a_failing_status_receiver_does_not_skip_other_receivers_or_notifications(self):
+        from django.db.models.signals import post_save
+
+        def failing_receiver(**kwargs):
+            raise RuntimeError('synthetic receiver failure')
+
+        post_save.connect(failing_receiver, sender=Status, weak=False)
+        self.addCleanup(post_save.disconnect, failing_receiver, sender=Status)
+        callback = self.cancellation_callback()
+        with self.assertLogs('rampp2p.management.commands.cancel_pending_p2p_orders', level='ERROR'):
+            callback()
+        self.effects['summary'].assert_called_once()
+        self.effects['live'].assert_called_once()
+        self.effects['websocket'].assert_called_once()
+        self.effects['push'].assert_called_once()
+        self.assertEqual(Status.objects.filter(order=self.order, status=StatusType.CANCELED).count(), 1)
+
+    def test_websocket_failure_does_not_skip_push_or_undo_cancellation(self):
+        callback = self.cancellation_callback()
+        self.effects['websocket'].side_effect = RuntimeError('synthetic WebSocket failure')
+        with self.assertLogs('rampp2p.management.commands.cancel_pending_p2p_orders', level='ERROR'):
+            callback()
+        self.effects['live'].assert_called_once()
+        self.effects['push'].assert_called_once()
+        self.assertEqual(Status.objects.filter(order=self.order, status=StatusType.CANCELED).count(), 1)
+
+    def test_repeated_apply_does_not_repeat_status_hooks(self):
+        callbacks = []
+        with patch('rampp2p.management.commands.cancel_pending_p2p_orders.transaction.on_commit', side_effect=callbacks.append):
+            self.apply()
+            repeated = self.apply()
+        self.assertEqual(repeated['canceled_order_ids'], [])
+        self.assertEqual(len(callbacks), 1)
+        callbacks[0]()
+        self.effects['summary'].assert_called_once()
+        self.effects['live'].assert_called_once()
+
+    def test_rolled_back_cancellation_does_not_publish_any_effects(self):
+        with patch(
+            'rampp2p.management.commands.cancel_pending_p2p_orders.OrderMember.objects.filter',
+            side_effect=RuntimeError('synthetic write failure'),
+        ), self.assertRaises(RuntimeError):
+            self.apply()
+        self.assertFalse(Status.objects.filter(order=self.order, status=StatusType.CANCELED).exists())
+        for effect in self.effects.values():
+            effect.assert_not_called()
