@@ -21,24 +21,7 @@ urlpatterns = [
     path("ad/check/limit/", AdViewSet.as_view({"get": "check_ad_limit"})),
     path("ad/currency/", AdViewSet.as_view({"get": "retrieve_currencies"})),
     path("ad/snapshot/<int:pk>/", AdSnapshotViewSet.as_view({"get": "retrieve"})),
-    path("ad/cash-in/", CashInAdViewSet.as_view({"get": "list"})),
     re_path(r"^ad/share/$", AdShareLinkView.as_view(), name="adview"),
-    path("cash-in/presets/", CashInAdViewSet.as_view({"get": "list_presets"})),
-    path(
-        "cash-in/ad/payment-types/",
-        CashInAdViewSet.as_view({"get": "retrieve_ad_count_by_payment_types"}),
-    ),
-    path("cash-in/ad/", CashInAdViewSet.as_view({"get": "retrieve_ads_by_presets"})),
-    path(
-        "cash-in/order/",
-        CashinOrderViewSet.as_view({"get": "list"}),
-        name="cashin-order-list",
-    ),
-    path(
-        "cash-in/order/alerts/",
-        CashinOrderViewSet.as_view({"get": "check_alerts"}),
-        name="cashin-order-alerts",
-    ),
     path("user/", UserAuthView.as_view(), name="user-profile"),
     path(
         "peer/",
@@ -170,16 +153,6 @@ urlpatterns = [
     path(
         "contract/fees/", ContractViewSet.as_view({"get": "fees"}), name="contract-fees"
     ),
-    path(
-        "order/cash-in/",
-        CashinOrderViewSet.as_view({"get": "list"}),
-        name="cashin-order-list",
-    ),
-    path(
-        "order/cash-in/alerts/",
-        CashinOrderViewSet.as_view({"get": "check_alerts"}),
-        name="cashin-order-alerts",
-    ),
     path("order/status/", OrderStatusViewSet.as_view({"patch": "read_order_status"})),
     # Payment
     path(
@@ -267,7 +240,7 @@ urlpatterns = [
     path("feature-control/", check_feature_control),
 ]
 
-# Cover every P2P HTTP route, including public router and cash-in aliases.
+# Cover every P2P HTTP route, including public router endpoints.
 # Keep feature reads available so clients can display the maintenance state.
 for route in urlpatterns:
     if route.callback is not check_feature_control:

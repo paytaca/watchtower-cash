@@ -3,7 +3,9 @@ from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny
 from rest_framework.exceptions import PermissionDenied
-from rest_framework.serializers import IntegerField, ListField
+from rest_framework.serializers import (
+    BooleanField as SerializerBooleanField, IntegerField, ListField,
+)
 
 from django.http import Http404
 from django.utils import timezone
@@ -17,7 +19,6 @@ from django.db.models import (
     When,
     Value,
     BooleanField,
-    CharField,
     Prefetch,
     Avg,
 )
@@ -96,94 +97,6 @@ def _peer_ratings_for_orders(orders):
         .annotate(avg_rating=Avg("rating"))
         .values_list("to_peer_id", "avg_rating")
     )
-
-
-class CashinOrderViewSet(viewsets.GenericViewSet):
-    queryset = models.Order.objects.all()
-
-    @action(detail=False, methods=["get"])
-    def list(self, request):
-        wallet_hash = request.query_params.get("wallet_hash")
-        status_type = request.query_params.get("status_type")
-        owned = request.query_params.get("owned")
-        if owned is not None:
-            owned = owned == "true"
-
-        try:
-            limit = int(request.query_params.get("limit", 10))
-            page = int(request.query_params.get("page", 1))
-            if limit < 0:
-                raise ValidationError("limit must be a non-negative number")
-            if page < 1:
-                raise ValidationError("invalid page number")
-        except (ValueError, ValidationError) as err:
-            return Response({"error": err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
-
-        queryset = _optimize_order_queryset(models.Order.objects.filter(is_cash_in=True))
-
-        # exclude completed orders
-        completed_status = [
-            StatusType.CANCELED,
-            StatusType.RELEASED,
-            StatusType.REFUNDED,
-        ]
-        last_status_subq = (
-            Status.objects.filter(order=OuterRef("pk"))
-            .order_by("-created_at")
-            .values("status")[:1]
-        )
-        queryset = queryset.annotate(last_status=Subquery(last_status_subq))
-
-        if status_type == "ONGOING":
-            queryset = queryset.exclude(last_status__in=completed_status)
-        if status_type == "COMPLETED":
-            queryset = queryset.filter(last_status__in=completed_status)
-
-        # fetches orders created by user
-        owned_orders = Q(owner__wallet_hash=wallet_hash)
-
-        if not owned:
-            # fetches the orders that have ad ids owned by user
-            ad_orders = Q(
-                ad_snapshot__ad__pk__in=list(
-                    # fetches the flat ids of ads owned by user
-                    models.Ad.objects.filter(
-                        owner__wallet_hash=wallet_hash
-                    ).values_list("id", flat=True)
-                )
-            )
-
-            queryset = queryset.filter(owned_orders | ad_orders)
-        else:
-            queryset = queryset.filter(owned_orders)
-
-        queryset = queryset.order_by("-created_at")
-
-        # Count total pages
-        count = queryset.count()
-        total_pages = page
-        if limit > 0:
-            total_pages = math.ceil(count / limit)
-
-        # Splice queryset
-        offset = (page - 1) * limit
-        page_results = queryset[offset : offset + limit]
-
-        context = {
-            "wallet_hash": wallet_hash,
-            "peer_ratings": _peer_ratings_for_orders(page_results),
-        }
-        serializer = serializers.OrderSerializer(
-            page_results, many=True, context=context
-        )
-        data = {"orders": serializer.data, "count": count, "total_pages": total_pages}
-        return Response(data, status.HTTP_200_OK)
-
-    @action(detail=False, methods=["get"])
-    def check_alerts(self, request):
-        wallet_hash = request.query_params.get("wallet_hash")
-        has_cashin_alerts = utils.check_has_cashin_alerts(wallet_hash)
-        return Response({"has_cashin_alerts": has_cashin_alerts}, status=200)
 
 
 class PublicOrdersViewSet(
@@ -441,7 +354,11 @@ class OrderViewSet(viewsets.GenericViewSet):
         wallet_hash = request.user.wallet_hash
         try:
             payment_method_ids = request.data.get("payment_methods", [])
-            is_cash_in = request.data.get("is_cash_in", False)
+            is_cash_in = SerializerBooleanField().run_validation(
+                request.data.get("is_cash_in", False)
+            )
+            if is_cash_in:
+                raise ValidationError("Cash-in is retired. Create a regular P2P order instead.")
             trade_amount = request.data.get("trade_amount")
             if trade_amount == None or trade_amount == 0:
                 raise ValidationError("trade_amount field is required")
@@ -461,9 +378,6 @@ class OrderViewSet(viewsets.GenericViewSet):
             self.check_create_permissions(wallet_hash, ad.id)
 
             with transaction.atomic():
-                if is_cash_in:
-                    self.require_singular_cashin_order(wallet_hash=wallet_hash)
-
                 snapshot = self.snapshot_ad(ad)
                 tracking_id = self.generate_tracking_id()
 
@@ -484,11 +398,6 @@ class OrderViewSet(viewsets.GenericViewSet):
 
                 members = self.create_members(snapshot=snapshot, order=order)
                 self.mark_creator_as_read(order=order, members=members)
-
-                if order.is_cash_in:
-                    self.create_order_payment_methods(
-                        payment_method_ids=payment_method_ids, order=order
-                    )
 
                 self.update_ad_trade_amount(order=order)
                 serialized_status = self.confirm_order(
@@ -701,25 +610,6 @@ class OrderViewSet(viewsets.GenericViewSet):
                 f"Invalid payment method(s). Expected {len(payment_method_ids)} owned payment methods, got {owned_payment_methods.count()}."
             )
 
-    def cancellable_cash_in_orders(self, wallet_hash):
-        queryset = models.Order.objects.filter(
-            Q(owner__wallet_hash=wallet_hash) & Q(is_cash_in=True)
-        )
-
-        latest_status = models.Status.objects.filter(order__id=OuterRef("pk")).order_by(
-            "-id"
-        )
-        queryset = queryset.annotate(
-            latest_status=Subquery(
-                latest_status.values("status")[:1], output_field=CharField()
-            )
-        )
-        queryset = queryset.filter(
-            Q(latest_status=StatusType.SUBMITTED)
-            | Q(latest_status=StatusType.CONFIRMED)
-        ).values_list("id", flat=True)
-        return queryset
-
     def update_ad_trade_amount(self, order=None):
         # Decrease the Ad's trade amount and limits
         ad = order.ad_snapshot.ad
@@ -848,20 +738,6 @@ class OrderViewSet(viewsets.GenericViewSet):
         if buyer.peer.wallet_hash == order.owner.wallet_hash:
             buyer.read_at = timezone.now()
             buyer.save()
-
-    def create_order_payment_methods(self, payment_method_ids=[], order=None):
-        payment_methods = models.PaymentMethod.objects.filter(id__in=payment_method_ids)
-        for payment_method in payment_methods:
-            models.OrderPayment.objects.get_or_create(
-                order=order,
-                payment_method=payment_method,
-                defaults={"payment_type": payment_method.payment_type},
-            )
-
-    def require_singular_cashin_order(self, wallet_hash=None):
-        cancellable_cashin_orders = self.cancellable_cash_in_orders(wallet_hash)
-        if cancellable_cashin_orders.count() > 0:
-            raise ValidationError({"pending_orders": cancellable_cashin_orders})
 
     def notify_ad_owner_channel(self, ad=None, order=None):
         unread_count = models.OrderMember.objects.filter(

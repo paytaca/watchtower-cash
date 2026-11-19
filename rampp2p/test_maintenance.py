@@ -55,11 +55,10 @@ class P2PMaintenanceTests(TestCase):
             with self.subTest(method=method, path=path), self.assertNumQueries(1):
                 self.assert_maintenance(self.request(method, path))
 
-    def test_public_and_cash_in_aliases_are_blocked(self):
+    def test_public_routes_are_blocked(self):
         for path in (
             '/order/public/', '/order/public/123/', '/order/public.json',
-            '/appeal/public/', '/cash-in/order/', '/order/cash-in/',
-            '/cash-in/order/alerts/', '/order/cash-in/alerts/', '/ad/share/',
+            '/appeal/public/', '/ad/share/',
         ):
             with self.subTest(path=path), self.assertNumQueries(1):
                 self.assert_maintenance(self.request('get', path))
