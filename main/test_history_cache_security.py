@@ -9,8 +9,8 @@ from unittest.mock import Mock, patch
 from rest_framework.renderers import JSONRenderer
 
 from main.utils.history_cache import (
-    pos_history_cache_key, pos_history_cache_params,
-    read_history_cache, write_history_cache,
+    history_page_cache_key, pos_history_cache_key, pos_history_cache_params,
+    read_history_cache, versioned_history_cache_key, write_history_cache,
 )
 
 
@@ -66,3 +66,19 @@ class HistoryCacheSecurityTests(TestCase):
         for key in keys:
             with self.subTest(key=key), patch('pickle.loads', side_effect=AssertionError('Unsafe decode')):
                 self.assertIsNone(pos_history_cache_params(key))
+
+    def test_versioned_key_is_stable(self):
+        self.assertEqual(
+            versioned_history_cache_key('wallet:history:w:bch:1:10'),
+            'wallet:history:w:bch:1:10:json-v1',
+        )
+
+    def test_targeted_invalidation_keys_include_the_json_version(self):
+        self.assertEqual(
+            history_page_cache_key('w', 'bch', 1, 10),
+            'wallet:history:w:bch:1:10:json-v1',
+        )
+        self.assertEqual(
+            history_page_cache_key('w', 'all', 2, 50),
+            'wallet:history:w:all:2:50:json-v1',
+        )

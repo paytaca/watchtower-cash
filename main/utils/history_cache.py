@@ -6,6 +6,21 @@ import json
 from rest_framework.utils.encoders import JSONEncoder
 
 
+CACHE_VERSION_SUFFIX = ':json-v1'
+
+
+def versioned_history_cache_key(key):
+    """Return the cache key used for the current JSON cache format."""
+    return f'{key}{CACHE_VERSION_SUFFIX}'
+
+
+def history_page_cache_key(wallet_hash, token_key, page, page_size):
+    """Build the versioned cache key for one wallet-history page."""
+    return versioned_history_cache_key(
+        f'wallet:history:{wallet_hash}:{token_key}:{page}:{page_size}'
+    )
+
+
 def read_history_cache(cache, key):
     value = cache.get(key)
     if value is None:

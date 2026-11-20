@@ -30,7 +30,9 @@ from django.core.paginator import Paginator
 from main.serializers import PaginatedWalletHistorySerializer
 from main.throttles import RebuildHistoryThrottle
 from main.tasks import rebuild_wallet_history
-from main.utils.history_cache import read_history_cache, write_history_cache
+from main.utils.history_cache import (
+    read_history_cache, versioned_history_cache_key, write_history_cache,
+)
 
 POS_ID_MAX_DIGITS = 4
 
@@ -102,11 +104,11 @@ def expand_token_from_dict(
 
 def store_object(key, obj, cache):
     cache_ttl = 60 if settings.BCH_NETWORK != 'mainnet' else 60 * 5
-    write_history_cache(cache, key + ':json-v1', obj, cache_ttl)
+    write_history_cache(cache, versioned_history_cache_key(key), obj, cache_ttl)
 
 
 def retrieve_object(key, cache):
-    return read_history_cache(cache, key + ':json-v1')
+    return read_history_cache(cache, versioned_history_cache_key(key))
 
 
 class ContractHistoryView(APIView):
