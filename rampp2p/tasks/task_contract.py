@@ -4,53 +4,18 @@ from rampp2p.utils.websocket import send_order_update
 from main.utils.subscription import save_subscription
 from rampp2p.models import Contract
 from rampp2p.contract_access import order_is_canceled, canceled_contract_payload
-import subprocess
-import json
-import re
+from rampp2p.contract_generation import generate_contract_address
 
 import logging
 logger = logging.getLogger(__name__)
 
 @shared_task(queue='rampp2p__contract_execution')
-def execute_subprocess(command):
-    """
-    Executes a subprocess command.
-
-    This function runs a subprocess command and captures its output and error streams.
-    It also removes control characters from the JSON output.
-
-    Args:
-        command (str): The command to be executed.
-
-    Returns:
-        dict: A dictionary containing the result and stderr output of the command.
-    """
-    # execute subprocess
-    logger.warning(f'executing: {command}')
-    process = subprocess.Popen(command.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    stdout, stderr = process.communicate() 
-    logger.warn(f'stdout: {stdout}')
-    logger.warn(f'stderr: {stderr}')
-    
-    if stderr is not None:
-        stderr = stderr.decode("utf-8") 
-    
-    if stdout is not None:
-        stdout = stdout.decode('utf-8')
-
-    if stdout is not None:
-        # Define the pattern for matching control characters
-        control_char_pattern = re.compile('[\x00-\x1f\x7f-\x9f]')
-        
-        # Remove all control characters from the JSON string
-        clean_stdout = control_char_pattern.sub('', stdout)
-
-        if clean_stdout is not None:
-            stdout = json.loads(clean_stdout)
-    
-    response = {'result': stdout, 'error': stderr}
-
-    return response
+def generate_contract(arbiter_pubkey, buyer_pubkey, seller_pubkey,
+                      timestamp, service_fee, arbitration_fee):
+    return generate_contract_address(
+        arbiter_pubkey, buyer_pubkey, seller_pubkey,
+        timestamp, service_fee, arbitration_fee,
+    )
 
 @shared_task(queue='rampp2p__contract_execution')
 def contract_handler(response: Dict, **kwargs):

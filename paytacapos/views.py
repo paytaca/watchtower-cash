@@ -1,4 +1,3 @@
-import pickle
 import base64
 import json
 import re
@@ -36,6 +35,9 @@ from .utils.cash_out import fetch_unspent_merchant_transactions, generate_payout
 
 from .models import Location, Category, Merchant, PosDevice, CashOutPaymentMethod
 from main.models import Address, Transaction, Wallet, WalletHistory, TransactionMetaAttribute
+from main.utils.history_cache import (
+    pos_history_cache_key, read_history_cache, write_history_cache,
+)
 from rampp2p.models import MarketPrice
 from .tasks import process_cashout_input_txns
 
@@ -660,49 +662,13 @@ class PosWalletHistoryViewSet(viewsets.GenericViewSet, mixins.ListModelMixin):
             .annotate(posid=F('pos_wallet_history__posid'))
 
     def get_cache_key(self):
-        # Serialize the object to binary
-        pickled_params = pickle.dumps(self.request.GET.dict())
-        # Convert binary to Base64 string
-        encoded_params = base64.b64encode(pickled_params).decode('utf-8')
-
-        wallet_hash = self._get_wallet_hash()
-        return f"wallet:history:{wallet_hash}:pos:{encoded_params}"
+        return pos_history_cache_key(self._get_wallet_hash(), self.request.GET.dict())
 
     def get_cached_response(self):
-        redis_cache = settings.REDISKV
-        cache_key = self.get_cache_key()
-
-        cached_data = redis_cache.get(cache_key)
-        if cached_data is None:
-            return None
-
-        # Try JSON first (faster deserialization)
-        try:
-            if isinstance(cached_data, bytes):
-                cached_data = cached_data.decode('utf-8')
-            return json.loads(cached_data)
-        except (json.JSONDecodeError, AttributeError, TypeError):
-            # Fallback to pickle for backward compatibility
-            try:
-                pickled_data = base64.b64decode(cached_data)
-                return pickle.loads(pickled_data)
-            except Exception:
-                return None
+        return read_history_cache(settings.REDISKV, self.get_cache_key())
 
     def save_cached_response(self, data):
-        redis_cache = settings.REDISKV
-        cache_key = self.get_cache_key()
-
-        # Use JSON instead of pickle for faster serialization
-        try:
-            json_data = json.dumps(data)
-            # Cache for 30 minutes instead of 5
-            redis_cache.set(cache_key, json_data, ex=60 * 30)
-        except (TypeError, ValueError):
-            # Fallback to pickle if JSON serialization fails
-            pickled_data = pickle.dumps(data)
-            encoded_data = base64.b64encode(pickled_data).decode('utf-8')
-            redis_cache.set(cache_key, encoded_data, ex=60 * 30)
+        write_history_cache(settings.REDISKV, self.get_cache_key(), data, 60 * 30)
 
     def list(self, request, *args, **kwargs):
         # Check full response cache first
