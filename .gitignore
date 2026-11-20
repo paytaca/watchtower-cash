@@ -218,6 +218,7 @@ images
 compose/firebase-admin-credentials.json
 
 # Private P2P security and incident notes
+/SECURITY_AUDIT*.md
 /docs/P2P_SECURITY*.[mM][dD]
 /docs/P2P_INCIDENT*.[mM][dD]
 /rampp2p/**/SECURITY*.[mM][dD]
