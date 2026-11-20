@@ -1,4 +1,4 @@
-import requests
+from internal_services.client import service_request
 
 def sort_address_sets(data):
     """
@@ -16,7 +16,7 @@ def sort_address_sets(data):
 
 def get_bch_transactions(address, chipnet=False):
     network = "chipnet" if chipnet else "mainnet"
-    url = f'http://localhost:3000/get-transactions/{address}/'
+    url = f'/get-transactions/{address}/'
     params = dict(network=network)
-    response = requests.get(url, params=params)
+    response = service_request('address', 'GET', url, params=params)
     return response.json()

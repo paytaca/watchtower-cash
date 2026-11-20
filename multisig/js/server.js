@@ -1,6 +1,7 @@
 import structuredClone from '@ungap/structured-clone'
 
 import express from 'express'
+import serviceAuth from '../../internal_services/auth.cjs'
 import {
     CashAddressNetworkPrefix,
     importWalletTemplate,
@@ -26,6 +27,7 @@ if (typeof global.structuredClone === 'undefined') {
   global.structuredClone = structuredClone;
 }
 const app = express()
+app.use(serviceAuth.serviceAuthMiddleware('MULTISIG_JS_AUTH_TOKEN'))
 const port = 3004
 app.use(express.json());
 
@@ -231,6 +233,6 @@ app.get('/multisig/transaction/unsigned-transaction-hash', async (req, res) => {
 
 
 
-app.listen(port, () => {
+app.listen(port, '127.0.0.1', () => {
     console.log(`Multisig express server listening on port ${port}`)
 })

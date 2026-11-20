@@ -16,4 +16,11 @@ function createServiceAuthenticator(name, environment = process.env) {
   };
 }
 
-module.exports = { createServiceAuthenticator };
+function serviceAuthMiddleware(name, environment = process.env) {
+  const authenticate = createServiceAuthenticator(name, environment);
+  return (req, res, next) => {
+    if (authenticate(req, res)) next();
+  };
+}
+
+module.exports = { createServiceAuthenticator, serviceAuthMiddleware };

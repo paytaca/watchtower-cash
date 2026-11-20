@@ -1,7 +1,6 @@
 
 
-import requests
-import threading
+from cts.js_client import get_token_authguard_addresses
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
 from rest_framework import status
@@ -49,23 +48,12 @@ class AuthKeyOwnerIdentityOutputs(APIView):
         # We need to get the addresses of the AuthGuard contract
         # associated with each of these AuthKeys.
         # We'll save it here 
-        token_authguard_addresses = [] 
 
-        urls = []
-        for authkey in authkeys:
-            if authkey.cashtoken_nft.category:
-                urls.append(f'http://localhost:3001/cts/js/authguard-token-deposit-address/{authkey.cashtoken_nft.category}')
-        
-        threads = []
-        for url in urls:
-            thread = threading.Thread(
-                target = lambda u = url: token_authguard_addresses.append(requests.get(u).json())
-            )
-            thread.start()
-            threads.append(thread)
-
-        for thread in threads:
-            thread.join()
+        categories = [
+            authkey.cashtoken_nft.category for authkey in authkeys
+            if authkey.cashtoken_nft.category
+        ]
+        token_authguard_addresses = get_token_authguard_addresses(categories)
 
         authguard_addresses_set = set(map(lambda x: x[list(x.keys())[0]], token_authguard_addresses))
         identity_outputs = Transaction.objects.filter(
