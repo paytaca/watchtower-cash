@@ -1,4 +1,3 @@
-# from subprocess import Popen, PIPE
 from django.conf import settings
 from cashaddress import convert
 import requests
