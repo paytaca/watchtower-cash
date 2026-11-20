@@ -19,11 +19,18 @@ from main.models import (
 from main import mqtt
 from main.tasks import get_slp_utxos, get_bch_utxos, publish_subscribed_addresses_to_mqtt_task
 from main.utils.cache import clear_last_address_index_cache
+from main.utils.logging import redact_mapping
 
 import logging
 import web3
 
 LOGGER = logging.getLogger(__name__)
+
+SENSITIVE_SUBSCRIPTION_FIELDS = frozenset({
+    'webhook_secret',
+    'current_webhook_secret',
+    'new_webhook_secret',
+})
 
 
 def remove_subscription(address, subscriber_id):
@@ -76,7 +83,7 @@ def remove_duplicate_wallet_address_path(address_obj):
 
 
 def new_subscription(**kwargs):
-    LOGGER.info(kwargs)
+    LOGGER.info(redact_mapping(kwargs, SENSITIVE_SUBSCRIPTION_FIELDS))
     response = {'success': False}
     address = kwargs.get('address', None)
     addresses = kwargs.get('addresses', None)
