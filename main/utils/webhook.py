@@ -6,9 +6,17 @@ import logging
 
 from cryptography.fernet import Fernet
 from django.conf import settings
-from django.core.exceptions import ImproperlyConfigured
+from django.core.exceptions import ImproperlyConfigured, ValidationError
+from main.utils.payment_http import UnsafePublicURL, public_request, validate_public_http_url
 
 logger = logging.getLogger(__name__)
+
+
+def validate_webhook_url(value):
+    try:
+        return validate_public_http_url(value)
+    except requests.RequestException as err:
+        raise ValidationError('Webhook URLs must resolve to public HTTP(S) destinations on standard ports.') from err
 
 
 def _get_fernet():
@@ -43,7 +51,8 @@ def send_webhook(recipient, data):
     signed with HMAC-SHA256 via the X-Watchtower-Signature header.
     Otherwise, falls back to form-encoded for backward compatibility.
 
-    Returns the requests.Response object (or _FailedResponse on decryption error).
+    Returns a requests.Response, or _FailedResponse with 400 for unsafe URLs,
+    500 for decryption errors, and 599 for retryable network failures.
     """
     logger.info(f"Sending webhook to {recipient.web_url}")
 
@@ -63,21 +72,27 @@ def send_webhook(recipient, data):
             hashlib.sha256,
         ).hexdigest()
         try:
-            return requests.post(
+            return public_request(
+                'POST',
                 recipient.web_url,
                 data=payload_bytes,
                 headers={
                     'Content-Type': 'application/json',
                     'X-Watchtower-Signature': f'sha256={sig}',
                 },
-                timeout=10,
             )
+        except UnsafePublicURL:
+            logger.warning("Blocked unsafe signed webhook destination for recipient %s", recipient.id)
+            return _FailedResponse(status_code=400)
         except requests.RequestException:
             logger.exception("Network error sending signed webhook to %s", recipient.web_url)
             return _FailedResponse(status_code=599)
 
     try:
-        return requests.post(recipient.web_url, data=data, timeout=10)
+        return public_request('POST', recipient.web_url, data=data)
+    except UnsafePublicURL:
+        logger.warning("Blocked unsafe webhook destination for recipient %s", recipient.id)
+        return _FailedResponse(status_code=400)
     except requests.RequestException:
         logger.exception("Network error sending webhook to %s", recipient.web_url)
         return _FailedResponse(status_code=599)

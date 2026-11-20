@@ -150,7 +150,7 @@ class PaymentHTTPSecurityTests(TestCase):
 
     def test_dns_errors_fail_closed(self):
         self.resolver.side_effect = socket.gaierror('synthetic resolution failure')
-        with self.assertRaises(UnsafePaymentURL):
+        with self.assertRaises(requests.exceptions.ConnectionError):
             payment_request('GET', 'http://merchant.example/')
         self.connect.assert_not_called()
 

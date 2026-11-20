@@ -1,4 +1,4 @@
-"""Bounded payment HTTP requests pinned to validated public destinations."""
+"""Bounded public HTTP requests pinned to validated destinations."""
 import ipaddress
 import re
 import socket
@@ -20,8 +20,11 @@ BLOCKED_NETWORKS = tuple(ipaddress.ip_network(value) for value in (
 ))
 
 
-class UnsafePaymentURL(requests.exceptions.RequestException):
+class UnsafePublicURL(requests.exceptions.RequestException):
     pass
+
+
+UnsafePaymentURL = UnsafePublicURL
 
 
 def _public_address(value):
@@ -31,14 +34,14 @@ def _public_address(value):
             or getattr(address, 'ipv4_mapped', None) is not None
             or any(address.version == network.version and address in network
                    for network in BLOCKED_NETWORKS)):
-        raise UnsafePaymentURL('Payment URLs must resolve only to public IP addresses.')
+        raise UnsafePublicURL('URLs must resolve only to public IP addresses.')
     return str(address)
 
 
 def _destination(url):
     if (not isinstance(url, str) or not url or len(url) > 2048
             or '\\' in url or any(ord(char) <= 32 or ord(char) == 127 for char in url)):
-        raise UnsafePaymentURL('A valid public HTTP(S) payment URL is required.')
+        raise UnsafePublicURL('A valid public HTTP(S) URL is required.')
     try:
         parsed = urlsplit(url)
         if (parsed.scheme not in ('http', 'https') or not parsed.hostname
@@ -70,10 +73,17 @@ def _destination(url):
         authority = '[{}]'.format(host) if ':' in host else host
         normalized = urlunsplit((parsed.scheme, authority, parsed.path or '/', parsed.query, ''))
         return normalized, parsed.scheme, host, port, tuple(addresses)
-    except UnsafePaymentURL:
+    except UnsafePublicURL:
         raise
-    except (ValueError, UnicodeError, OSError) as err:
-        raise UnsafePaymentURL('A resolvable public HTTP(S) payment URL is required.') from err
+    except OSError as err:
+        raise requests.exceptions.ConnectionError('Public URL resolution failed.') from err
+    except (ValueError, UnicodeError) as err:
+        raise UnsafePublicURL('A resolvable public HTTP(S) URL is required.') from err
+
+
+def validate_public_http_url(url):
+    _destination(url)
+    return url
 
 
 class _PinnedConnection:
@@ -88,7 +98,7 @@ class _PinnedConnection:
         for address in self._pinned_addresses:
             remaining = deadline - time.monotonic()
             if remaining <= 0:
-                raise ConnectTimeoutError(self, 'Payment connection timed out.')
+                raise ConnectTimeoutError(self, 'Public HTTP connection timed out.')
             try:
                 return create_connection(
                     (address, self.port), remaining,
@@ -97,8 +107,8 @@ class _PinnedConnection:
             except OSError as err:
                 last_error = err
         if isinstance(last_error, socket.timeout):
-            raise ConnectTimeoutError(self, 'Payment connection timed out.') from last_error
-        raise NewConnectionError(self, 'Payment connection failed.') from last_error
+            raise ConnectTimeoutError(self, 'Public HTTP connection timed out.') from last_error
+        raise NewConnectionError(self, 'Public HTTP connection failed.') from last_error
 
 
 class _PinnedHTTPConnection(_PinnedConnection, HTTPConnection):
@@ -128,7 +138,7 @@ class _PaymentAdapter(HTTPAdapter):
         parsed = urlsplit(url)
         port = parsed.port or (443 if parsed.scheme == 'https' else 80)
         if proxies or (parsed.scheme, parsed.hostname, port) != self._origin:
-            raise UnsafePaymentURL('Payment connection destination changed.')
+            raise UnsafePublicURL('Public HTTP connection destination changed.')
         return self._pool
 
     def get_connection_with_tls_context(self, request, verify, proxies=None, cert=None):
@@ -146,11 +156,11 @@ class _PaymentSession(requests.Session):
         return iter(())
 
 
-def payment_request(method, url, *, headers=None, data=None, verify=True):
+def public_request(method, url, *, headers=None, data=None, verify=True):
     if method not in ('GET', 'POST'):
-        raise ValueError('Unsupported payment HTTP method.')
+        raise ValueError('Unsupported public HTTP method.')
     if verify is not True and (not isinstance(verify, str) or not verify):
-        raise ValueError('Payment TLS certificate verification is required.')
+        raise ValueError('TLS certificate verification is required.')
     url, scheme, host, port, addresses = _destination(url)
     deadline = time.monotonic() + 30
     with _PaymentSession() as session:
@@ -162,16 +172,19 @@ def payment_request(method, url, *, headers=None, data=None, verify=True):
             timeout=(5, 10), allow_redirects=False, stream=True,
         ) as response:
             if 300 <= response.status_code < 400:
-                raise UnsafePaymentURL('Payment URL redirects are not supported; use the final public URL.')
+                raise UnsafePublicURL('URL redirects are not supported; use the final public URL.')
             chunks = []
             size = 0
             for chunk in response.iter_content(chunk_size=8192):
                 size += len(chunk)
                 if size > MAX_RESPONSE_BYTES:
-                    raise UnsafePaymentURL('Payment response exceeds the size limit.')
+                    raise UnsafePublicURL('Public HTTP response exceeds the size limit.')
                 if time.monotonic() > deadline:
-                    raise requests.exceptions.Timeout('Payment response timed out.')
+                    raise requests.exceptions.Timeout('Public HTTP response timed out.')
                 chunks.append(chunk)
             response._content = b''.join(chunks)
             response._content_consumed = True
             return response
+
+
+payment_request = public_request

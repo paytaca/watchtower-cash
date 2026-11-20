@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from main.utils.webhook import validate_webhook_url
 
 class SubscriberSerializer(serializers.Serializer):
     address = serializers.CharField(
@@ -13,6 +14,7 @@ class SubscriberSerializer(serializers.Serializer):
     wallet_hash = serializers.CharField(max_length=200, required=False, allow_blank=True)
     wallet_index = serializers.IntegerField(required=False, allow_null=True)
     address_index = serializers.IntegerField(required=False, allow_null=True)
-    webhook_url = serializers.CharField(max_length=200, required=False, allow_blank=True)
+    webhook_url = serializers.CharField(max_length=200, required=False, allow_blank=True,
+                                        validators=[validate_webhook_url])
     webhook_secret = serializers.CharField(min_length=32, max_length=64, required=False, allow_blank=True)
     remove_duplicate_path = serializers.BooleanField(default=False)
