@@ -57,8 +57,9 @@ services:
       GOOGLE_APP_CREDENTIALS_PATH: /run/watchtower-credentials/firebase-admin-credentials.json
       P2P_REGISTRATION_PROXY_HOPS: "${P2P_REGISTRATION_PROXY_HOPS:-1}"
     volumes:
-      # Provision this directory on the host before starting the service.
+      # Provision this directory on the host and grant UID/GID 10001 read access.
       - /var/opt/watchtower/credentials:/run/watchtower-credentials:ro
+      # These host directories must be writable by UID/GID 10001.
       - /var/www/images:/images
       - /var/opt/watchtower/private-p2p-proofs:/code/private-p2p-proofs
       - /var/opt/watchtower/media:/code/media

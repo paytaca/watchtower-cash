@@ -6,7 +6,7 @@ from django.db.models import F, Q
 
 from main.models import Transaction, WalletHistory, Wallet
 from main.utils.address_validator import is_bch_address
-from main.utils.history_cache import pos_history_cache_params
+from main.utils.history_cache import history_page_cache_key, pos_history_cache_params
 
 
 def scan_keys(cache, pattern, count=1000):
@@ -372,14 +372,14 @@ def clear_wallet_history_cache_for_txid(wallet_hash, txid):
         
         # Clear the specific cache keys for this token_key
         for page, page_size in pages_to_clear:
-            cache_key = f'wallet:history:{wallet_hash}:{token_key}:{page}:{page_size}'
+            cache_key = history_page_cache_key(wallet_hash, token_key, page, page_size)
             cache.delete(cache_key)
         
         # Also clear the "all" combined history cache if it exists
         # (for when all=true parameter is used). This covers both the plain
         # combined key and the exclude-field variants.
         for page, page_size in pages_to_clear:
-            cache_key = f'wallet:history:{wallet_hash}:all:{page}:{page_size}'
+            cache_key = history_page_cache_key(wallet_hash, 'all', page, page_size)
             cache.delete(cache_key)
             exclude_cache_keys = scan_keys(
                 cache, f'wallet:history:{wallet_hash}:all:{page}:{page_size}:exclude:*'

@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import shutil
 import tempfile
 import unittest
 
@@ -56,8 +57,11 @@ class ContainerRuntimeTests(unittest.TestCase):
             context = Path(directory)
             dockerfile = (ROOT / 'Dockerfile').read_text()
             runtime = dockerfile[dockerfile.index('ENV LC_ALL='):dockerfile.index('ENTRYPOINT')]
+            base_image = os.environ.get('WATCHTOWER_TEST_BASE_IMAGE', 'watchtower-cash-backend:latest')
+            if not base_image or any(character.isspace() for character in base_image):
+                raise ValueError('WATCHTOWER_TEST_BASE_IMAGE must be a local Docker image reference')
             (context / 'Dockerfile').write_text(
-                'FROM watchtower-cash-backend:latest\nUSER root\n'
+                'FROM ' + base_image + '\nUSER root\n'
                 'RUN printf synthetic > /code/runtime-canary\n'
                 'COPY supervisor-configs /tmp/supervisor-configs\n'
                 'COPY entrypoint.sh /tmp/entrypoint-under-test.sh\n'
@@ -173,3 +177,45 @@ with tempfile.TemporaryDirectory() as directory:
     assert check.returncode == 0 and check.stdout.strip() == '10001'
 print('PASS: entrypoint fails on migration errors and executes successful startup as UID 10001')
 '''
+
+
+@unittest.skipUnless(
+    os.environ.get('RUN_BUILT_IMAGE_RUNTIME_TESTS') == '1',
+    'set RUN_BUILT_IMAGE_RUNTIME_TESTS=1 to check a freshly built application image',
+)
+class BuiltImageRuntimeTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        if not shutil.which('docker'):
+            raise unittest.SkipTest('Docker CLI is unavailable')
+        cls.image = os.environ.get('WATCHTOWER_TEST_IMAGE', 'watchtower_web:latest')
+        check = subprocess.run(
+            ['docker', 'image', 'inspect', cls.image],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        )
+        if check.returncode:
+            raise RuntimeError('Requested application image is unavailable: ' + cls.image)
+
+    def test_built_image_identity_permissions_and_privileges(self):
+        probe = """
+import os
+from pathlib import Path
+import tempfile
+assert os.getuid() == os.getgid() == 10001
+assert os.environ['HOME'] == '/home/watchtower'
+assert os.access('/code/manage.py', os.R_OK)
+assert not os.access('/code/manage.py', os.W_OK)
+assert not os.access('/code', os.W_OK)
+status = Path('/proc/self/status').read_text()
+assert 'CapEff:' + chr(9) + '0000000000000000' in status
+assert 'NoNewPrivs:' + chr(9) + '1' in status
+for directory in ['/run/watchtower', '/var/lib/watchtower', '/code/static', '/code/media', '/code/private-p2p-proofs', '/images', '/home/watchtower']:
+    with tempfile.TemporaryFile(dir=directory) as handle:
+        handle.write(b'synthetic-probe')
+"""
+        result = subprocess.run([
+            'docker', 'run', '--rm', '--network=none', '--cap-drop=ALL',
+            '--security-opt=no-new-privileges:true', '--entrypoint', 'python',
+            self.image, '-c', probe,
+        ], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=60)
+        self.assertEqual(result.returncode, 0, result.stdout)

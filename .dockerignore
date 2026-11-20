@@ -32,6 +32,7 @@ private-security/INCIDENT_CANCELLATION.md
 # Private uploads, incident evidence, local data and development dependencies.
 **/private-security
 **/private-p2p-proofs
+**/SECURITY_AUDIT*.md
 **/media
 **/images
 **/*.log
