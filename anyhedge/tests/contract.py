@@ -1,4 +1,5 @@
 import json
+from unittest.mock import patch
 from django.test import TestCase
 
 from anyhedge.utils.contract import (
@@ -25,7 +26,7 @@ class ContractCreationTestCase(TestCase):
             Tests hedge sats calculation from long sats, used when compiling contracts from
             an hedge position offer
         """
-        data = factory.generate_random_contract()
+        data = factory.fetch_saved_test_data()
         contract_data = data["contract_data"]
         contract_creation_parameters = data["creation_parameters"]
         other = data["other"]
@@ -55,7 +56,11 @@ class ContractCreationTestCase(TestCase):
 
     def test_compile_contract_from_hedge_position(self):
         contract, _, _ = hedge_position_data.load_test_data()
-        contract_data = compile_contract_from_hedge_position(contract)
+        with patch(
+            'anyhedge.utils.contract.AnyhedgeFunctions.compileContract',
+            return_value=factory.fetch_saved_test_data()["contract_data"],
+        ):
+            contract_data = compile_contract_from_hedge_position(contract)
         contract_metadata = contract_data["metadata"]
         contract_parameters = contract_data["parameters"]
 
@@ -86,7 +91,11 @@ class ContractCreationTestCase(TestCase):
 
     def test_compile_contract_from_hedge_position_offer(self):
         contract_position_offer, _, _ = hedge_position_offer_data.load_test_data()
-        contract_data = compile_contract_from_hedge_position_offer(contract_position_offer)
+        with patch(
+            'anyhedge.utils.contract.AnyhedgeFunctions.compileContract',
+            return_value=factory.fetch_saved_test_data()["contract_data"],
+        ):
+            contract_data = compile_contract_from_hedge_position_offer(contract_position_offer)
 
         contract_metadata = contract_data["metadata"]
         contract_parameters = contract_data["parameters"]
