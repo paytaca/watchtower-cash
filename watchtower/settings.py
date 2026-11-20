@@ -279,7 +279,10 @@ google_app_credentials_path = os.path.join(
     config("GOOGLE_APP_CREDENTIALS_PATH", "compose/firebase-admin-credentials.json"),
 )
 google_app_cert = firebase_admin.credentials.Certificate(google_app_credentials_path)
-firebase_app = firebase_admin.initialize_app(google_app_cert)
+try:
+    firebase_app = firebase_admin.get_app()
+except ValueError:
+    firebase_app = firebase_admin.initialize_app(google_app_cert)
 
 
 # Sandbox default and presence rules live in watchtower/apns_settings.py so they
