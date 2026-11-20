@@ -1,4 +1,3 @@
-# from subprocess import Popen, PIPE
 import requests
 import bitcoin
 from django.conf import settings
