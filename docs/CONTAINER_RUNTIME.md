@@ -21,9 +21,10 @@ The credentials directory must contain, as configured:
 - `APNS_AuthKey.p8` when APNs token authentication is enabled
 
 The Firebase path is set by `compose/mainnet.yml` and `compose/chipnet.yml`.
-When APNs token authentication is enabled, set `APNS_AUTH_KEY_PATH` to the
-mounted key's path, for example `/run/watchtower-credentials/APNS_AuthKey.p8`.
-The filename remains configurable; omit APNs configuration when it is unused.
+They also set `APNS_AUTH_KEY_PATH` to the mounted key by default; override that
+variable only when the key has a different filename. When APNs token
+authentication is enabled, provision `APNS_AuthKey.p8` in the credentials
+directory. Omit APNs configuration when it is unused.
 The build context intentionally excludes `*.p8`, service-account JSON, env
 files, and private uploads.
 
