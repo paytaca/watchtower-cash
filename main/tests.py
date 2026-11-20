@@ -915,15 +915,8 @@ class TestLookupKeySecretResolution(TestCase):
     """
 
     def _real_secret_key(self):
-        """
-        The actual SECRET_KEY literal from settings.py. Read rather than
-        hardcoded so the assertions compare against the real fallback value.
-        """
-        import re
-        with open('watchtower/settings.py') as fh:
-            return re.search(
-                r'^SECRET_KEY = "([^"]+)"', fh.read(), re.MULTILINE
-            ).group(1)
+        # Synthetic configured Django secret: production no longer has a literal.
+        return 'synthetic-configured-django-secret-for-lookup-tests'
 
     def _resolve(self, env_contents, environ=None):
         """
@@ -954,8 +947,7 @@ class TestLookupKeySecretResolution(TestCase):
             match, 'could not find the LOOKUP_KEY_SECRET assignment')
         expression = match.group(1)
         # The real fallback and the real guard, as written.
-        fallback = re.search(
-            r'^SECRET_KEY = "([^"]+)"', source, re.MULTILINE).group(1)
+        fallback = self._real_secret_key()
         guard = re.search(
             r'^if LOOKUP_KEY_SECRET == SECRET_KEY:$', source, re.MULTILINE)
         self.assertIsNotNone(guard, 'could not find the fallback warning guard')

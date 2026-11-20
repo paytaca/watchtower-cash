@@ -12,8 +12,11 @@ services:
     command: [ "supervisord", "-c", "/code/supervisord-mainnet.conf", "--nodaemon" ]
     env_file: /root/watchtower/compose/.env_mainnet
     environment:
+      GOOGLE_APP_CREDENTIALS_PATH: /run/watchtower-credentials/firebase-admin-credentials.json
       P2P_REGISTRATION_PROXY_HOPS: "${P2P_REGISTRATION_PROXY_HOPS:-1}"
     volumes:
+      # Provision this directory on the host before starting the service.
+      - /var/opt/watchtower/credentials:/run/watchtower-credentials:ro
       - /var/www/images:/images
       - /var/opt/watchtower/private-p2p-proofs:/code/private-p2p-proofs
       - /var/opt/watchtower/media:/code/media

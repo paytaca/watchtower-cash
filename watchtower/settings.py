@@ -20,6 +20,7 @@ import decimal
 from celery.schedules import crontab
 
 from watchtower.apns_settings import build_apns_settings
+from watchtower.signing_secrets import require_signing_secret
 
 # Memory optimization: Configure Python garbage collection to be more aggressive
 # This helps prevent memory fragmentation and reduces overall memory usage
@@ -50,7 +51,7 @@ def decipher(value):
 # See https://docs.djangoproject.com/en/3.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = "g7+b)g5r@ugo4&ix$mto0b(u*^9_51p5a5-j#_@t)1g!fv&j99"
+SECRET_KEY = require_signing_secret(config, "SECRET_KEY")
 
 # HMAC key for wallet lookup keys. Deliberately separate from SECRET_KEY:
 # rotating SECRET_KEY would otherwise invalidate every issued lookup key,
@@ -532,6 +533,7 @@ REST_FRAMEWORK = {
 }
 
 SIMPLE_JWT = {
+    "SIGNING_KEY": require_signing_secret(config, "JWT_SIGNING_KEY"),
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
     "SLIDING_TOKEN_REFRESH_LIFETIME": timedelta(days=1),
     "SLIDING_TOKEN_LIFETIME": timedelta(days=30),
