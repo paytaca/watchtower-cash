@@ -2,7 +2,8 @@ from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 
-import os
+from pathlib import Path
+from rampp2p.proof_storage import is_public_proof_path
 from django.conf import settings
 from django.http import FileResponse
 from django.http import HttpResponse, JsonResponse
@@ -77,11 +78,20 @@ class SubscribeContractAddress(APIView):
     
 def media_proxy_view(request, *args, **kwargs):
     path = kwargs.get("path", "")
-    if path.endswith("/"): path = path[:-1]
+    try:
+        relative_path = Path(path)
+        if relative_path.is_absolute():
+            return HttpResponse(status=404)
 
-    file_path = os.path.join(settings.MEDIA_ROOT, path)
-
-    if os.path.exists(file_path):
-        return FileResponse(open(file_path, 'rb'))
-    else:
+        media_root = Path(settings.MEDIA_ROOT).resolve(strict=True)
+        file_path = (media_root / relative_path).resolve(strict=True)
+        # Resolve symlinks before checking containment. A string-prefix check
+        # would also allow sibling directories such as "media-private".
+        file_path.relative_to(media_root)
+        if is_public_proof_path(relative_path, file_path) or not file_path.is_file():
+            return HttpResponse(status=404)
+        return FileResponse(file_path.open('rb'))
+    except (OSError, ValueError, RuntimeError):
+        # Missing/inaccessible files, invalid paths and symlink loops all look
+        # like an unavailable media file; do not expose filesystem details.
         return HttpResponse(status=404)

@@ -14,6 +14,8 @@ from rampp2p.utils.fees import get_trading_fees
 import rampp2p.utils as utils
 import rampp2p.models as models
 from rampp2p.feature_control import require_p2p_feature
+from rampp2p.contract_access import order_is_canceled, canceled_contract_payload
+from rampp2p.order_access import require_order_participant
 import rampp2p.serializers as serializers
 import rampp2p.utils.websocket as websocket
 
@@ -28,13 +30,18 @@ class ContractViewSet(viewsets.GenericViewSet):
     authentication_classes = [TokenAuthentication]
     permission_classes = [RampP2PIsAuthenticated]
     serializer_class = serializers.BaseContractSerializer
-    queryset = models.Contract.objects.all()
+    queryset = models.Contract.objects.select_related('order__ad_snapshot__ad')
 
     def retrieve(self, request, pk):
         try:
             contract = self.get_queryset().get(pk=pk)
+            require_order_participant(contract.order, request.user)
+            if order_is_canceled(contract.order_id):
+                return Response(canceled_contract_payload(), status=status.HTTP_410_GONE,
+                                headers={'Cache-Control': 'no-store'})
             serialized_contract = serializers.ContractSerializer(contract)
-            return Response(serialized_contract.data, status=status.HTTP_200_OK)
+            return Response(serialized_contract.data, status=status.HTTP_200_OK,
+                            headers={'Cache-Control': 'no-store'})
         except models.Contract.DoesNotExist:
             raise Http404
     
@@ -45,8 +52,13 @@ class ContractViewSet(viewsets.GenericViewSet):
             if not contract.exists():
                 raise models.Contract.DoesNotExist
             contract = contract.first()
+            require_order_participant(contract.order, request.user)
+            if order_is_canceled(contract.order_id):
+                return Response(canceled_contract_payload(), status=status.HTTP_410_GONE,
+                                headers={'Cache-Control': 'no-store'})
             serialized_contract = serializers.ContractSerializer(contract)
-            return Response(serialized_contract.data, status=status.HTTP_200_OK)
+            return Response(serialized_contract.data, status=status.HTTP_200_OK,
+                            headers={'Cache-Control': 'no-store'})
         except models.Contract.DoesNotExist:
             raise Http404
 
@@ -82,6 +94,11 @@ class ContractViewSet(viewsets.GenericViewSet):
             contract_params = self._get_contract_params(arbiter, order)
         
             with transaction.atomic():
+                # Serialize generation with incident cancellation of this order.
+                order = models.Order.objects.select_for_update().get(pk=order_pk)
+                if order_is_canceled(order_pk):
+                    raise ValidationError('This order is canceled. Do not fund its contract.')
+                validate_status(order_pk, StatusType.CONFIRMED)
                 address = None
                 contract, created = models.Contract.objects.get_or_create(order=order)
                 timestamp = contract.created_at.timestamp()
@@ -171,6 +188,7 @@ class ContractViewSet(viewsets.GenericViewSet):
     def transactions(self, request, pk):
         try:
             contract = self.get_queryset().get(pk=pk)
+            require_order_participant(contract.order, request.user)
             tx_data = self._retrieve_transactions(contract.id)
             return Response(tx_data, status=status.HTTP_200_OK)
         except models.Contract.DoesNotExist:
@@ -183,6 +201,7 @@ class ContractViewSet(viewsets.GenericViewSet):
             if not contract.exists():
                 raise models.Contract.DoesNotExist
             contract = contract.first()
+            require_order_participant(contract.order, request.user)
             tx_data = self._retrieve_transactions(contract.id)
             return Response(tx_data, status=status.HTTP_200_OK)
         except models.Contract.DoesNotExist:
@@ -198,6 +217,7 @@ class ContractViewSet(viewsets.GenericViewSet):
     def contract_fees(self, request, pk):
         try:
             order = models.Order.objects.get(id=pk)
+            require_order_participant(order, request.user)
             contract = models.Contract.objects.get(order__id=order.id)
             _, breakdown = get_trading_fees(trade_amount=order.trade_amount)
             contract_fee = breakdown['contract_fee']

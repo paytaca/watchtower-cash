@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from django.db.models import Q
+from django.urls import reverse
 
 from .serializer_ad import SubsetAdSnapshotSerializer, PublicAdSnapshotSerializer
 from .serializer_payment import SubsetPaymentMethodSerializer
@@ -326,6 +327,17 @@ class OrderPaymentSerializer(serializers.ModelSerializer):
 
 
 class ImageUploadSerializer(serializers.ModelSerializer):
+    url = serializers.SerializerMethodField()
+    url_path = serializers.SerializerMethodField()
+
+    def get_url_path(self, obj):
+        return reverse('order-payment-image', kwargs={'pk': obj.pk})
+
+    def get_url(self, obj):
+        path = self.get_url_path(obj)
+        request = self.context.get('request')
+        return request.build_absolute_uri(path) if request is not None else path
+
     class Meta:
         model = models.ImageUpload
         fields = ['id', 'url', 'url_path', 'file_hash', 'size']

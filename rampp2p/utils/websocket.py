@@ -1,6 +1,7 @@
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 
+import hashlib
 import decimal
 import datetime
 
@@ -42,8 +43,11 @@ def send_market_price(data, currency):
     room_name = f'p2pxchange_market_price_{currency.upper()}'
     send_message(data, room_name)
 
+def general_room_name(wallet_hash):
+    return "p2pxchange_general_" + hashlib.sha256(wallet_hash.encode()).hexdigest()
+
 def send_general_update(data, wallet_hash):
-    room_name = f'p2pxchange_{wallet_hash[:8]}'
+    room_name = general_room_name(wallet_hash)
     send_message(data, room_name)
 
 def send_cashin_order_alert(data, wallet_hash):

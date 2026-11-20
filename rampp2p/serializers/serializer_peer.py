@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from django.db.models import Q, Subquery, OuterRef, F
 from rampp2p.models import Peer, ReservedName
+from .profile_identity import ImmutableProfileIdentityMixin
 
 class PeerProfileSerializer(serializers.ModelSerializer):
     class Meta:
@@ -75,7 +76,7 @@ class PeerCreateSerializer(serializers.ModelSerializer):
             'address_path'
         ]
 
-class PeerUpdateSerializer(serializers.ModelSerializer):
+class PeerUpdateSerializer(ImmutableProfileIdentityMixin, serializers.ModelSerializer):
     name = serializers.CharField(required=False)
     chat_identity_id = serializers.CharField(required=False)
     public_key = serializers.CharField(required=False)

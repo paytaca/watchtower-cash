@@ -490,6 +490,7 @@ CORS_ALLOW_HEADERS = list(default_headers) + [
     "signature",
     "timestamp",
     "public-key",
+    "registration-challenge",
     "version",
     "platform",
     "x-auth-pubkey",
@@ -585,6 +586,14 @@ SIDESHIFT_AFFILIATE_ID = config("SIDESHIFT_AFFILIATE_ID")
 # Webhook HMAC signing — generate with:
 # python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 WEBHOOK_SECRET_KEY = config("WEBHOOK_SECRET_KEY", default=None)
+
+# Public key corresponding to the chat service's CHAT_WEBHOOK_PRIVATE_KEY.
+P2P_CHAT_WEBHOOK_PUBLIC_KEY = config("P2P_CHAT_WEBHOOK_PUBLIC_KEY", default="")
+
+# 0 for direct local access; production Compose enables the trusted Nginx hop.
+# Increase only for additional trusted proxies that append the observed peer.
+# Positive values require a private backend port and a matching proxy chain.
+P2P_REGISTRATION_PROXY_HOPS = config("P2P_REGISTRATION_PROXY_HOPS", default=0, cast=int)
 
 LOGGING = {
     "version": 1,
@@ -776,6 +785,8 @@ from requests.compat import urljoin
 IMAGE_UPLOAD_FOLDER = "image_uploads"
 IMAGE_UPLOAD_PATH = urljoin(MEDIA_URL, IMAGE_UPLOAD_FOLDER)
 IMAGE_UPLOAD_ROOT = os.path.join(MEDIA_ROOT, IMAGE_UPLOAD_FOLDER)
+# Proof files must be persistent and outside all public media/static roots.
+P2P_PROOF_ROOT = config("P2P_PROOF_ROOT", default=os.path.join(BASE_DIR, "private-p2p-proofs"))
 
 P2P_EXCHANGE_SLACKBOT_USER_TOKEN = config("P2P_EXCHANGE_SLACKBOT_USER_TOKEN", "")
 P2P_EXCHANGE_SLACK_CHANNEL = config(

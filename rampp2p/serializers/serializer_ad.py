@@ -403,6 +403,11 @@ class WriteAdSerializer(serializers.ModelSerializer):
     appeal_cooldown_choice = serializers.ChoiceField(choices=models.CooldownChoices.choices, required=False)
     is_public = serializers.BooleanField(required=False)
     modified_at = serializers.DateTimeField(read_only=True)
+
+    def validate_owner(self, owner):
+        if self.instance is not None and owner.pk != self.instance.owner_id:
+            raise serializers.ValidationError('Ad ownership cannot be changed.')
+        return owner
     
     class Meta:
         model = models.Ad
