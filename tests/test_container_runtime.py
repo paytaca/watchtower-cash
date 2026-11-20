@@ -15,6 +15,87 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 
 
+class ContainerConfigurationTests(unittest.TestCase):
+    """Checks that run without Docker so CI cannot silently regress setup."""
+
+    def test_dockerfile_uses_unprivileged_identity(self):
+        dockerfile = (ROOT / 'Dockerfile').read_text()
+        self.assertIn('groupadd --gid 10001 watchtower', dockerfile)
+        self.assertIn('useradd --uid 10001 --gid 10001', dockerfile)
+        self.assertGreater(
+            dockerfile.rfind('USER 10001:10001'),
+            dockerfile.rfind('USER root'),
+        )
+        self.assertIn('USER 10001:10001', dockerfile)
+        self.assertNotIn('sudo', dockerfile)
+        self.assertIn('PYTHONDONTWRITEBYTECODE=1', dockerfile)
+        self.assertIn('ENV HOME=/home/watchtower', dockerfile)
+
+    def test_dockerfile_writable_paths_are_limited(self):
+        dockerfile = (ROOT / 'Dockerfile').read_text()
+        install = 'install -d -o 10001 -g 10001 -m 0755'
+        self.assertIn(install, dockerfile)
+        for path in (
+            '/home/watchtower', '/run/watchtower', '/var/lib/watchtower',
+            '/code/static', '/code/media', '/code/private-p2p-proofs', '/images',
+        ):
+            self.assertIn(path, dockerfile)
+
+    def test_supervisor_runtime_paths_are_writable_and_not_tmp(self):
+        configs = [ROOT / 'supervisord.conf', ROOT / 'supervisord-mainnet.conf']
+        configs.extend(sorted((ROOT / 'supervisor').glob('*.conf')))
+        self.assertGreaterEqual(len(configs), 6)
+        for path in configs:
+            with self.subTest(config=path.name):
+                text = path.read_text()
+                self.assertNotIn('/tmp', text)
+                self.assertIn('/run/watchtower', text)
+                if 'celerybeat' in text:
+                    self.assertIn(
+                        '--schedule=/var/lib/watchtower/celerybeat-schedule', text
+                    )
+                    self.assertIn(
+                        '--pidfile=/run/watchtower/celerybeat.pid', text
+                    )
+
+    def test_production_compose_drops_privileges_and_mounts_credentials(self):
+        for name in ('compose/mainnet.yml', 'compose/chipnet.yml'):
+            with self.subTest(compose=name):
+                text = (ROOT / name).read_text()
+                self.assertIn('user: "10001:10001"', text)
+                self.assertIn('cap_drop:', text)
+                self.assertIn('- ALL', text)
+                self.assertIn('no-new-privileges:true', text)
+                self.assertIn(
+                    'APNS_AUTH_KEY_PATH: '
+                    '"${APNS_AUTH_KEY_PATH:-/run/watchtower-credentials/APNS_AuthKey.p8}"',
+                    text,
+                )
+                self.assertIn(
+                    '/var/opt/watchtower/credentials:/run/watchtower-credentials:ro',
+                    text,
+                )
+
+    def test_development_compose_drops_privileges(self):
+        text = (ROOT / 'docker-compose.yml').read_text()
+        self.assertIn('cap_drop:', text)
+        self.assertIn('- ALL', text)
+        self.assertIn('no-new-privileges:true', text)
+
+    def test_entrypoint_fails_fast_and_waits_strictly(self):
+        text = (ROOT / 'entrypoint.sh').read_text()
+        self.assertIn('set -eu', text)
+        self.assertIn('wait-for-it.sh', text)
+        self.assertIn('--strict', text)
+
+    def test_build_context_excludes_secrets(self):
+        text = (ROOT / '.dockerignore').read_text()
+        for pattern in ('**/.env', '**/.env_*', '**/*.p8', '**/*.pem',
+                        '**/*.key', '**/*credentials*.json',
+                        '**/*service-account*.json'):
+            self.assertIn(pattern, text)
+
+
 @unittest.skipUnless(os.environ.get('RUN_CONTAINER_RUNTIME_TESTS') == '1', 'requires local Docker')
 class ContainerRuntimeTests(unittest.TestCase):
     def test_compose_security_and_storage_settings_resolve(self):
