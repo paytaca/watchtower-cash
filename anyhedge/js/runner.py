@@ -1,5 +1,6 @@
 import json
 import requests
+from internal_services.client import post_script_request
 
 # This class gets populated lazily with function proxies. The JS server resolves
 # the function name and returns an error for unknown functions.
@@ -28,7 +29,7 @@ def generate_func(func_name):
         }
 
         try:
-            response = requests.post('http://localhost:3020/', data=json.dumps(_input), timeout=30)
+            response = post_script_request('anyhedge', _input)
         except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as err:
             raise RuntimeError(
                 "Anyhedge JS server is unavailable at http://localhost:3020/"

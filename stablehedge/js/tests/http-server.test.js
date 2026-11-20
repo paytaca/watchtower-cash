@@ -4,6 +4,7 @@ import { once } from 'node:events';
 import { test } from 'node:test';
 import { createScriptServer } from '../src/http-server.js';
 
+const authToken = 'synthetic-test-service-token-abcdefghijklmnopqrstuvwxyz-0123456789';
 const secret = 'synthetic-private-key-do-not-log';
 const payload = { function: 'schnorrSign', params: [{ wif: secret, message: 'test' }] };
 
@@ -12,7 +13,7 @@ async function exercise(runScript, body = JSON.stringify(payload)) {
   const original = { log: console.log, error: console.error };
   console.log = (...args) => logs.push(args);
   console.error = (...args) => logs.push(args);
-  const server = createScriptServer(runScript);
+  const server = createScriptServer(runScript, { STABLEHEDGE_JS_AUTH_TOKEN: authToken });
   try {
     server.listen(0, '127.0.0.1');
     await once(server, 'listening');
@@ -20,7 +21,7 @@ async function exercise(runScript, body = JSON.stringify(payload)) {
       const request = http.request({
         hostname: '127.0.0.1', port: server.address().port,
         method: 'POST', path: '/?token=' + secret,
-        headers: { Authorization: 'Bearer ' + secret, 'Content-Type': 'application/json' },
+        headers: { Authorization: 'Bearer ' + authToken, 'Content-Type': 'application/json' },
       }, res => {
         let text = '';
         res.setEncoding('utf8');
@@ -65,7 +66,7 @@ test('thrown errors expose neither their message, custom properties nor stack', 
   });
   assert.equal(response.status, 500);
   assert.equal(response.body, 'Server Error');
-  assert.deepEqual(response.logs, [['Stablehedge script request failed']]);
+  assert.deepEqual(response.logs, [['Internal script request failed']]);
   assert.ok(!JSON.stringify(response).includes(secret));
 });
 
