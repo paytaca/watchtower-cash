@@ -475,25 +475,31 @@ class TreasuryContractViewSet(
 
 class TestUtilsViewSet(viewsets.GenericViewSet):
     @swagger_auto_schema(
-        method="get",
+        method="post",
         manual_parameters=[
             openapi.Parameter('price', openapi.IN_QUERY, type=openapi.TYPE_INTEGER),
-            openapi.Parameter('wif', openapi.IN_QUERY, type=openapi.TYPE_STRING, description="Optional"),
+            openapi.Parameter('wif', openapi.IN_FORM, type=openapi.TYPE_STRING, description="Optional; send in the request body only"),
             openapi.Parameter('mock_wif_index', openapi.IN_QUERY, type=openapi.TYPE_INTEGER, description="Optional"),
             openapi.Parameter('save', openapi.IN_QUERY, type=openapi.TYPE_BOOLEAN),
         ],
     )
-    @decorators.action(methods=["get"], detail=False)
+    @decorators.action(methods=["post"], detail=False)
     def price_message(self, request, *args, **kwargs):
         save = str(request.query_params.get("save", "")).lower().strip() == "true"
-        wif = request.query_params.get("wif", None) or None
+        # Private keys must never be accepted from query strings because proxy
+        # and web-server access logs record the full URL.
+        wif = request.data.get("wif", None) or None
         try:
-            mock_wif_index = int(request.query_params.get("mock_wif_index"))
+            mock_wif_index = int(request.data.get(
+                "mock_wif_index", request.query_params.get("mock_wif_index")
+            ))
         except (TypeError, ValueError):
             mock_wif_index = 0
 
         try:
-            price = int(request.query_params.get("price"))
+            price = int(request.data.get(
+                "price", request.query_params.get("price")
+            ))
         except (TypeError, ValueError):
             price = hash(request) % 2 ** 32 # almost random
 
