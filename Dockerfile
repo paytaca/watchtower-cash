@@ -8,6 +8,11 @@ RUN apt-get -y install build-essential sudo postgresql libpq-dev postgresql-clie
     wget -O /usr/local/bin/wait-for-it.sh https://raw.githubusercontent.com/vishnubob/wait-for-it/8ed92e8cab83cfed76ff012ed4a36cef74b28096/wait-for-it.sh && \
     chmod +x /usr/local/bin/wait-for-it.sh
 
+# Application processes run as an unprivileged, fixed UID/GID so host volumes
+# and runtime credentials can be granted the minimum required permissions.
+RUN groupadd --gid 10001 app && \
+    useradd --uid 10001 --gid 10001 --create-home --shell /usr/sbin/nologin app
+
 # Next command needed for grpcio==1.34.0 build
 RUN apt-get install -y \
     build-essential \
@@ -43,7 +48,15 @@ RUN npm install --prefix /code/multisig/js
 COPY . /code
 WORKDIR /code
 
+# Only runtime data directories are writable by the application user. Source
+# files, dependencies, and entrypoint stay owned by root and read-only.
+RUN mkdir -p /code/static /code/media /code/private-p2p-proofs /var/run/watchtower /images && \
+    chown -R app:app /code/static /code/media /code/private-p2p-proofs /var/run/watchtower /images /home/app
+
 ENV LC_ALL=C.UTF-8
 ENV LANG=C.UTF-8
+ENV PYTHONDONTWRITEBYTECODE=1
+
+USER 10001:10001
 
 ENTRYPOINT [ "sh", "entrypoint.sh" ]
