@@ -9,6 +9,11 @@ services:
     container_name: watchtower_web
     build: /root/watchtower
     image: watchtower_web
+    user: "10001:10001"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     command: [ "supervisord", "-c", "/code/supervisord-mainnet.conf", "--nodaemon" ]
     env_file: /root/watchtower/compose/.env_mainnet
     environment:

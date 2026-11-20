@@ -1,6 +1,7 @@
 #!/bin/sh
+set -eu
 
-wait-for-it.sh $POSTGRES_HOST:$POSTGRES_PORT
+wait-for-it.sh "${POSTGRES_HOST}:${POSTGRES_PORT:-5432}" --strict --timeout=60
 python /code/manage.py migrate contenttypes
 python /code/manage.py migrate sessions
 python /code/manage.py migrate
