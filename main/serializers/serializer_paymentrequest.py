@@ -3,6 +3,7 @@ import requests
 import logging
 from rest_framework import serializers
 from main.utils import paymentrequest_pb2 as prpb
+from main.utils.payment_http import payment_request
 
 ca_path = requests.certs.where()
 ACK_HEADERS = {'Content-Type':'application/bitcoincash-payment','Accept':'application/bitcoincash-paymentack' }
@@ -40,7 +41,8 @@ class PaySerializer(serializers.Serializer):
 
     def send(self):
         try:
-            r = requests.post(
+            r = payment_request(
+                'POST',
                 self.validated_data["payment_url"],
                 data=self.serialized_payment,
                 headers=self.get_headers(),
