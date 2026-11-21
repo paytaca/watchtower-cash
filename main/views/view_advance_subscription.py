@@ -116,7 +116,7 @@ class AdvanceSubscriptionViewSet(viewsets.GenericViewSet):
                         advance_subscription=True
                     )
 
-                    if not result.get("success"):
+                    if not result.get("success") or result.get("error"):
                         error_msg = result.get("error", "Unknown error")
                         LOGGER.error(f"Failed to advance subscribe index {address_index}: {error_msg}")
                         raise Exception(f"Subscription failed for index {address_index}: {error_msg}")

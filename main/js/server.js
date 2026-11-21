@@ -1,4 +1,5 @@
 import express from 'express'
+import serviceAuth from '../../internal_services/auth.cjs'
 import {
     decodeCashAddress,
     encodeCashAddress,
@@ -87,6 +88,7 @@ function addressToBytecode(address) {
 }
 
 const app = express()
+app.use(serviceAuth.serviceAuthMiddleware('ADDRESS_JS_AUTH_TOKEN'))
 const port = 3000
 
 app.use(express.json());
@@ -117,6 +119,6 @@ app.get('/to-locking-bytecode/:address', async (req, res) => {
 })
 
 
-app.listen(port, () => {
+app.listen(port, '127.0.0.1', () => {
     console.log(`Example app listening on port ${port}`)
 })

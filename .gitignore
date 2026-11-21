@@ -216,8 +216,12 @@ supervisord.pid
 **.p8
 images
 compose/firebase-admin-credentials.json
+# Deployment credentials are grouped per network under compose/credentials/.
+# The folder's own .gitignore excludes everything except its README.
+/compose/credentials/*/
 
 # Private P2P security and incident notes
+/SECURITY_AUDIT*.md
 /docs/P2P_SECURITY*.[mM][dD]
 /docs/P2P_INCIDENT*.[mM][dD]
 /rampp2p/**/SECURITY*.[mM][dD]

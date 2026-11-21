@@ -146,9 +146,10 @@ Configuration for setting a fee for P2P & General Protocol's LP contracts
   - generating the settlement transaction for all cases(maturation, liquidation, mutual redemption), also checks the validity of data (e.g. price messages, & payout satoshis that each party gets)
   - fetching, validated, and parsing oracle price messages.
 - `anyhedge.js.runner.AnyhedgeFunctions`
-  - JS functions from the `anyhedge.js.src.funcs` are loaded into `anyhedge.js.runner.AnyhedgeFunctions` class to provide an abstraction on running them.
-  - Functions are loaded by running `anyhedge.js.src.load.js` which returns the function names.
-  - Functions in `anyhedge.js.runner.AnyhedgeFunctions` accept will only accept _positional arguments_ that are JSON serializable
+  - JS functions from the `anyhedge.js.src.funcs` are exposed lazily through `anyhedge.js.runner.AnyhedgeFunctions` to provide an abstraction on running them.
+  - Function names are resolved by the supervised Anyhedge JS server at `http://localhost:3020/`; unknown functions are rejected by the server. There is no local `node` subprocess fallback.
+  - The server is managed by supervisor as `anyhedge_js_scripts_server` (`supervisord.conf`). Tests or local runs that call JS-backed functions must start that server or mock `requests.post`.
+  - Functions in `anyhedge.js.runner.AnyhedgeFunctions` only accept _positional arguments_ that are JSON serializable.
 
 ### HedgePositionOffer lifecycle
 NOTE: `settled` status for `HedgePositionOffer` only implies that the offer has an `HedgePosition` created

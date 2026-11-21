@@ -11,3 +11,42 @@ rampp2p/**/*handoff*.[mM][dD]
 watchtower_p2p_handoff.[mM][dD]
 private-security/INCIDENT_CANCELLATION.md
 /private-p2p-proofs/
+
+# Deployment secrets and repository history must never enter image layers.
+**/.git
+**/.env
+**/.env.*
+**/.env_*
+**/.ssh
+**/.aws
+**/.config/gcloud
+**/*credentials*.json
+**/*service-account*.json
+**/*service_account*.json
+**/*.pem
+**/*.key
+**/*.p8
+**/*.p12
+**/*.pfx
+
+# Deployment credentials grouped per network under compose/credentials/.
+compose/credentials
+**/compose/credentials
+
+# Private uploads, incident evidence, local data and development dependencies.
+**/private-security
+**/private-p2p-proofs
+**/SECURITY_AUDIT*.md
+**/media
+**/images
+**/*.log
+**/*.sqlite3
+**/*.sqlite3-*
+**/*.dump
+**/*.rdb
+**/__pycache__
+**/*.pyc
+**/.venv
+**/venv
+**/myenv
+**/node_modules

@@ -13,8 +13,6 @@ from django.db.models import (
     CharField,
     IntegerField,
 )
-import pickle
-import base64
 import json
 import math
 from django.conf import settings
@@ -32,6 +30,9 @@ from django.core.paginator import Paginator
 from main.serializers import PaginatedWalletHistorySerializer
 from main.throttles import RebuildHistoryThrottle
 from main.tasks import rebuild_wallet_history
+from main.utils.history_cache import (
+    read_history_cache, versioned_history_cache_key, write_history_cache,
+)
 
 POS_ID_MAX_DIGITS = 4
 
@@ -102,26 +103,12 @@ def expand_token_from_dict(
 
 
 def store_object(key, obj, cache):
-    """Serialize an object using pickle and store it in Redis as a string."""
-    # Serialize the object to binary
-    pickled_data = pickle.dumps(obj)
-    # Convert binary to Base64 string
-    encoded_data = base64.b64encode(pickled_data).decode("utf-8")
-    # Store in Redis
     cache_ttl = 60 if settings.BCH_NETWORK != 'mainnet' else 60 * 5
-    cache.set(key, encoded_data, ex=cache_ttl)
+    write_history_cache(cache, versioned_history_cache_key(key), obj, cache_ttl)
 
 
 def retrieve_object(key, cache):
-    """Retrieve an object from Redis and deserialize it using pickle."""
-    # Get the Base64 string from Redis
-    encoded_data = cache.get(key)
-    if encoded_data is None:
-        return None
-    # Convert Base64 string back to binary
-    pickled_data = base64.b64decode(encoded_data)
-    # Deserialize the binary back to an object
-    return pickle.loads(pickled_data)
+    return read_history_cache(cache, versioned_history_cache_key(key))
 
 
 class ContractHistoryView(APIView):

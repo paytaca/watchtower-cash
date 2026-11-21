@@ -1,7 +1,6 @@
-# from subprocess import Popen, PIPE
 from django.conf import settings
 from cashaddress import convert
-import requests
+from internal_services.client import service_request
 import json
 
 
@@ -29,8 +28,8 @@ def is_bch_address(addr, to_token_addr=False):
             return False
 
         result = { 'valid': False }
-        url = f'http://localhost:3000/validate-address/{addr}?token={to_token_addr}'
-        resp = requests.get(url)
+        url = f'/validate-address/{addr}?token={to_token_addr}'
+        resp = service_request('address', 'GET', url)
         result = resp.json()
         return result['valid']
     

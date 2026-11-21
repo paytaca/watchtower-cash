@@ -46,13 +46,26 @@ services:
     container_name: watchtower_backend
     build: /root/watchtower
     image: watchtower_web
+    user: "10001:10001"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     command: [ "supervisord", "-c", "/code/supervisord.conf", "--nodaemon" ]
     env_file: /root/watchtower/compose/.env_chipnet
     environment:
+      GOOGLE_APP_CREDENTIALS_PATH: /run/watchtower-credentials/firebase-admin-credentials.json
+      # The build context excludes *.p8 files. Point APNs at the read-only
+      # credentials mount unless the deployment explicitly overrides this.
+      APNS_AUTH_KEY_PATH: "${APNS_AUTH_KEY_PATH:-/run/watchtower-credentials/APNS_AuthKey.p8}"
       P2P_REGISTRATION_PROXY_HOPS: "${P2P_REGISTRATION_PROXY_HOPS:-1}"
     volumes:
+      # Provision this directory on the host and grant UID/GID 10001 read access.
+      - /var/opt/watchtower/credentials:/run/watchtower-credentials:ro
+      # These host directories must be writable by UID/GID 10001.
       - /var/www/images:/images
       - /var/opt/watchtower/private-p2p-proofs:/code/private-p2p-proofs
+      - /var/opt/watchtower/media:/code/media
       - /code/anyhedge/js/node_modules
       - /code/stablehedge/js/node_modules
     ports:

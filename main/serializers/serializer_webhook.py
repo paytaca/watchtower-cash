@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from main.utils.webhook import validate_webhook_url
 
 
 class BcmrWebhookSerializer(serializers.Serializer):
@@ -11,7 +12,7 @@ class BcmrWebhookSerializer(serializers.Serializer):
 
 
 class RecipientWebhookSecretCreateSerializer(serializers.Serializer):
-    web_url = serializers.CharField(max_length=300)
+    web_url = serializers.CharField(max_length=300, validators=[validate_webhook_url])
     webhook_secret = serializers.CharField(min_length=32, max_length=64)
 
 

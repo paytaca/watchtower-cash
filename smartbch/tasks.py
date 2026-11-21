@@ -288,8 +288,8 @@ def send_transaction_notification_task(txid):
         send_transaction_transfer_notification_task.delay(transfer_tx.id)
 
 
-@shared_task(queue=_QUEUE_TRANSACTION_TRANSFER_NOTIFICATION, max_retries=3, time_limit=_TASK_TIME_LIMIT)
-def send_transaction_transfer_notification_task(tx_transfer_id):
+@shared_task(bind=True, queue=_QUEUE_TRANSACTION_TRANSFER_NOTIFICATION, max_retries=3, time_limit=_TASK_TIME_LIMIT)
+def send_transaction_transfer_notification_task(self, tx_transfer_id):
     tx_transfer_obj = TransactionTransfer.objects.filter(id=tx_transfer_id).first()
 
     if not tx_transfer_obj:

@@ -21,48 +21,8 @@ from rampp2p.models import (
     Status
 )
 
-import subprocess
-import json
-import re
-
 import logging
 logger = logging.getLogger(__name__)
-
-@shared_task(queue='rampp2p__contract_execution')
-def execute_subprocess(command):
-    """
-    Executes a subprocess command.
-
-    This function runs a subprocess command and captures its output and error streams.
-    It also removes control characters from the JSON output.
-
-    Args:
-        command (str): The command to be executed.
-
-    Returns:
-        dict: A dictionary containing the result and stderr output of the command.
-    """
-    # execute subprocess
-    logger.warning(f'executing: {command}')
-    process = subprocess.Popen(command.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    stdout, stderr = process.communicate() 
-
-    stderr = stderr.decode("utf-8")
-    stdout = stdout.decode('utf-8')
-
-    if stdout is not None:
-        # Define the pattern for matching control characters
-        control_char_pattern = re.compile('[\x00-\x1f\x7f-\x9f]')
-        
-        # Remove all control characters from the JSON string
-        clean_stdout = control_char_pattern.sub('', stdout)
-
-        stdout = json.loads(clean_stdout)
-    
-    response = {'result': stdout, 'stderr': stderr} 
-
-    return response    
-
 @shared_task(queue='rampp2p__contract_execution')
 def handle_transaction_validation(txn: Dict, action: str, contract_id: int):
     """

@@ -20,6 +20,7 @@ import decimal
 from celery.schedules import crontab
 
 from watchtower.apns_settings import build_apns_settings
+from watchtower.signing_secrets import require_signing_secret
 
 # Memory optimization: Configure Python garbage collection to be more aggressive
 # This helps prevent memory fragmentation and reduces overall memory usage
@@ -50,7 +51,7 @@ def decipher(value):
 # See https://docs.djangoproject.com/en/3.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = "g7+b)g5r@ugo4&ix$mto0b(u*^9_51p5a5-j#_@t)1g!fv&j99"
+SECRET_KEY = require_signing_secret(config, "SECRET_KEY")
 
 # HMAC key for wallet lookup keys. Deliberately separate from SECRET_KEY:
 # rotating SECRET_KEY would otherwise invalidate every issued lookup key,
@@ -129,6 +130,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "watchtower.gift_host.GiftHostMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
@@ -274,10 +276,21 @@ import firebase_admin
 # Initialize the default app (either use `GOOGLE_APPLICATION_CREDENTIALS` environment variable, or pass a firebase_admin.credentials.Certificate instance)
 google_app_credentials_path = os.path.join(
     BASE_DIR,
-    config("GOOGLE_APP_CREDENTIALS_PATH", "compose/firebase-admin-credentials.json"),
+    config(
+        "GOOGLE_APP_CREDENTIALS_PATH",
+        os.path.join(
+            "compose",
+            "credentials",
+            config("BCH_NETWORK", default="chipnet"),
+            "firebase-admin-credentials.json",
+        ),
+    ),
 )
 google_app_cert = firebase_admin.credentials.Certificate(google_app_credentials_path)
-firebase_app = firebase_admin.initialize_app(google_app_cert)
+try:
+    firebase_app = firebase_admin.get_app()
+except ValueError:
+    firebase_app = firebase_admin.initialize_app(google_app_cert)
 
 
 # Sandbox default and presence rules live in watchtower/apns_settings.py so they
@@ -531,6 +544,7 @@ REST_FRAMEWORK = {
 }
 
 SIMPLE_JWT = {
+    "SIGNING_KEY": require_signing_secret(config, "JWT_SIGNING_KEY"),
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
     "SLIDING_TOKEN_REFRESH_LIFETIME": timedelta(days=1),
     "SLIDING_TOKEN_LIFETIME": timedelta(days=30),
@@ -554,7 +568,6 @@ SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 # Telegram bot settings
 # TELEGRAM_BOT_TOKEN = config('TELEGRAM_BOT_TOKEN', default='')
-# TELEGRAM_BOT_TOKEN = "1764241013:AAGA5L8vuZf8CBJH3iHkFsp84pRbFzSGwrc"
 # TELEGRAM_BOT_USER = decipher(config('TELEGRAM_BOT_USER'))
 # TELEGRAM_DESTINATION_ADDR = decipher(config('TELEGRAM_DESTINATION_ADDR'))
 

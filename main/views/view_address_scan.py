@@ -90,7 +90,8 @@ class WalletAddressScanViewSet(viewsets.GenericViewSet):
                 )
                 response.update(subscription_response)
 
-            if not response["success"]:
+            if not response.get("success") or response.get("error"):
+                response["success"] = False
                 has_error = True
 
         return Response(responses, status=status.HTTP_200_OK)

@@ -10,6 +10,7 @@ from cryptography.hazmat.primitives.asymmetric import padding
 from django.utils import timezone
 
 from . import paymentrequest_pb2 as pb2
+from .payment_http import payment_request
 
 
 class PaymentRequest:
@@ -19,7 +20,7 @@ class PaymentRequest:
     def get_payment_request(cls, url):
         data, error = None, None
         try:
-            response = requests.get(url, headers=cls.REQUEST_HEADERS)
+            response = payment_request('GET', url, headers=cls.REQUEST_HEADERS)
             response.raise_for_status()
             data = response.content
         except requests.exceptions.RequestException as e:

@@ -5,6 +5,18 @@ from functools import wraps
 
 LOGGER = logging.getLogger(__name__)
 
+REDACTED_VALUE = '<redacted>'
+
+
+def redact_mapping(values, sensitive_keys):
+    """Return a copy of a mapping with sensitive values replaced."""
+    sensitive_keys = set(sensitive_keys)
+    return {
+        key: REDACTED_VALUE if key in sensitive_keys else value
+        for key, value in values.items()
+    }
+
+
 def get_stack_frames(start=0, end=10):
     stack = []
     for i, (frame, lineno) in enumerate(traceback.walk_stack(None)):

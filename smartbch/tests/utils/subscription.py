@@ -39,10 +39,9 @@ class SubscriptionUtilsTestCase(TestCase):
         self.assertTrue(self.tx_transfer_obj.get_unsent_valid_subscriptions().exists())
 
     @tag("unit")
-    @mock.patch("requests.post")
-    def test_send_subscription_web_url(self, mock_post_request):
-        mock_post_request.return_value.ok = True
-        mock_post_request.return_value.status_code = 200
+    @mock.patch("smartbch.utils.subscription.send_webhook")
+    def test_send_subscription_web_url(self, mock_send_webhook):
+        mock_send_webhook.return_value.status_code = 200
 
         subscription = self.tx_transfer_obj.get_unsent_valid_subscriptions().first()
         subscription.recipient.telegram_id = None
@@ -60,7 +59,50 @@ class SubscriptionUtilsTestCase(TestCase):
         self.assertIsNotNone(log.sent_at)
 
     @tag("unit")
-    @mock.patch("main.tasks.send_telegram_message", return_value="send notification to 12312")
+    @mock.patch("smartbch.utils.subscription.send_webhook")
+    def test_send_subscription_web_url_400_invalidates_recipient(self, mock_send_webhook):
+        mock_send_webhook.return_value.status_code = 400
+
+        subscription = self.tx_transfer_obj.get_unsent_valid_subscriptions().first()
+        subscription.recipient.telegram_id = None
+        subscription.recipient.web_url = "https://example.com/webhook/receiver/"
+        subscription.recipient.save()
+        subscription.refresh_from_db()
+
+        log, error = subscription_utils.send_transaction_transfer_notification_to_subscriber(
+            subscription,
+            self.tx_transfer_obj,
+        )
+
+        self.assertIsNone(error)
+        self.assertIsNotNone(log)
+        self.assertIsInstance(log, TransactionTransferReceipientLog)
+        subscription.recipient.refresh_from_db()
+        self.assertFalse(subscription.recipient.valid)
+
+    @tag("unit")
+    @mock.patch("smartbch.utils.subscription.send_webhook")
+    def test_send_subscription_web_url_unknown_status_returns_error(self, mock_send_webhook):
+        mock_send_webhook.return_value.status_code = 500
+
+        subscription = self.tx_transfer_obj.get_unsent_valid_subscriptions().first()
+        subscription.recipient.telegram_id = None
+        subscription.recipient.web_url = "https://example.com/webhook/receiver/"
+        subscription.recipient.save()
+        subscription.refresh_from_db()
+
+        log, error = subscription_utils.send_transaction_transfer_notification_to_subscriber(
+            subscription,
+            self.tx_transfer_obj,
+        )
+
+        self.assertIsNone(log)
+        self.assertIn("500", error)
+        subscription.recipient.refresh_from_db()
+        self.assertTrue(subscription.recipient.valid)
+
+    @tag("unit")
+    @mock.patch("smartbch.utils.subscription.send_telegram_message", return_value="send notification to 12312")
     def test_send_subscription_telegram(self, mock_send_tg_msg):
         subscription = self.tx_transfer_obj.get_unsent_valid_subscriptions().first()
 
@@ -74,8 +116,9 @@ class SubscriptionUtilsTestCase(TestCase):
         self.assertIsNotNone(log.sent_at)
 
     @tag("unit")
+    @mock.patch("smartbch.utils.subscription.send_telegram_message", return_value="send notification to 12312")
     @mock.patch("channels_redis.core.RedisChannelLayer.group_send", side_effect=mock_coroutine)
-    def test_send_subscription_websocket(self, mock_async_to_sync):
+    def test_send_subscription_websocket(self, mock_async_to_sync, mock_send_tg_msg):
         subscription = self.tx_transfer_obj.get_unsent_valid_subscriptions().first()
         subscription.receiver = None
         subscription.websocket = True
@@ -92,7 +135,7 @@ class SubscriptionUtilsTestCase(TestCase):
         self.assertIsNotNone(log.sent_at)
 
     @tag("unit")
-    @mock.patch("main.tasks.send_telegram_message", return_value="send notification to 12312")
+    @mock.patch("smartbch.utils.subscription.send_telegram_message", return_value="send notification to 12312")
     def test_send_subscription_prevent_duplicate(self, mock_send_tg_msg):
         subscription = self.tx_transfer_obj.get_unsent_valid_subscriptions().first()
 

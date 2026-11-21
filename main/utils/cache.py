@@ -1,6 +1,4 @@
-import base64
 import datetime
-import pickle
 import math
 
 from django.conf import settings
@@ -8,6 +6,7 @@ from django.db.models import F, Q
 
 from main.models import Transaction, WalletHistory, Wallet
 from main.utils.address_validator import is_bch_address
+from main.utils.history_cache import history_page_cache_key, pos_history_cache_params
 
 
 def scan_keys(cache, pattern, count=1000):
@@ -201,24 +200,8 @@ def clear_pos_wallet_history_cache(wallet_hash, posid):
     target_posid = str(posid)
 
     for cache_key in pos_history_cache_keys:
-        # Redis may return bytes keys; normalise to str for parsing
-        if isinstance(cache_key, bytes):
-            try:
-                decoded_key = cache_key.decode('utf-8')
-            except UnicodeDecodeError:
-                continue
-        else:
-            decoded_key = cache_key
-
-        if ':pos:' not in decoded_key:
-            continue
-
-        encoded_params = decoded_key.split(':pos:', 1)[1]
-
-        try:
-            request_params = pickle.loads(base64.b64decode(encoded_params))
-        except Exception:
-            # Skip keys we cannot decode safely
+        request_params = pos_history_cache_params(cache_key)
+        if request_params is None:
             continue
 
         request_posid = request_params.get('posid')
@@ -230,6 +213,7 @@ def clear_pos_wallet_history_cache(wallet_hash, posid):
 
         # Delete cached response and corresponding count entry
         cache.delete(cache_key)
+        decoded_key = cache_key.decode('utf-8') if isinstance(cache_key, bytes) else cache_key
         cache.delete(f"{decoded_key}:count")
 
 
@@ -388,14 +372,14 @@ def clear_wallet_history_cache_for_txid(wallet_hash, txid):
         
         # Clear the specific cache keys for this token_key
         for page, page_size in pages_to_clear:
-            cache_key = f'wallet:history:{wallet_hash}:{token_key}:{page}:{page_size}'
+            cache_key = history_page_cache_key(wallet_hash, token_key, page, page_size)
             cache.delete(cache_key)
         
         # Also clear the "all" combined history cache if it exists
         # (for when all=true parameter is used). This covers both the plain
         # combined key and the exclude-field variants.
         for page, page_size in pages_to_clear:
-            cache_key = f'wallet:history:{wallet_hash}:all:{page}:{page_size}'
+            cache_key = history_page_cache_key(wallet_hash, 'all', page, page_size)
             cache.delete(cache_key)
             exclude_cache_keys = scan_keys(
                 cache, f'wallet:history:{wallet_hash}:all:{page}:{page_size}:exclude:*'

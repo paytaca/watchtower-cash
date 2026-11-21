@@ -111,7 +111,7 @@ class TestSendWebhook(TestCase):
         r.webhook_secret = encrypt_webhook_secret(secret) if secret else None
         return r
 
-    @patch('main.utils.webhook.requests.post')
+    @patch('main.utils.webhook.public_request')
     def test_signed_request_body_and_signature(self, mock_post):
         mock_post.return_value = MagicMock(status_code=200)
         data = {'txid': 'abc123', 'address': 'bitcoincash:qtest'}
@@ -130,7 +130,7 @@ class TestSendWebhook(TestCase):
         ).hexdigest()
         self.assertEqual(kwargs['headers']['X-Watchtower-Signature'], expected_sig)
 
-    @patch('main.utils.webhook.requests.post')
+    @patch('main.utils.webhook.public_request')
     def test_unsigned_fallback_when_no_secret(self, mock_post):
         mock_post.return_value = MagicMock(status_code=200)
 
@@ -140,7 +140,7 @@ class TestSendWebhook(TestCase):
         _, kwargs = mock_post.call_args
         self.assertNotIn('X-Watchtower-Signature', kwargs.get('headers', {}))
 
-    @patch('main.utils.webhook.requests.post')
+    @patch('main.utils.webhook.public_request')
     def test_body_keys_are_sorted(self, mock_post):
         mock_post.return_value = MagicMock(status_code=200)
         data = {'z_last': 1, 'a_first': 2, 'm_middle': 3}
@@ -161,6 +161,11 @@ class TestSendWebhook(TestCase):
 class TestRecipientWebhookSecretViewPost(TestCase):
 
     def setUp(self):
+        resolver = patch('main.utils.payment_http.socket.getaddrinfo', return_value=[
+            (2, 1, 6, '', ('8.8.8.8', 443)),
+        ])
+        resolver.start()
+        self.addCleanup(resolver.stop)
         self.client = APIClient()
         self._throttle = patch.object(WebhookSecretThrottle, 'allow_request', return_value=True)
         self._throttle.start()
@@ -369,7 +374,7 @@ class TestRecipientHandlerFindOwnership(TestCase):
 @override_settings(WEBHOOK_SECRET_KEY=_TEST_FERNET_KEY)
 class TestSendWebhookDecryptionFailure(TestCase):
 
-    @patch('main.utils.webhook.requests.post')
+    @patch('main.utils.webhook.public_request')
     def test_returns_500_on_invalid_ciphertext(self, mock_post):
         """
         If the stored ciphertext is malformed (e.g. key was rotated),
@@ -387,7 +392,7 @@ class TestSendWebhookDecryptionFailure(TestCase):
         self.assertEqual(resp.status_code, 500)
         mock_post.assert_not_called()
 
-    @patch('main.utils.webhook.requests.post', side_effect=requests_lib.exceptions.Timeout)
+    @patch('main.utils.webhook.public_request', side_effect=requests_lib.exceptions.Timeout)
     def test_returns_599_on_timeout_signed(self, mock_post):
         """
         A Timeout (or any RequestException) on a signed request must not
@@ -403,7 +408,7 @@ class TestSendWebhookDecryptionFailure(TestCase):
 
         self.assertEqual(resp.status_code, 599)
 
-    @patch('main.utils.webhook.requests.post', side_effect=requests_lib.exceptions.ConnectionError)
+    @patch('main.utils.webhook.public_request', side_effect=requests_lib.exceptions.ConnectionError)
     def test_returns_599_on_network_error_unsigned(self, mock_post):
         """Same guarantee for unsigned (legacy) recipients."""
         r = MagicMock()
@@ -910,15 +915,8 @@ class TestLookupKeySecretResolution(TestCase):
     """
 
     def _real_secret_key(self):
-        """
-        The actual SECRET_KEY literal from settings.py. Read rather than
-        hardcoded so the assertions compare against the real fallback value.
-        """
-        import re
-        with open('watchtower/settings.py') as fh:
-            return re.search(
-                r'^SECRET_KEY = "([^"]+)"', fh.read(), re.MULTILINE
-            ).group(1)
+        # Synthetic configured Django secret: production no longer has a literal.
+        return 'synthetic-configured-django-secret-for-lookup-tests'
 
     def _resolve(self, env_contents, environ=None):
         """
@@ -949,8 +947,7 @@ class TestLookupKeySecretResolution(TestCase):
             match, 'could not find the LOOKUP_KEY_SECRET assignment')
         expression = match.group(1)
         # The real fallback and the real guard, as written.
-        fallback = re.search(
-            r'^SECRET_KEY = "([^"]+)"', source, re.MULTILINE).group(1)
+        fallback = self._real_secret_key()
         guard = re.search(
             r'^if LOOKUP_KEY_SECRET == SECRET_KEY:$', source, re.MULTILINE)
         self.assertIsNotNone(guard, 'could not find the fallback warning guard')

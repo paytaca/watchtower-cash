@@ -1,37 +1,19 @@
-import os
 import json
-import logging
 import requests
-from subprocess import run, PIPE
+from internal_services.client import post_script_request
 
-# This class gets populated with functions in the javascript after loading this file
-# Refer to code below
-
-LOGGER = logging.getLogger(__name__)
+# This class gets populated lazily with function proxies. The JS server resolves
+# the function name and returns an error for unknown functions.
 
 class AnyhedgeFunctionsMeta(type):
-    functions_loaded = False
     functions = {}
 
-    def load_anyhedge_functions(cls):
-        print("loading anyhedge functions")
-        process = run(['node', '/code/anyhedge/js/src/load.js'], stdout=PIPE)
-        functions = []
-        if process.stdout:
-            functions = json.loads(process.stdout)
-
-        for function in functions:
-            cls.functions[function] = generate_func(function)
-
-        cls.functions_loaded = True
-
     def __getattr__(cls, key):
-        if key == "__load_functions__":
-            return cls.load_anyhedge_functions
+        if key.startswith("_"):
+            raise AttributeError(key)
 
         if key not in cls.functions:
             cls.functions[key] = generate_func(key)
-            # raise AttributeError(key)
 
         return cls.functions[key]
 
@@ -47,28 +29,18 @@ def generate_func(func_name):
         }
 
         try:
-            response = requests.post('http://localhost:3020/', data=json.dumps(_input))
-            if response.ok:
-                try:
-                    return response.json()
-                except json.JSONDecodeError:
-                    return response.content
-            else:
-               raise Exception(response.content.decode())
-        except requests.exceptions.ConnectionError:
-            pass
+            response = post_script_request('anyhedge', _input)
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as err:
+            raise RuntimeError(
+                "Anyhedge JS server is unavailable at http://localhost:3020/"
+            ) from err
 
-        process = run(['node', './anyhedge/js/src/main.js'], input=json.dumps(_input).encode(), stdout=PIPE, stderr=PIPE)
-        result = None
+        if not response.ok:
+            raise Exception(response.content.decode())
 
-        LOGGER.info(f"{func_name} | {args} | {process}")
-        if process.stdout:
-            try:
-                result = json.loads(process.stdout)
-            except json.JSONDecodeError:
-                result = process.stdout
-        elif process.stderr:
-            raise Exception(f"{func_name} | {args} | {process.stderr.decode()}")
-        return result
+        try:
+            return response.json()
+        except json.JSONDecodeError:
+            return response.content
 
     return func
