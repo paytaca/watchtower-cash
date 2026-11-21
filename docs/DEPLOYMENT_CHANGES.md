@@ -144,6 +144,22 @@ required; expect a cold cache after rollout. Old entries expire naturally.
 
 ## 6. Caller and behavior changes
 
+### Address-to-wallet binding
+
+An address is bound to at most one wallet. Requests that try to associate an
+address with a different `wallet_hash` than the one already stored now fail
+with `address_already_owned` instead of reassigning it.
+
+This applies to the shared subscription path used by:
+
+- `POST /api/wallet/address-scan/`
+- `POST /api/wallet/advance-subscribe/`
+- `POST /api/subscription/`
+
+These endpoints still do not require authentication. An unowned address can
+still be claimed; an address already owned by the same wallet can still be
+updated. Clients should not rely on moving an address between wallets.
+
 ### Stablehedge test utility
 
 `POST /api/stablehedge/test-utils/price_message/` is now **POST-only**. A WIF

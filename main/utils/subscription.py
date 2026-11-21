@@ -161,6 +161,16 @@ def new_subscription(**kwargs):
                         # Store address string for async MQTT publishing
                         new_addresses.add(address_obj.address)
 
+                        # An address belongs to at most one wallet. Never
+                        # reassign an existing address to a different wallet;
+                        # address-scan and subscription are unauthenticated.
+                        if (wallet_hash
+                                and (wallet_index is not None or address_index is not None)
+                                and address_obj.wallet_id is not None
+                                and address_obj.wallet.wallet_hash != wallet_hash):
+                            response['error'] = 'address_already_owned'
+                            break
+
                         # Handle advance_subscription flag
                         # CRITICAL: Never change False -> True
                         # Only allow True -> False or setting on new addresses
@@ -192,32 +202,46 @@ def new_subscription(**kwargs):
                         if wallet_hash:
                             if wallet_index is not None or address_index is not None:
                                 if isinstance(path, str):
-                                    if '/' in path:
-                                        address_obj.address_path = path
-                                        wallet_version = 2
+                                    address_path = path
+                                    wallet_index_value = None
+                                    wallet_version = 2
                                 else:
                                     # Deal with subscription for v1 wallets
-                                    address_obj.wallet_index = int(path)
-                                    address_obj.address_path = path
+                                    address_path = path
+                                    wallet_index_value = int(path)
                                     wallet_version = 1
-                                # Optimized: use .last() directly instead of .exists() + .last() to avoid two queries
-                                wallet = Wallet.objects.filter(
-                                    wallet_hash=wallet_hash
-                                ).last()
-                                if not wallet:
-                                    wallet = Wallet(
-                                        wallet_hash=wallet_hash,
-                                        version=wallet_version
-                                    )
-                                    wallet.save()
-                                if wallet.version != wallet_version:
-                                    wallet.version = wallet_version
-                                    wallet.save()
-                                if not wallet.project:
-                                    wallet.project = project
-                                    wallet.save()
-                                address_obj.wallet = wallet
-                                address_obj.save()
+
+                                with trans.atomic():
+                                    # Lock the row so concurrent requests cannot
+                                    # both claim the same unowned address.
+                                    address_obj = Address.objects.select_for_update().get(pk=address_obj.pk)
+                                    if (address_obj.wallet_id is not None
+                                            and address_obj.wallet.wallet_hash != wallet_hash):
+                                        response['error'] = 'address_already_owned'
+                                        break
+
+                                    # Optimized: use .last() directly instead of .exists() + .last() to avoid two queries
+                                    wallet = Wallet.objects.filter(
+                                        wallet_hash=wallet_hash
+                                    ).last()
+                                    if not wallet:
+                                        wallet = Wallet(
+                                            wallet_hash=wallet_hash,
+                                            version=wallet_version
+                                        )
+                                        wallet.save()
+                                    if wallet.version != wallet_version:
+                                        wallet.version = wallet_version
+                                        wallet.save()
+                                    if not wallet.project:
+                                        wallet.project = project
+                                        wallet.save()
+
+                                    if wallet_index_value is not None:
+                                        address_obj.wallet_index = wallet_index_value
+                                    address_obj.address_path = address_path
+                                    address_obj.wallet = wallet
+                                    address_obj.save()
                                 
                                 # Clear last address index cache when a non-advance-subscribed address is added
                                 # or when an address changes from advance_subscription=True to False
