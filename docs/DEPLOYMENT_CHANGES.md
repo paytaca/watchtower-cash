@@ -80,11 +80,12 @@ Provision these host paths:
 Example:
 
 ```bash
-install -d -o 10001 -g 10001 -m 0750 /var/opt/watchtower/credentials
+install -d -o 10001 -g 10001 -m 0750 \
+  /var/opt/watchtower/credentials \
+  /var/opt/watchtower/private-p2p-proofs
 install -d -o 10001 -g 10001 -m 0755 \
   /var/www/images \
-  /var/opt/watchtower/media \
-  /var/opt/watchtower/private-p2p-proofs
+  /var/opt/watchtower/media
 ```
 
 If you use existing Docker named volumes created before the non-root change,
@@ -196,6 +197,10 @@ This applies to the shared subscription path used by:
 These endpoints still do not require authentication. An unowned address can
 still be claimed; an address already owned by the same wallet can still be
 updated. Clients should not rely on moving an address between wallets.
+
+If either address in a pair fails subscription, the result reports failure.
+Advance subscription rolls back that pair and counts both addresses as skipped;
+address scanning stops subscribing subsequent pairs after an error.
 
 ### Stablehedge test utility
 

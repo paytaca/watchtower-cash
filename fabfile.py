@@ -43,10 +43,10 @@ SERVICE_TOKENS = (
 CREDENTIALS_DIR = "/var/opt/watchtower/credentials"
 CREDENTIALS_SOURCE = Path("compose/credentials")
 CREDENTIALS_STAGING = "/tmp/watchtower-credentials"
+PRIVATE_PROOFS_DIR = "/var/opt/watchtower/private-p2p-proofs"
 RUNTIME_DIRS = (
     "/var/www/images",
     "/var/opt/watchtower/media",
-    "/var/opt/watchtower/private-p2p-proofs",
 )
 
 
@@ -168,7 +168,7 @@ def provision(ctx):
     conn = ctx.config.run.env['conn']
 
     conn.run(
-        f'sudo install -d -o 10001 -g 10001 -m 0750 {CREDENTIALS_DIR}'
+        f'sudo install -d -o 10001 -g 10001 -m 0750 {CREDENTIALS_DIR} {PRIVATE_PROOFS_DIR}'
     )
     conn.run(
         'sudo install -d -o 10001 -g 10001 -m 0755 ' + ' '.join(RUNTIME_DIRS)

@@ -123,7 +123,7 @@ def new_subscription(**kwargs):
                     if project:
                         proceed = True
                     else:
-                        response['error'] = 'project_does_not_exist'
+                        return {'success': False, 'error': 'project_does_not_exist'}
                 else:
                     proceed = True
                 
@@ -136,11 +136,9 @@ def new_subscription(**kwargs):
                     try:
                         recipient, created = obj_recipient.get_or_create()
                     except WebhookOwnershipRequired:
-                        response['error'] = 'webhook_url_already_has_secret'
-                        break
+                        return {'success': False, 'error': 'webhook_url_already_has_secret'}
                     except WebhookSecretRegistrationRequired:
-                        response['error'] = 'webhook_url_secret_not_registered'
-                        break
+                        return {'success': False, 'error': 'webhook_url_secret_not_registered'}
                                     
                     if recipient and not created:
                         # Renew validity.
@@ -165,8 +163,7 @@ def new_subscription(**kwargs):
                                 and (wallet_index is not None or address_index is not None)
                                 and address_obj.wallet_id is not None
                                 and address_obj.wallet.wallet_hash != wallet_hash):
-                            response['error'] = 'address_already_owned'
-                            break
+                            return {'success': False, 'error': 'address_already_owned'}
 
                         # Handle advance_subscription flag
                         # CRITICAL: Never change False -> True
@@ -214,8 +211,7 @@ def new_subscription(**kwargs):
                                     address_obj = Address.objects.select_for_update().get(pk=address_obj.pk)
                                     if (address_obj.wallet_id is not None
                                             and address_obj.wallet.wallet_hash != wallet_hash):
-                                        response['error'] = 'address_already_owned'
-                                        break
+                                        return {'success': False, 'error': 'address_already_owned'}
 
                                     # Optimized: use .last() directly instead of .exists() + .last() to avoid two queries
                                     wallet = Wallet.objects.filter(
@@ -295,7 +291,7 @@ def new_subscription(**kwargs):
 
                     response['success'] = True
             else:
-                response['error'] = 'invalid_address'
+                return {'success': False, 'error': 'invalid_address'}
 
         if response['success'] and new_addresses:
             # Publish to MQTT asynchronously to avoid blocking the request
