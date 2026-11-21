@@ -29,6 +29,10 @@ private-security/INCIDENT_CANCELLATION.md
 **/*.p12
 **/*.pfx
 
+# Deployment credentials grouped per network under compose/credentials/.
+compose/credentials
+**/compose/credentials
+
 # Private uploads, incident evidence, local data and development dependencies.
 **/private-security
 **/private-p2p-proofs

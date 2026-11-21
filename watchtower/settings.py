@@ -276,7 +276,15 @@ import firebase_admin
 # Initialize the default app (either use `GOOGLE_APPLICATION_CREDENTIALS` environment variable, or pass a firebase_admin.credentials.Certificate instance)
 google_app_credentials_path = os.path.join(
     BASE_DIR,
-    config("GOOGLE_APP_CREDENTIALS_PATH", "compose/firebase-admin-credentials.json"),
+    config(
+        "GOOGLE_APP_CREDENTIALS_PATH",
+        os.path.join(
+            "compose",
+            "credentials",
+            config("BCH_NETWORK", default="chipnet"),
+            "firebase-admin-credentials.json",
+        ),
+    ),
 )
 google_app_cert = firebase_admin.credentials.Certificate(google_app_credentials_path)
 try:

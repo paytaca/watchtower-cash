@@ -20,6 +20,19 @@ The credentials directory must contain, as configured:
 - `firebase-admin-credentials.json`
 - `APNS_AuthKey.p8` when APNs token authentication is enabled
 
+Keep the local copies under `compose/credentials/<network>/` (gitignored):
+
+```text
+compose/credentials/mainnet/
+compose/credentials/chipnet/
+```
+
+`fab <network> provision` uploads that folder to
+`/var/opt/watchtower/credentials` as UID/GID 10001, so the host directory does
+not need to be maintained by hand. The whole folder is mirrored, which lets
+mainnet and chipnet use different keys and picks up additional credential
+files without changing the fabfile.
+
 The Firebase path is set by `compose/mainnet.yml` and `compose/chipnet.yml`.
 They also set `APNS_AUTH_KEY_PATH` to the mounted key by default; override that
 variable only when the key has a different filename. When APNs token

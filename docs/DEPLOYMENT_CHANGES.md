@@ -99,6 +99,10 @@ The credentials directory is mounted read-only at
 - `firebase-admin-credentials.json`
 - `APNS_AuthKey.p8` when APNs token authentication is enabled
 
+Keep the local copies in `compose/credentials/<network>/`; `fab <network>
+provision` mirrors that folder into `/var/opt/watchtower/credentials` with the
+required ownership. Both folders are gitignored.
+
 `compose/mainnet.yml` and `compose/chipnet.yml` set the Firebase path and
 default the APNs path to:
 

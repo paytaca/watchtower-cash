@@ -3,6 +3,7 @@ from fabric import task
 from fabric.connection import Connection
 from dotenv import dotenv_values
 from pathlib import Path
+import re
 
 
 def get_active_branch_name():
@@ -15,6 +16,82 @@ def get_active_branch_name():
 
 config = dotenv_values(".env")
 project = "watchtower"
+
+NETWORK_ENV_FILES = {
+    "mainnet": "compose/.env_mainnet",
+    "chipnet": "compose/.env_chipnet",
+}
+
+# mainnet.yml calls the application service "web"; chipnet.yml calls it "backend".
+NETWORK_SERVICES = {
+    "mainnet": "web",
+    "chipnet": "backend",
+}
+
+SIGNING_SECRETS = ("SECRET_KEY", "JWT_SIGNING_KEY")
+
+# Must match internal_services/client.py and the Node service auth middleware.
+SERVICE_TOKENS = (
+    "ADDRESS_JS_AUTH_TOKEN",
+    "CTS_JS_AUTH_TOKEN",
+    "MULTISIG_JS_AUTH_TOKEN",
+    "ANYHEDGE_JS_AUTH_TOKEN",
+    "STABLEHEDGE_JS_AUTH_TOKEN",
+)
+
+CREDENTIALS_DIR = "/var/opt/watchtower/credentials"
+CREDENTIALS_SOURCE = Path("compose/credentials")
+CREDENTIALS_STAGING = "/tmp/watchtower-credentials"
+RUNTIME_DIRS = (
+    "/var/www/images",
+    "/var/opt/watchtower/media",
+    "/var/opt/watchtower/private-p2p-proofs",
+)
+
+
+def network_env_file(ctx):
+    return NETWORK_ENV_FILES[ctx.config.network]
+
+
+def compose_env_file(ctx):
+    return f"{ctx.config.project_dir}/{network_env_file(ctx)}"
+
+
+def compose(ctx, command):
+    conn = ctx.config.run.env["conn"]
+    compose_file = f"compose/{ctx.config.network}.yml"
+    with conn.cd(ctx.config.project_dir):
+        conn.run(
+            f"docker-compose -f {compose_file} "
+            f"--env-file {compose_env_file(ctx)} {command}"
+        )
+
+
+def check_env(ctx):
+    """Fail before uploading anything when the branch's required secrets are missing."""
+    values = dotenv_values(network_env_file(ctx))
+    problems = []
+
+    for name in SIGNING_SECRETS:
+        value = (values.get(name) or "").strip()
+        if len(value) < 50 or len(set(value)) < 5:
+            problems.append(
+                f"{name} must be a randomly generated secret of at least 50 characters"
+            )
+
+    for name in SERVICE_TOKENS:
+        value = (values.get(name) or "").strip()
+        if not re.fullmatch(r"[A-Za-z0-9_-]{43,}", value) or len(set(value)) < 5:
+            problems.append(
+                f"{name} must be a randomly generated URL-safe token "
+                "of at least 43 characters"
+            )
+
+    if problems:
+        raise ValueError(
+            f"Invalid deployment environment in {network_env_file(ctx)}:\n  - "
+            + "\n  - ".join(problems)
+        )
 
 
 @task
@@ -58,7 +135,15 @@ def sync(ctx):
         exclude=[
             '.venv',
             '.git',
+            '.env',
             '/static',
+            'media',
+            'images',
+            'private-p2p-proofs',
+            'node_modules',
+            'compose/credentials',
+            'compose/firebase-admin-credentials.json',
+            'compose/APNS_AuthKey.p8',
             '.DS_Store',
             '__pycache__',
             '*.pyc',
@@ -66,38 +151,77 @@ def sync(ctx):
             '*.pid'
         ]
     )
-    with conn.cd(ctx.config.project_dir):
-        conn.run(f'cat compose/.env_{ctx.config.network} >> .env')
+
+
+@task
+def provision(ctx):
+    """Create the non-root runtime paths and install the network's credentials."""
+    if 'network' not in ctx.config.keys(): return
+    source = CREDENTIALS_SOURCE / ctx.config.network
+    if not source.is_dir() or not any(source.iterdir()):
+        raise RuntimeError(
+            f'No credential files found in {source}; '
+            'add the network credentials before deploying'
+        )
+
+    conn = ctx.config.run.env['conn']
+
+    conn.run(
+        f'sudo install -d -o 10001 -g 10001 -m 0750 {CREDENTIALS_DIR}'
+    )
+    conn.run(
+        'sudo install -d -o 10001 -g 10001 -m 0755 ' + ' '.join(RUNTIME_DIRS)
+    )
+
+    # Stage outside the project directory, then mirror the whole folder so
+    # removed or new credential files are reflected on the server.
+    conn.run(f'rm -rf {CREDENTIALS_STAGING}')
+    conn.run(f'install -d -m 0700 {CREDENTIALS_STAGING}')
+    rsync(
+        conn,
+        str(source) + '/',
+        CREDENTIALS_STAGING,
+        exclude=['.DS_Store'],
+    )
+    conn.run(f'sudo find {CREDENTIALS_DIR} -mindepth 1 -delete')
+    conn.run(f'sudo cp -a {CREDENTIALS_STAGING}/. {CREDENTIALS_DIR}/')
+    conn.run(f'sudo chown -R 10001:10001 {CREDENTIALS_DIR}')
+    conn.run(f'sudo find {CREDENTIALS_DIR} -type d -exec chmod 0750 {{}} +')
+    conn.run(f'sudo find {CREDENTIALS_DIR} -type f -exec chmod 0400 {{}} +')
+    conn.run(f'rm -rf {CREDENTIALS_STAGING}')
+
+
+@task
+def check_env_file(ctx):
+    if 'network' not in ctx.config.keys(): return
+    check_env(ctx)
+    print(f'{network_env_file(ctx)} contains the required signing keys and service tokens.')
 
 
 @task
 def build(ctx):
     if 'network' not in ctx.config.keys(): return
-    conn = ctx.config.run.env['conn']
-    with conn.cd(ctx.config.project_dir):
-        conn.run(f'docker-compose -f compose/{ctx.config.network}.yml --env-file {ctx.config.project_dir}/.env build')
+    compose(ctx, 'build')
 
 
 @task
 def up(ctx):
     if 'network' not in ctx.config.keys(): return
-    conn = ctx.config.run.env['conn']
-    with conn.cd(ctx.config.project_dir):
-        conn.run(f'docker-compose -f compose/{ctx.config.network}.yml --env-file {ctx.config.project_dir}/.env up -d')
+    compose(ctx, 'up -d')
 
 
 @task
 def down(ctx):
     if 'network' not in ctx.config.keys(): return
-    conn = ctx.config.run.env['conn']
-    with conn.cd(ctx.config.project_dir):
-        conn.run(f'docker-compose -f compose/{ctx.config.network}.yml --env-file {ctx.config.project_dir}/.env down --remove-orphans')
+    compose(ctx, 'down --remove-orphans')
 
 
 @task
 def deploy(ctx):
     if 'network' not in ctx.config.keys(): return
+    check_env(ctx)
     sync(ctx)
+    provision(ctx)
     build(ctx)
     down(ctx)
     up(ctx)
@@ -128,29 +252,25 @@ def nginx(ctx):
 @task
 def clear_caches(ctx):
     if 'network' not in ctx.config.keys(): return
-    conn = ctx.config.run.env['conn']
-    with conn.cd(ctx.config.project_dir):
-        conn.run(f'docker-compose -f compose/{ctx.config.network}.yml --env-file {ctx.config.project_dir}/.env exec -T web python manage.py clear_caches')
+    service = NETWORK_SERVICES[ctx.config.network]
+    compose(ctx, f'exec -T {service} python manage.py clear_caches')
 
 
 @task
 def logs(ctx):
     if 'network' not in ctx.config.keys(): return
-    conn = ctx.config.run.env['conn']
-    with conn.cd(ctx.config.project_dir):
-        conn.run(f'docker-compose -f compose/{ctx.config.network}.yml --env-file {ctx.config.project_dir}/.env logs  -f web')
+    service = NETWORK_SERVICES[ctx.config.network]
+    compose(ctx, f'logs -f {service}')
 
 
 @task
 def reports(ctx):
     if 'network' not in ctx.config.keys(): return
-    conn = ctx.config.run.env['conn']
-    with conn.cd(ctx.config.project_dir):
-        conn.run(f'docker-compose -f compose/{ctx.config.network}.yml --env-file {ctx.config.project_dir}/.env exec -T web python manage.py reports -p paytaca')
+    service = NETWORK_SERVICES[ctx.config.network]
+    compose(ctx, f'exec -T {service} python manage.py reports -p paytaca')
 
 @task
 def check_tx(ctx, txid):
     if 'network' not in ctx.config.keys(): return
-    conn = ctx.config.run.env['conn']
-    with conn.cd(ctx.config.project_dir):
-        conn.run(f'docker-compose -f compose/{ctx.config.network}.yml --env-file {ctx.config.project_dir}/.env exec -T web python manage.py tx_fiat_amounts -t {txid} -c php') 
+    service = NETWORK_SERVICES[ctx.config.network]
+    compose(ctx, f'exec -T {service} python manage.py tx_fiat_amounts -t {txid} -c php')
