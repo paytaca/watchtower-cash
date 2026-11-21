@@ -142,7 +142,12 @@ class _PaymentAdapter(HTTPAdapter):
         return self._pool
 
     def get_connection_with_tls_context(self, request, verify, proxies=None, cert=None):
-        return self.get_connection(request.url, proxies=proxies)
+        # requests 2.32+ resolves the TLS context here; older versions call
+        # cert_verify() from send(). Apply it explicitly so every supported
+        # requests version honors a custom CA bundle or client certificate.
+        conn = self.get_connection(request.url, proxies=proxies)
+        self.cert_verify(conn, request.url, verify, cert)
+        return conn
 
     def close(self):
         self._pool.close()

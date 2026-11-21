@@ -8,9 +8,14 @@ import requests
 from urllib3.exceptions import SSLError
 from urllib3.util.ssl_ import create_urllib3_context
 
+try:
+    from urllib3.util.ssl_match_hostname import CertificateError as Urllib3CertificateError
+except ImportError:  # urllib3 1.25.x
+    from urllib3.packages.ssl_match_hostname import CertificateError as Urllib3CertificateError
+
 from main.utils.payment_http import (
     MAX_RESPONSE_BYTES, UnsafePaymentURL, _destination,
-    _PinnedHTTPSConnection, payment_request,
+    _PaymentAdapter, _PinnedHTTPSConnection, payment_request,
 )
 
 
@@ -217,7 +222,7 @@ class PaymentHTTPSecurityTests(TestCase):
         tls_socket = Mock()
         tls_socket.getpeercert.return_value = {'subjectAltName': (('DNS', 'other.example'),)}
         with patch('urllib3.connection.ssl_wrap_socket', return_value=tls_socket), \
-                self.assertRaises((ssl.CertificateError, SSLError)):
+                self.assertRaises((ssl.CertificateError, SSLError, Urllib3CertificateError)):
             conn.connect()
 
     def test_tls_verification_cannot_be_disabled(self):
@@ -225,6 +230,25 @@ class PaymentHTTPSecurityTests(TestCase):
             with self.subTest(verify=verify), self.assertRaises(ValueError):
                 payment_request('GET', 'https://merchant.example/', verify=verify)
         self.connect.assert_not_called()
+
+    def test_custom_ca_bundle_is_applied_to_the_pinned_pool(self):
+        adapter = _PaymentAdapter('https', 'merchant.example', 443, ('8.8.8.8',))
+        self.addCleanup(adapter.close)
+        request = requests.Request('GET', 'https://merchant.example/').prepare()
+
+        pool = adapter.get_connection_with_tls_context(request, requests.certs.where())
+        self.assertEqual(pool.ca_certs, requests.certs.where())
+        self.assertEqual(pool.cert_reqs, 'CERT_REQUIRED')
+
+        pool = adapter.get_connection_with_tls_context(request, True)
+        self.assertEqual(pool.ca_certs, requests.certs.where())
+        self.assertEqual(pool.cert_reqs, 'CERT_REQUIRED')
+
+        pool = adapter.get_connection_with_tls_context(
+            request, True, cert=requests.certs.where(),
+        )
+        self.assertEqual(pool.cert_file, requests.certs.where())
+        self.assertIsNone(pool.key_file)
 
     def test_public_ipv6_and_idna_hosts_normalize_safely(self):
         self.assertEqual(_destination('https://[2606:4700:4700::1111]/')[2], '2606:4700:4700::1111')
