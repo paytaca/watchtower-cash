@@ -81,8 +81,12 @@ def send_transaction_transfer_notification_to_subscriber(
                 recipient.valid = False
                 recipient.save()
                 LOGGER.info(f"!!! ATTENTION !!! THIS IS AN INVALID DESTINATION URL: {recipient.web_url}")
+            elif resp.status_code == 400:
+                recipient.valid = False
+                recipient.save()
+                LOGGER.info(f"!!! ATTENTION !!! ENCOUNTERED AN ERROR SENDING REQUEST TO: {recipient.web_url}")
             else:
-                return f"unknown_web_url_response_status_code: {resp.status_code}", None
+                return None, f"unknown_web_url_response_status_code: {resp.status_code}"
 
         if recipient.telegram_id:
             LOGGER.info(f"Sending telegram message for {tx_transfer_obj} to telegram({recipient.telegram_id})")
