@@ -1,14 +1,34 @@
 import http from 'http';
 import auth from './auth.cjs';
 
+const MAX_REQUEST_BYTES = 1024 * 1024;
+
+class RequestTooLargeError extends Error {
+  constructor() {
+    super('Request body too large');
+    this.name = 'RequestTooLargeError';
+  }
+}
+
 function readRequestData(req) {
   return new Promise((resolve, reject) => {
     let content = '';
+    let size = 0;
+    let settled = false;
     req.setEncoding('utf8');
-    req.on('data', chunk => { content += chunk; });
-    req.on('end', () => resolve(content));
-    req.on('error', reject);
-    req.on('aborted', () => reject(new Error('Request aborted')));
+    req.on('data', chunk => {
+      if (settled) return;
+      size += Buffer.byteLength(chunk, 'utf8');
+      if (size > MAX_REQUEST_BYTES) {
+        settled = true;
+        reject(new RequestTooLargeError());
+        return;
+      }
+      content += chunk;
+    });
+    req.on('end', () => { if (!settled) resolve(content); });
+    req.on('error', error => { if (!settled) reject(error); });
+    req.on('aborted', () => { if (!settled) reject(new Error('Request aborted')); });
   });
 }
 
@@ -40,7 +60,14 @@ export function createScriptServer(runScript, tokenName, environment = process.e
       }
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(response.result);
-    } catch {
+    } catch (error) {
+      if (error instanceof RequestTooLargeError) {
+        if (!res.headersSent) {
+          res.writeHead(413, { 'Content-Type': 'text/plain' });
+        }
+        res.end('Request body too large');
+        return;
+      }
       // Dependency errors can embed WIF values in their message or stack.
       console.error('Internal script request failed');
       if (!res.headersSent) {

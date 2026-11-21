@@ -82,3 +82,13 @@ test('empty body is rejected without invoking a signing function', async () => {
   assert.equal(response.status, 400);
   assert.deepEqual(response.logs, []);
 });
+
+test('oversized request bodies are rejected without dispatching or logging', async () => {
+  const response = await exercise(
+    () => { assert.fail('must not dispatch oversized body'); },
+    'x'.repeat(1024 * 1024 + 1),
+  );
+  assert.equal(response.status, 413);
+  assert.equal(response.body, 'Request body too large');
+  assert.deepEqual(response.logs, []);
+});
