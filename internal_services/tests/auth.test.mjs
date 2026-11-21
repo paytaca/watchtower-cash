@@ -58,3 +58,49 @@ for (const name of Object.keys(tokens)) {
     }
   });
 }
+
+for (const name of Object.keys(tokens)) {
+  test(`${name}: invalid result types return 500 before committing success`, async () => {
+    let result;
+    const server = createScriptServer(async () => ({ success: true, result }), name, tokens);
+    server.listen(0, '127.0.0.1');
+    await once(server, 'listening');
+    try {
+      for (result of [undefined, null, {}, 42, Buffer.from('synthetic')]) {
+        assert.deepEqual(await request(server, 'Bearer ' + tokens[name], '{}'), {
+          status: 500, content: 'Server Error',
+        });
+      }
+    } finally {
+      await new Promise(resolve => server.close(resolve));
+    }
+  });
+
+  test(`${name}: oversized unfinished uploads receive 413 and close`, { timeout: 5000 }, async () => {
+    let calls = 0;
+    const server = createScriptServer(async () => { calls++; }, name, tokens);
+    server.listen(0, '127.0.0.1');
+    await once(server, 'listening');
+    try {
+      const result = await new Promise((resolve, reject) => {
+        const req = http.request({
+          hostname: '127.0.0.1', port: server.address().port, method: 'POST',
+          headers: { Authorization: 'Bearer ' + tokens[name] },
+        }, res => {
+          let content = '';
+          res.setEncoding('utf8');
+          res.on('data', chunk => { content += chunk; });
+          res.on('error', reject);
+          req.on('close', () => resolve({ status: res.statusCode, content }));
+        });
+        req.on('error', reject);
+        // Keep the chunked request open; the server must terminate it itself.
+        req.write('x'.repeat(1024 * 1024 + 1));
+      });
+      assert.deepEqual(result, { status: 413, content: 'Request body too large' });
+      assert.equal(calls, 0);
+    } finally {
+      await new Promise(resolve => server.close(resolve));
+    }
+  });
+}

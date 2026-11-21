@@ -70,6 +70,16 @@ class SubscriptionWalletOwnershipTests(TestCase):
         address = Address.objects.get(address='bitcoincash:qsynthetica')
         self.assertEqual(address.wallet_id, self.wallet_a.id)
 
+    def test_rejected_change_address_is_not_published_to_mqtt(self):
+        self.assertTrue(self.subscribe('wallet-a', 'bitcoincash:qowned')['success'])
+        with patch('main.utils.subscription.publish_subscribed_addresses_to_mqtt_task.delay') as publish:
+            new_subscription(
+                addresses={'receiving': 'bitcoincash:qfree', 'change': 'bitcoincash:qowned'},
+                wallet_hash='wallet-b', address_index=1,
+            )
+        for call in publish.call_args_list:
+            self.assertNotIn('bitcoincash:qowned', call.args[0])
+
     def test_an_unowned_address_can_be_claimed_by_either_wallet(self):
         self.assertTrue(self.subscribe('wallet-b', 'bitcoincash:qsyntheticb')['success'])
 

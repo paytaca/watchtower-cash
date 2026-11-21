@@ -60,10 +60,18 @@ class SigningSecretTests(unittest.TestCase):
         module._EXPOSED_KEY_SHA256 = hashlib.sha256(OLD_TEST_KEY.encode()).hexdigest()
         try:
             for name in ['SECRET_KEY', 'JWT_SIGNING_KEY']:
-                with self.assertRaises(ImproperlyConfigured):
-                    require_signing_secret(lambda *a, **k: OLD_TEST_KEY, name)
+                for value in (OLD_TEST_KEY, ' \t' + OLD_TEST_KEY + '\n'):
+                    with self.assertRaises(ImproperlyConfigured):
+                        require_signing_secret(lambda *a, **k: value, name)
         finally:
             module._EXPOSED_KEY_SHA256 = original
+
+    def test_whitespace_is_normalized_before_validation_and_return(self):
+        self.assertEqual(require_signing_secret(
+            lambda *a, **k: ' \t' + NEW_TEST_KEY + '\n', 'SECRET_KEY',
+        ), NEW_TEST_KEY)
+        with self.assertRaises(ImproperlyConfigured):
+            require_signing_secret(lambda *a, **k: ' \t\n\r' + 'a' * 70, 'SECRET_KEY')
 
     def test_independent_keys_and_lookup_secret_are_preserved(self):
         result = self.resolve({

@@ -76,3 +76,31 @@ class ContractGenerationSecurityTests(TestCase):
             run.return_value = Mock(stdout=output, stderr=b'')
             with self.subTest(output=output), self.assertRaises(ValueError):
                 generate_contract_address(**self.params())
+
+
+class ContractErrorCallbackTests(TestCase):
+    def test_contract_creation_attaches_order_to_error_callback(self):
+        from rampp2p.utils.contract import create_contract
+        with patch('rampp2p.utils.contract.generate_contract.apply_async') as dispatch:
+            create_contract(order_id=123)
+        callback = dispatch.call_args.kwargs['link_error']
+        self.assertEqual(callback.task, 'rampp2p.tasks.task_contract.contract_error_handler')
+        self.assertEqual(callback.kwargs, {'order_id': 123})
+
+    def test_generator_failure_notifies_without_exception_details(self):
+        from rampp2p.tasks.task_contract import contract_error_handler
+        with patch('rampp2p.tasks.task_contract.order_is_canceled', return_value=False), \
+                patch('rampp2p.tasks.task_contract.send_order_update') as notify:
+            contract_error_handler.run(Mock(), ValueError('sensitive-output'), None, order_id=123)
+        payload, order_id = notify.call_args.args
+        self.assertEqual(order_id, 123)
+        self.assertFalse(payload['success'])
+        self.assertNotIn('sensitive-output', str(payload))
+
+    def test_cancellation_takes_priority_over_generator_failure(self):
+        from rampp2p.contract_access import canceled_contract_payload
+        from rampp2p.tasks.task_contract import contract_error_handler
+        with patch('rampp2p.tasks.task_contract.order_is_canceled', return_value=True), \
+                patch('rampp2p.tasks.task_contract.send_order_update') as notify:
+            contract_error_handler.run(Mock(), ValueError('failure'), None, order_id=123)
+        notify.assert_called_once_with(canceled_contract_payload(), 123)

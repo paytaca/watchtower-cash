@@ -4,6 +4,7 @@ from fabric.connection import Connection
 from dotenv import dotenv_values
 from pathlib import Path
 import re
+import shlex
 
 
 def get_active_branch_name():
@@ -183,11 +184,13 @@ def provision(ctx):
         CREDENTIALS_STAGING,
         exclude=['.DS_Store'],
     )
-    conn.run(f'sudo find {CREDENTIALS_DIR} -mindepth 1 -delete')
-    conn.run(f'sudo cp -a {CREDENTIALS_STAGING}/. {CREDENTIALS_DIR}/')
-    conn.run(f'sudo chown -R 10001:10001 {CREDENTIALS_DIR}')
-    conn.run(f'sudo find {CREDENTIALS_DIR} -type d -exec chmod 0750 {{}} +')
-    conn.run(f'sudo find {CREDENTIALS_DIR} -type f -exec chmod 0400 {{}} +')
+    # Keep live credentials while transferring replacements; prune orphans only
+    # after the transfer. Delayed updates also avoid partially written files.
+    conn.run(
+        'sudo rsync -a --delay-updates --delete-delay '
+        '--chown=10001:10001 --chmod=D0750,F0400 '
+        f'{CREDENTIALS_STAGING}/ {CREDENTIALS_DIR}/'
+    )
     conn.run(f'rm -rf {CREDENTIALS_STAGING}')
 
 
@@ -273,4 +276,4 @@ def reports(ctx):
 def check_tx(ctx, txid):
     if 'network' not in ctx.config.keys(): return
     service = NETWORK_SERVICES[ctx.config.network]
-    compose(ctx, f'exec -T {service} python manage.py tx_fiat_amounts -t {txid} -c php')
+    compose(ctx, f'exec -T {service} python manage.py tx_fiat_amounts -t {shlex.quote(txid)} -c php')

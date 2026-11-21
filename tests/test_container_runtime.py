@@ -81,6 +81,10 @@ class ContainerConfigurationTests(unittest.TestCase):
         self.assertIn('cap_drop:', text)
         self.assertIn('- ALL', text)
         self.assertIn('no-new-privileges:true', text)
+        self.assertEqual(text.count('user: "10001:10001"'), 2)
+        self.assertEqual(text.count(
+            './compose/credentials/${BCH_NETWORK:-chipnet}:/run/watchtower-credentials:ro'
+        ), 2)
 
     def test_entrypoint_fails_fast_and_waits_strictly(self):
         text = (ROOT / 'entrypoint.sh').read_text()

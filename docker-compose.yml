@@ -82,6 +82,7 @@ services:
       - emqx_log:/opt/emqx/log
   backend:
     build: .
+    user: "10001:10001"
     cap_drop:
       - ALL
     security_opt:
@@ -92,12 +93,16 @@ services:
       - "9000:9000"
     env_file:
       - .env_dev
+    environment:
+      GOOGLE_APP_CREDENTIALS_PATH: /run/watchtower-credentials/firebase-admin-credentials.json
+      APNS_AUTH_KEY_PATH: "${APNS_AUTH_KEY_PATH:-/run/watchtower-credentials/APNS_AuthKey.p8}"
     depends_on:
       - postgres
       - redis
       - emqx
     volumes:
       - ./:/code
+      - ./compose/credentials/${BCH_NETWORK:-chipnet}:/run/watchtower-credentials:ro
       # These named volumes remain writable by the image's non-root user.
       - watchtower_static:/code/static
       - watchtower_media:/code/media
@@ -111,6 +116,7 @@ services:
       - /code/multisig/js/node_modules
   test:
     build: .
+    user: "10001:10001"
     cap_drop:
       - ALL
     security_opt:
@@ -120,6 +126,8 @@ services:
       - .env_dev
     environment:
       - POSTGRES_DB=watchtower_test
+      - GOOGLE_APP_CREDENTIALS_PATH=/run/watchtower-credentials/firebase-admin-credentials.json
+      - APNS_AUTH_KEY_PATH=${APNS_AUTH_KEY_PATH:-/run/watchtower-credentials/APNS_AuthKey.p8}
     depends_on:
       postgres:
         condition: service_healthy
@@ -127,6 +135,7 @@ services:
         condition: service_started
     volumes:
       - ./:/code
+      - ./compose/credentials/${BCH_NETWORK:-chipnet}:/run/watchtower-credentials:ro
       # These named volumes remain writable by the image's non-root user.
       - watchtower_static:/code/static
       - watchtower_media:/code/media

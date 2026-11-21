@@ -7,6 +7,7 @@ from unittest.mock import Mock, patch
 import requests
 from urllib3.exceptions import SSLError
 from urllib3.util.ssl_ import create_urllib3_context
+from urllib3.util import Timeout
 
 try:
     from urllib3.util.ssl_match_hostname import CertificateError as Urllib3CertificateError
@@ -199,6 +200,21 @@ class PaymentHTTPSecurityTests(TestCase):
         self.connect.side_effect = socket.timeout('synthetic timeout')
         with self.assertRaises(requests.exceptions.ConnectTimeout):
             payment_request('GET', 'http://merchant.example/')
+
+    def test_connection_normalizes_default_and_timeout_object_values(self):
+        for timeout in (None, socket._GLOBAL_DEFAULT_TIMEOUT, Timeout.DEFAULT_TIMEOUT,
+                        Timeout(connect=2), float('inf')):
+            with self.subTest(timeout=timeout):
+                conn = _PinnedHTTPSConnection(
+                    'merchant.example', timeout=5, pinned_addresses=('8.8.8.8',),
+                )
+                conn.timeout = timeout
+                self.connect.reset_mock()
+                with patch('socket.getdefaulttimeout', return_value=None):
+                    conn._new_conn()
+                budget = self.connect.call_args.args[1]
+                self.assertGreater(budget, 0)
+                self.assertLessEqual(budget, 2 if isinstance(timeout, Timeout) else 5)
 
     def test_https_keeps_original_sni_and_requires_certificate_verification(self):
         context = create_urllib3_context(cert_reqs=ssl.CERT_REQUIRED)

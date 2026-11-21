@@ -9,6 +9,18 @@ from rampp2p.contract_generation import generate_contract_address
 import logging
 logger = logging.getLogger(__name__)
 
+
+@shared_task(queue='rampp2p__contract_execution')
+def contract_error_handler(request, exc, traceback, order_id):
+    # Celery invokes this errback with the failed request and exception. Do not
+    # expose generator arguments, subprocess output, or exception text.
+    if order_is_canceled(order_id):
+        return send_order_update(canceled_contract_payload(), order_id)
+    return send_order_update({
+        'success': False,
+        'error': 'Contract generation failed. Please retry or contact support.',
+    }, order_id)
+
 @shared_task(queue='rampp2p__contract_execution')
 def generate_contract(arbiter_pubkey, buyer_pubkey, seller_pubkey,
                       timestamp, service_fee, arbitration_fee):

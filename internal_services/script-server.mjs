@@ -58,14 +58,17 @@ export function createScriptServer(runScript, tokenName, environment = process.e
         res.end('Script execution failed');
         return;
       }
+      if (typeof response.result !== 'string') {
+        throw new TypeError('Invalid script result');
+      }
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(response.result);
     } catch (error) {
       if (error instanceof RequestTooLargeError) {
         if (!res.headersSent) {
-          res.writeHead(413, { 'Content-Type': 'text/plain' });
+          res.writeHead(413, { 'Content-Type': 'text/plain', Connection: 'close' });
         }
-        res.end('Request body too large');
+        res.end('Request body too large', () => req.destroy());
         return;
       }
       // Dependency errors can embed WIF values in their message or stack.

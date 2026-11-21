@@ -103,6 +103,11 @@ Keep the local copies in `compose/credentials/<network>/`; `fab <network>
 provision` mirrors that folder into `/var/opt/watchtower/credentials` with the
 required ownership. Both folders are gitignored.
 
+Provisioning requires remote `rsync` (3.1 or newer) and passwordless `sudo`
+for the deployment account. Credential updates transfer replacements before
+deleting orphaned files; an interrupted transfer preserves the live directory.
+Re-run provisioning after a failed transfer before recreating the container.
+
 `compose/mainnet.yml` and `compose/chipnet.yml` set the Firebase path and
 default the APNs path to:
 
@@ -116,6 +121,24 @@ Existing deployment env files may still contain the old
 precedence, but verify the resolved value with `docker compose config`.
 The build context excludes `*.p8`, service-account JSON, env files, private
 keys, uploads, and audit notes; credentials must be supplied at runtime.
+
+### Local development
+
+`docker-compose.yml` runs both `backend` and `test` as UID/GID 10001 and mounts
+`compose/credentials/${BCH_NETWORK:-chipnet}` read-only at
+`/run/watchtower-credentials`. Place the Firebase JSON and, when enabled, APNs
+key there, with read permissions for UID/GID 10001. Supply the two signing keys
+and all five independent `*_JS_AUTH_TOKEN` values listed in section 1 in
+`.env_dev`; Supervisor's Node processes and Python callers share that file.
+Use the same env file for Compose interpolation so the credentials directory
+matches Django's network and APNs endpoint selection:
+
+```bash
+docker compose --env-file .env_dev up --build
+```
+
+Set `BCH_NETWORK` in `.env_dev` (`chipnet` or `mainnet`). APNs defaults to sandbox
+on chipnet; set `APNS_USE_SANDBOX` explicitly if your APNs environment differs.
 
 ## 4. Build and recreate
 
@@ -135,6 +158,20 @@ Before recreating, review queued Celery tasks:
 
 These generic tasks were removed. Any queued tasks referencing them will fail
 and should be cleared or reviewed before the new workers consume them.
+
+Before rollout, inspect legacy P2P public keys for values that are not compressed
+secp256k1 keys. In a Django shell, the following counts rows requiring review:
+
+```python
+from rampp2p.models import Arbiter, Peer
+for model in (Arbiter, Peer):
+    print(model.__name__, model.objects.exclude(
+        public_key__regex=r'^(02|03)[0-9a-fA-F]{64}$'
+    ).count())
+```
+
+Repair invalid legacy keys with their owners before retrying contract creation.
+Generator exceptions now notify the order channel with a safe failure message.
 
 ## 5. Cache format change
 

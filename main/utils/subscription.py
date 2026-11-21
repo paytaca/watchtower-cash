@@ -158,9 +158,6 @@ def new_subscription(**kwargs):
                             address=address,
                             token_address=token_address
                         )
-                        # Store address string for async MQTT publishing
-                        new_addresses.add(address_obj.address)
-
                         # An address belongs to at most one wallet. Never
                         # reassign an existing address to a different wallet;
                         # address-scan and subscription are unauthenticated.
@@ -285,6 +282,10 @@ def new_subscription(**kwargs):
                                 get_bch_utxos.delay(address)
                         except Subscription.MultipleObjectsReturned:
                             pass
+
+                        # Publish only after ownership checks and subscription
+                        # creation have succeeded for this address.
+                        new_addresses.add(address_obj.address)
                         
                     except IntegrityError as exception:
                         if 'unique constraint' in str(exception.args).lower():

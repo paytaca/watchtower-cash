@@ -1,4 +1,4 @@
-from rampp2p.tasks.task_contract import generate_contract, contract_handler
+from rampp2p.tasks.task_contract import generate_contract, contract_handler, contract_error_handler
 
 def create_contract(**kwargs):
     '''
@@ -15,5 +15,6 @@ def create_contract(**kwargs):
         },
         link=contract_handler.s(
             order_id=kwargs.get('order_id')
-        )
+        ),
+        link_error=contract_error_handler.s(order_id=kwargs.get('order_id')),
     )

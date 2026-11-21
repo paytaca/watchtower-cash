@@ -1,5 +1,6 @@
 """Bounded public HTTP requests pinned to validated destinations."""
 import ipaddress
+import math
 import re
 import socket
 import time
@@ -11,6 +12,7 @@ from urllib3.connection import HTTPConnection, HTTPSConnection
 from urllib3.connectionpool import HTTPConnectionPool, HTTPSConnectionPool
 from urllib3.exceptions import ConnectTimeoutError, NewConnectionError
 from urllib3.util.connection import create_connection
+from urllib3.util import Timeout
 
 
 MAX_RESPONSE_BYTES = 1024 * 1024
@@ -93,7 +95,17 @@ class _PinnedConnection:
 
     def _new_conn(self):
         # Keep self.host unchanged for Host headers, SNI and certificate checks.
-        deadline = time.monotonic() + self.timeout
+        timeout = self.timeout
+        if isinstance(timeout, Timeout):
+            timeout = timeout.connect_timeout
+        if timeout is None or timeout is socket._GLOBAL_DEFAULT_TIMEOUT:
+            timeout = socket.getdefaulttimeout()
+        # urllib3 versions use different default sentinels. Always retain a
+        # finite connection budget, including for unset or unbounded defaults.
+        if (not isinstance(timeout, (int, float)) or isinstance(timeout, bool)
+                or not math.isfinite(timeout) or timeout <= 0):
+            timeout = 5
+        deadline = time.monotonic() + timeout
         last_error = None
         for address in self._pinned_addresses:
             remaining = deadline - time.monotonic()
